@@ -204,10 +204,15 @@
     <div class="painel">
       <h2>Importar export do TOTVS Protheus</h2>
       <p style="font-size:13px;color:var(--cinza)">
-        Selecione o .xlsx do "Listagem do Browse" (Contas a Pagar). Os títulos
-        substituem a última importação salva; os lançamentos manuais não são
-        afetados — apenas recomparados para sinalizar duplicidade.
+        Os títulos importados substituem a última importação salva; os
+        lançamentos manuais não são afetados — apenas recomparados para
+        sinalizar duplicidade.
       </p>
+      <button class="btn" id="btn-importar-drive">🔄 Buscar arquivo mais recente do Drive</button>
+      <p style="font-size:12px;color:var(--cinza); margin-top:6px;">
+        Busca direto na pasta "17 CONTAS A PAGAR" o arquivo AAAA.MM.DD.xlsx mais recente.
+      </p>
+      <p style="font-size:13px;color:var(--cinza); margin-top:18px;">Ou selecione manualmente:</p>
       <div id="dropzone">Arraste o arquivo .xlsx aqui ou clique para selecionar
         <input type="file" id="arquivo-erp" accept=".xlsx" style="display:none">
       </div>
@@ -586,6 +591,18 @@ dropzone.addEventListener('dragleave', () => dropzone.classList.remove('sobre'))
 dropzone.addEventListener('drop', (e) => {
   dropzone.classList.remove('sobre');
   if (e.dataTransfer.files[0]) processarArquivo(e.dataTransfer.files[0]);
+});
+
+document.getElementById('btn-importar-drive').addEventListener('click', async () => {
+  const resumo = document.getElementById('resumo-importacao');
+  resumo.innerHTML = '<div class="aviso">Buscando o arquivo mais recente na pasta do Drive…</div>';
+  try {
+    const dados = await postarAcao('importarDoDrive', {});
+    resumo.innerHTML = `<div class="aviso">${dados.quantidadeImportada} títulos importados de "${dados.arquivoUsado}".</div>`;
+    toast('Importação do Drive concluída.');
+  } catch (e) {
+    resumo.innerHTML = `<div class="aviso">Falha ao importar do Drive: ${e.message}</div>`;
+  }
 });
 
 // ---------- Início ----------
