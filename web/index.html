@@ -186,11 +186,14 @@
           <option value="OK">OK</option>
           <option value="Duplicado – revisar">Duplicado – revisar</option>
         </select>
+        <select id="filtro-aporte">
+          <option value="">Aporte: todos</option>
+        </select>
       </div>
       <div class="tabela-scroll">
         <table id="tabela-lancamentos">
           <thead><tr>
-            <th>Origem</th><th>Status</th><th>Tipo</th><th>Emissão</th><th>Nº Doc.</th>
+            <th>Origem</th><th>Status</th><th>Aporte</th><th>Tipo</th><th>Emissão</th><th>Nº Doc.</th>
             <th>Fornecedor</th><th>Razão Social</th><th>Vencimento</th><th>Baixa</th>
             <th>Valor</th><th>Histórico</th><th></th>
           </tr></thead>
@@ -340,6 +343,22 @@ function fmtMoeda(v) { return 'R$ ' + paraNumero(v).toLocaleString('pt-BR', { mi
 function fmtData(v) { const d = paraData(v); return d ? d.toLocaleDateString('pt-BR') : ''; }
 function inicioDoDia(d) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 
+// Ciclo semanal de "aporte" (mesma regra usada no AppSheet): semanas de 7
+// dias a partir de 2026-01-31 (a semana que contém essa data é o aporte 23).
+const APORTE_BASE = '2026-01-31';
+const APORTE_OFFSET = 23;
+function calcularAporte(vencimentoISO) {
+  const venc = paraData(vencimentoISO);
+  if (!venc) return '';
+  const base = new Date(APORTE_BASE + 'T00:00:00Z');
+  const vencUtc = new Date(Date.UTC(venc.getUTCFullYear(), venc.getUTCMonth(), venc.getUTCDate()));
+  const diffDias = Math.floor((vencUtc - base) / 86400000);
+  const semanas = Math.floor(diffDias / 7);
+  const aporte = APORTE_OFFSET + semanas;
+  if (aporte < 1) return '';
+  return ('00' + aporte).slice(-2);
+}
+
 // combinado usado para KPIs/gráficos: ERP inteiro + manuais que NÃO batem com um item do ERP
 function combinadoParaAnalise() {
   return state.erp.concat(state.manual.filter(m => m.Status !== 'Duplicado – revisar'));
@@ -462,10 +481,23 @@ function renderizarLancamentos() {
   const busca = document.getElementById('busca').value.trim().toLowerCase();
   const fOrigem = document.getElementById('filtro-origem').value;
   const fStatus = document.getElementById('filtro-status').value;
+  const fAporte = document.getElementById('filtro-aporte').value;
 
-  let itens = state.erp.concat(state.manual).map(i => i);
+  let itens = state.erp.concat(state.manual).map(i => Object.assign({ Aporte: calcularAporte(i['Vencimento']) }, i));
+
+  const selectAporte = document.getElementById('filtro-aporte');
+  const aportesDisponiveis = Array.from(new Set(itens.map(i => i.Aporte).filter(a => a))).sort();
+  if (selectAporte.dataset.opcoes !== aportesDisponiveis.join(',')) {
+    selectAporte.dataset.opcoes = aportesDisponiveis.join(',');
+    const selecionado = selectAporte.value;
+    selectAporte.innerHTML = '<option value="">Aporte: todos</option>' +
+      aportesDisponiveis.map(a => `<option value="${a}">Aporte ${a}</option>`).join('');
+    selectAporte.value = aportesDisponiveis.includes(selecionado) ? selecionado : '';
+  }
+
   if (fOrigem) itens = itens.filter(i => i.Origem === fOrigem);
   if (fStatus) itens = itens.filter(i => i.Status === fStatus);
+  if (fAporte) itens = itens.filter(i => i.Aporte === fAporte);
   if (busca) itens = itens.filter(i =>
     [i['Razão Social'], i['Histórico'], i['Nº Documento'], i['Código Fornecedor']]
       .some(v => String(v || '').toLowerCase().includes(busca)));
@@ -481,6 +513,7 @@ function renderizarLancamentos() {
     return `<tr>
       <td><span class="badge ${origemBadge}">${i.Origem}</span></td>
       <td><span class="badge ${statusBadge}">${i.Status}</span></td>
+      <td>${i.Aporte || ''}</td>
       <td>${i.Tipo || ''}</td>
       <td>${fmtData(i['Data Emissão'])}</td>
       <td>${i['Nº Documento'] || ''}</td>
@@ -494,7 +527,7 @@ function renderizarLancamentos() {
     </tr>`;
   }).join('');
 }
-['busca', 'filtro-origem', 'filtro-status'].forEach(id =>
+['busca', 'filtro-origem', 'filtro-status', 'filtro-aporte'].forEach(id =>
   document.getElementById(id).addEventListener('input', renderizarLancamentos));
 
 async function removerManual(id) {
