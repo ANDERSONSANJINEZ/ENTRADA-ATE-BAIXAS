@@ -129,6 +129,15 @@
       </div>
     </div>
     <div class="painel">
+      <h2>Resumo por Aporte — títulos em aberto</h2>
+      <div class="tabela-scroll">
+        <table id="tabela-aporte">
+          <thead><tr><th>Aporte</th><th>Período</th><th>Qtde</th><th>Valor</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="painel">
       <h2>Curva ABC de fornecedores</h2>
       <div class="tabela-scroll">
         <table id="tabela-abc">
@@ -175,7 +184,7 @@
     <div class="painel">
       <h2>Todos os lançamentos</h2>
       <div class="filtros">
-        <input id="busca" placeholder="Buscar fornecedor, histórico, documento…" style="min-width:260px">
+        <input id="busca" placeholder="Buscar em todas as colunas…" style="min-width:260px">
         <select id="filtro-origem">
           <option value="">Origem: todas</option>
           <option value="ERP">ERP</option>
@@ -358,6 +367,14 @@ function calcularAporte(vencimentoISO) {
   if (aporte < 1) return '';
   return ('00' + aporte).slice(-2);
 }
+// Período (semana) correspondente a um número de aporte — inverso de calcularAporte.
+function periodoDoAporte(aporteStr) {
+  const n = parseInt(aporteStr, 10);
+  const base = new Date(APORTE_BASE + 'T00:00:00Z');
+  const inicio = new Date(base.getTime() + (n - APORTE_OFFSET) * 7 * 86400000);
+  const fim = new Date(inicio.getTime() + 6 * 86400000);
+  return `${inicio.toLocaleDateString('pt-BR')} – ${fim.toLocaleDateString('pt-BR')}`;
+}
 
 // combinado usado para KPIs/gráficos: ERP inteiro + manuais que NÃO batem com um item do ERP
 function combinadoParaAnalise() {
@@ -400,7 +417,25 @@ function renderizarDashboard() {
 
   renderizarAging(abertos, hoje);
   renderizarFluxoCaixa(abertos, hoje);
+  renderizarResumoAporte(abertos);
   renderizarCurvaAbc(itens);
+}
+
+function renderizarResumoAporte(abertos) {
+  const grupos = {};
+  abertos.forEach(i => {
+    const aporte = calcularAporte(i['Vencimento']);
+    if (!aporte) return;
+    if (!grupos[aporte]) grupos[aporte] = { qtde: 0, valor: 0 };
+    grupos[aporte].qtde += 1;
+    grupos[aporte].valor += paraNumero(i['R$ Valor']);
+  });
+  const linhas = Object.keys(grupos).sort().map(aporte => {
+    const g = grupos[aporte];
+    return `<tr><td>${aporte}</td><td>${periodoDoAporte(aporte)}</td><td>${g.qtde}</td><td>${fmtMoeda(g.valor)}</td></tr>`;
+  });
+  document.querySelector('#tabela-aporte tbody').innerHTML = linhas.join('') ||
+    '<tr><td colspan="4" style="color:var(--cinza)">Nenhum título em aberto com aporte identificado.</td></tr>';
 }
 
 function renderizarAging(abertos, hoje) {
@@ -477,6 +512,23 @@ function renderizarCurvaAbc(itens) {
 }
 
 // ---------- Lançamentos ----------
+// Junta o valor bruto e o formatado (data/moeda) de todas as colunas exibidas,
+// para a busca encontrar tanto "31/12/2026" quanto "2026-12-31" ou "22364".
+function textoBuscavel(i) {
+  return [
+    i.Origem, i.Status, i.Aporte, i.Tipo,
+    i['Data Emissão'], fmtData(i['Data Emissão']),
+    i['Nº Documento'], i['Forma Pagamento'],
+    i['Código Fornecedor'], i['Parcela'],
+    i['Vencimento'], fmtData(i['Vencimento']),
+    i['Vencimento Real'], fmtData(i['Vencimento Real']),
+    i['Data Baixa'], fmtData(i['Data Baixa']),
+    i['R$ Valor'], fmtMoeda(i['R$ Valor']),
+    i['Usuário Inclusor'], i['Razão Social'],
+    i['Aprovação Remessa'], i['Remessa'], i['Histórico'],
+  ].map(v => String(v == null ? '' : v).toLowerCase()).join(' ␟ ');
+}
+
 function renderizarLancamentos() {
   const busca = document.getElementById('busca').value.trim().toLowerCase();
   const fOrigem = document.getElementById('filtro-origem').value;
@@ -498,9 +550,7 @@ function renderizarLancamentos() {
   if (fOrigem) itens = itens.filter(i => i.Origem === fOrigem);
   if (fStatus) itens = itens.filter(i => i.Status === fStatus);
   if (fAporte) itens = itens.filter(i => i.Aporte === fAporte);
-  if (busca) itens = itens.filter(i =>
-    [i['Razão Social'], i['Histórico'], i['Nº Documento'], i['Código Fornecedor']]
-      .some(v => String(v || '').toLowerCase().includes(busca)));
+  if (busca) itens = itens.filter(i => textoBuscavel(i).includes(busca));
 
   itens.sort((a, b) => (paraData(b['Vencimento']) || 0) - (paraData(a['Vencimento']) || 0));
 
