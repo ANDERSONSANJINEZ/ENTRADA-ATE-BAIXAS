@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Entrada até Baixas</title>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/chart.umd.js"></script>
+<style>
+  :root {
+    --azul: #1f4e78;
+    --azul-claro: #eaf1f8;
+    --verde: #1e7e34;
+    --vermelho: #c0392b;
+    --laranja: #e08e0b;
+    --cinza: #6b7280;
+    --borda: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    margin: 0;
+    background: #f5f7fa;
+    color: #1e2430;
+  }
+  header {
+    background: var(--azul);
+    color: #fff;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  header button {
+    background: rgba(255,255,255,.15);
+    border: 1px solid rgba(255,255,255,.4);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  nav {
+    display: flex;
+    gap: 4px;
+    background: #fff;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--borda);
+  }
+  nav button {
+    border: none;
+    background: none;
+    padding: 12px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--cinza);
+    border-bottom: 3px solid transparent;
+  }
+  nav button.ativo { color: var(--azul); border-bottom-color: var(--azul); font-weight: bold; }
+  main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .aba { display: none; }
+  .aba.ativa { display: block; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .card { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px 16px; }
+  .card .rotulo { font-size: 12px; color: var(--cinza); margin-bottom: 6px; }
+  .card .valor { font-size: 20px; font-weight: bold; color: var(--azul); }
+  .card.alerta .valor { color: var(--vermelho); }
+  .card.atencao .valor { color: var(--laranja); }
+  .painel { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 16px; margin-bottom: 24px; }
+  .painel h2 { font-size: 15px; margin: 0 0 12px; color: var(--azul); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+  th { background: var(--azul-claro); color: var(--azul); position: sticky; top: 0; }
+  .tabela-scroll { max-height: 480px; overflow: auto; border: 1px solid var(--borda); border-radius: 8px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }
+  .badge-erp { background: #dbeafe; color: #1e40af; }
+  .badge-manual { background: #ede9fe; color: #5b21b6; }
+  .badge-ok { background: #dcfce7; color: var(--verde); }
+  .badge-dup { background: #fee2e2; color: var(--vermelho); }
+  .filtros { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .filtros input, .filtros select { padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; font-size: 13px; }
+  .btn { background: var(--azul); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .btn.secundario { background: #fff; color: var(--azul); border: 1px solid var(--azul); }
+  .btn.perigo { background: var(--vermelho); }
+  .btn.small { padding: 4px 10px; font-size: 12px; }
+  form.manual { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+  form.manual label { font-size: 12px; color: var(--cinza); display: block; margin-bottom: 3px; }
+  form.manual input, form.manual select { width: 100%; padding: 7px 8px; border: 1px solid var(--borda); border-radius: 6px; font-size: 13px; }
+  form.manual .full { grid-column: 1 / -1; }
+  .aviso { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+  #dropzone { border: 2px dashed var(--borda); border-radius: 10px; padding: 40px; text-align: center; color: var(--cinza); margin-bottom: 16px; }
+  #dropzone.sobre { border-color: var(--azul); background: var(--azul-claro); }
+  .toast { position: fixed; bottom: 20px; right: 20px; background: #1e2430; color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .toast.mostrar { opacity: 1; }
+  canvas { max-height: 320px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Entrada até Baixas — Financeiro Protheus</h1>
+  <button id="btn-config">⚙ Configurar planilha</button>
+</header>
+
+<nav>
+  <button class="ativo" data-aba="dashboard">Dashboard</button>
+  <button data-aba="lancamentos">Lançamentos</button>
+  <button data-aba="importar">Importar</button>
+</nav>
+
+<main>
+
+  <section id="aba-dashboard" class="aba ativa">
+    <div class="cards" id="cards-kpi"></div>
+    <div class="grid-2">
+      <div class="painel">
+        <h2>Aging — títulos em aberto por faixa de vencimento</h2>
+        <canvas id="chart-aging"></canvas>
+      </div>
+      <div class="painel">
+        <h2>Fluxo de caixa projetado (títulos em aberto)</h2>
+        <canvas id="chart-fluxo"></canvas>
+      </div>
+    </div>
+    <div class="painel">
+      <h2>Curva ABC de fornecedores</h2>
+      <div class="tabela-scroll">
+        <table id="tabela-abc">
+          <thead><tr><th>Fornecedor</th><th>Razão Social</th><th>Qtde</th><th>Valor Total</th><th>% do Total</th><th>% Acum.</th><th>Classe</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="aba-lancamentos" class="aba">
+    <div class="painel">
+      <h2>Novo lançamento manual</h2>
+      <form class="manual" id="form-manual">
+        <div>
+          <label>Tipo</label>
+          <select name="Tipo" required>
+            <option value="NF">NF</option><option value="ISS">ISS</option>
+            <option value="RES">RES</option><option value="TX">TX</option>
+            <option value="INS">INS</option><option value="FOL">FOL</option>
+            <option value="ADI">ADI</option><option value="PA">PA</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+        <div><label>Data Emissão</label><input type="date" name="Data Emissão" required></div>
+        <div><label>Nº Documento</label><input type="text" name="Nº Documento"></div>
+        <div>
+          <label>Forma Pagamento</label>
+          <select name="Forma Pagamento">
+            <option value="Boleto">Boleto</option><option value="Pix">Pix</option>
+            <option value="TED">TED</option><option value="Outro">Outro</option>
+          </select>
+        </div>
+        <div><label>Código Fornecedor</label><input type="text" name="Código Fornecedor" required></div>
+        <div class="full"><label>Razão Social</label><input type="text" name="Razão Social" required></div>
+        <div><label>Vencimento</label><input type="date" name="Vencimento" required></div>
+        <div><label>R$ Valor</label><input type="number" step="0.01" name="R$ Valor" required></div>
+        <div><label>Usuário Inclusor</label><input type="text" name="Usuário Inclusor"></div>
+        <div class="full"><label>Histórico</label><input type="text" name="Histórico"></div>
+        <div class="full"><button class="btn" type="submit">Adicionar lançamento manual</button></div>
+      </form>
+    </div>
+
+    <div class="painel">
+      <h2>Todos os lançamentos</h2>
+      <div class="filtros">
+        <input id="busca" placeholder="Buscar fornecedor, histórico, documento…" style="min-width:260px">
+        <select id="filtro-origem">
+          <option value="">Origem: todas</option>
+          <option value="ERP">ERP</option>
+          <option value="Manual">Manual</option>
+        </select>
+        <select id="filtro-status">
+          <option value="">Status: todos</option>
+          <option value="OK">OK</option>
+          <option value="Duplicado – revisar">Duplicado – revisar</option>
+        </select>
+      </div>
+      <div class="tabela-scroll">
+        <table id="tabela-lancamentos">
+          <thead><tr>
+            <th>Origem</th><th>Status</th><th>Tipo</th><th>Emissão</th><th>Nº Doc.</th>
+            <th>Fornecedor</th><th>Razão Social</th><th>Vencimento</th><th>Baixa</th>
+            <th>Valor</th><th>Histórico</th><th></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="aba-importar" class="aba">
+    <div class="painel">
+      <h2>Importar export do TOTVS Protheus</h2>
+      <p style="font-size:13px;color:var(--cinza)">
+        Selecione o .xlsx do "Listagem do Browse" (Contas a Pagar). Os títulos
+        substituem a última importação salva; os lançamentos manuais não são
+        afetados — apenas recomparados para sinalizar duplicidade.
+      </p>
+      <div id="dropzone">Arraste o arquivo .xlsx aqui ou clique para selecionar
+        <input type="file" id="arquivo-erp" accept=".xlsx" style="display:none">
+      </div>
+      <div id="resumo-importacao"></div>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const HEADERS = ['ID','Tipo','Data Emissão','Nº Documento','Vencimento Real','Forma Pagamento',
+  'Código Fornecedor','Parcela','Data Baixa','Vencimento','R$ Valor','Usuário Inclusor',
+  'Razão Social','Aprovação Remessa','Remessa','Histórico','Origem','Status'];
+
+const SRC = { tipo:'B', dt_emissao:'C', no_titulo:'D', form_pagto:'E', fornecedor:'F',
+  nome_fornece:'G', vencimento:'H', vencto_real:'I', vlr_titulo:'J', parcela:'K',
+  dt_baixa:'L', historico:'M', aprovacao:'S', usuario:'AJ', remessa:'AW' };
+
+const CONFIG_KEY = 'eab_backend_url';
+let state = { erp: [], manual: [] };
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('mostrar');
+  setTimeout(() => t.classList.remove('mostrar'), 3000);
+}
+
+function getBackendUrl() {
+  let url = localStorage.getItem(CONFIG_KEY);
+  if (!url) url = pedirBackendUrl();
+  return url;
+}
+function pedirBackendUrl() {
+  const url = prompt('Cole a URL do Web App do Apps Script (termina em /exec):', localStorage.getItem(CONFIG_KEY) || '');
+  if (url) localStorage.setItem(CONFIG_KEY, url.trim());
+  return url ? url.trim() : null;
+}
+document.getElementById('btn-config').onclick = () => { pedirBackendUrl(); carregarTudo(); };
+
+async function chamarBackend(opcoes) {
+  const url = getBackendUrl();
+  if (!url) throw new Error('URL do backend não configurada.');
+  const resp = await fetch(url, opcoes);
+  return resp.json();
+}
+
+async function carregarTudo() {
+  const url = getBackendUrl();
+  if (!url) return;
+  try {
+    const dados = await chamarBackend({ method: 'GET' });
+    state.erp = dados.erp || [];
+    state.manual = dados.manual || [];
+    renderizarTudo();
+  } catch (e) {
+    toast('Erro ao carregar dados: ' + e.message);
+  }
+}
+
+async function postarAcao(action, extra) {
+  try {
+    const dados = await chamarBackend({
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ action }, extra)),
+    });
+    if (dados.ok === false) throw new Error(dados.erro || 'falha na operação');
+    state.erp = dados.erp || [];
+    state.manual = dados.manual || [];
+    renderizarTudo();
+    return dados;
+  } catch (e) {
+    toast('Erro: ' + e.message);
+    throw e;
+  }
+}
+
+// ---------- Navegação por abas ----------
+document.querySelectorAll('nav button').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('ativo'));
+    document.querySelectorAll('.aba').forEach(a => a.classList.remove('ativa'));
+    btn.classList.add('ativo');
+    document.getElementById('aba-' + btn.dataset.aba).classList.add('ativa');
+  };
+});
+
+// ---------- Utilitários de dados ----------
+function paraNumero(v) { return typeof v === 'number' ? v : parseFloat(v) || 0; }
+function paraData(v) {
+  if (v instanceof Date) return v;
+  if (typeof v === 'string' && v) { const d = new Date(v); return isNaN(d) ? null : d; }
+  return null;
+}
+function fmtMoeda(v) { return 'R$ ' + paraNumero(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtData(v) { const d = paraData(v); return d ? d.toLocaleDateString('pt-BR') : ''; }
+function inicioDoDia(d) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
+
+// combinado usado para KPIs/gráficos: ERP inteiro + manuais que NÃO batem com um item do ERP
+function combinadoParaAnalise() {
+  return state.erp.concat(state.manual.filter(m => m.Status !== 'Duplicado – revisar'));
+}
+
+// ---------- Dashboard ----------
+let chartAging, chartFluxo;
+
+function renderizarDashboard() {
+  const itens = combinadoParaAnalise();
+  const hoje = inicioDoDia(new Date());
+
+  const totalQtde = itens.length;
+  const totalValor = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const abertos = itens.filter(i => !i['Data Baixa']);
+  const abertoQtde = abertos.length;
+  const abertoValor = abertos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const vencidos = abertos.filter(i => { const v = paraData(i['Vencimento']); return v && inicioDoDia(v) < hoje; });
+  const vencidoQtde = vencidos.length;
+  const vencidoValor = vencidos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const aguardando = state.erp.filter(i => i['Aprovação Remessa'] === 'Aguardando' || !i['Aprovação Remessa']);
+  const aguardandoValor = aguardando.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const manuaisPendentes = state.manual.filter(m => m.Status !== 'Duplicado – revisar');
+  const manuaisPendentesValor = manuaisPendentes.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const duplicados = state.manual.filter(m => m.Status === 'Duplicado – revisar').length;
+
+  const cards = [
+    { rotulo: 'Total de títulos', valor: totalQtde.toLocaleString('pt-BR') },
+    { rotulo: 'Valor total', valor: fmtMoeda(totalValor) },
+    { rotulo: 'Em aberto (sem baixa)', valor: `${abertoQtde} · ${fmtMoeda(abertoValor)}` },
+    { rotulo: 'Vencido e em aberto', valor: `${vencidoQtde} · ${fmtMoeda(vencidoValor)}`, classe: vencidoQtde ? 'alerta' : '' },
+    { rotulo: 'Aguardando aprovação (ERP)', valor: `${aguardando.length} · ${fmtMoeda(aguardandoValor)}`, classe: aguardando.length ? 'atencao' : '' },
+    { rotulo: 'Lançados manualmente (não conferidos)', valor: `${manuaisPendentes.length} · ${fmtMoeda(manuaisPendentesValor)}` },
+    { rotulo: 'Duplicados a revisar', valor: duplicados.toLocaleString('pt-BR'), classe: duplicados ? 'alerta' : '' },
+  ];
+  document.getElementById('cards-kpi').innerHTML = cards.map(c =>
+    `<div class="card ${c.classe || ''}"><div class="rotulo">${c.rotulo}</div><div class="valor">${c.valor}</div></div>`
+  ).join('');
+
+  renderizarAging(abertos, hoje);
+  renderizarFluxoCaixa(abertos, hoje);
+  renderizarCurvaAbc(itens);
+}
+
+function renderizarAging(abertos, hoje) {
+  const faixas = [
+    { nome: 'A vencer', teste: d => d >= hoje },
+    { nome: '1–30 dias', teste: d => diasAtraso(d, hoje) >= 1 && diasAtraso(d, hoje) <= 30 },
+    { nome: '31–60 dias', teste: d => diasAtraso(d, hoje) >= 31 && diasAtraso(d, hoje) <= 60 },
+    { nome: '61–90 dias', teste: d => diasAtraso(d, hoje) >= 61 && diasAtraso(d, hoje) <= 90 },
+    { nome: '90+ dias', teste: d => diasAtraso(d, hoje) > 90 },
+  ];
+  function diasAtraso(d, hoje) { return Math.round((hoje - d) / 86400000); }
+  const valores = faixas.map(f => abertos
+    .filter(i => { const v = paraData(i['Vencimento']); return v && f.teste(inicioDoDia(v)); })
+    .reduce((s, i) => s + paraNumero(i['R$ Valor']), 0));
+
+  if (chartAging) chartAging.destroy();
+  chartAging = new Chart(document.getElementById('chart-aging'), {
+    type: 'bar',
+    data: { labels: faixas.map(f => f.nome), datasets: [{ label: 'Valor em aberto (R$)', data: valores,
+      backgroundColor: ['#1f4e78', '#e08e0b', '#e08e0b', '#c0392b', '#c0392b'] }] },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+  });
+}
+
+function renderizarFluxoCaixa(abertos, hoje) {
+  const vencido = abertos.filter(i => { const v = paraData(i['Vencimento']); return v && inicioDoDia(v) < hoje; })
+    .reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const futuros = abertos.filter(i => { const v = paraData(i['Vencimento']); return v && inicioDoDia(v) >= hoje; });
+
+  const buckets = {};
+  futuros.forEach(i => {
+    const v = paraData(i['Vencimento']);
+    const chave = `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}`;
+    buckets[chave] = (buckets[chave] || 0) + paraNumero(i['R$ Valor']);
+  });
+  const chavesOrdenadas = Object.keys(buckets).sort();
+  const labels = ['Vencido', ...chavesOrdenadas.map(c => { const [a, m] = c.split('-'); return `${m}/${a}`; })];
+  const valoresMes = [vencido, ...chavesOrdenadas.map(c => buckets[c])];
+  let acumulado = 0;
+  const saldo = valoresMes.map(v => acumulado += v);
+
+  if (chartFluxo) chartFluxo.destroy();
+  chartFluxo = new Chart(document.getElementById('chart-fluxo'), {
+    data: {
+      labels,
+      datasets: [
+        { type: 'bar', label: 'A pagar no período (R$)', data: valoresMes, backgroundColor: '#1f4e78' },
+        { type: 'line', label: 'Saldo acumulado (R$)', data: saldo, borderColor: '#c0392b', backgroundColor: '#c0392b', yAxisID: 'y' },
+      ],
+    },
+    options: { scales: { y: { beginAtZero: true } } },
+  });
+}
+
+function renderizarCurvaAbc(itens) {
+  const totalGeral = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const grupos = {};
+  itens.forEach(i => {
+    const cod = i['Código Fornecedor'] || '(sem código)';
+    if (!grupos[cod]) grupos[cod] = { nome: i['Razão Social'] || '', qtde: 0, valor: 0 };
+    grupos[cod].qtde += 1;
+    grupos[cod].valor += paraNumero(i['R$ Valor']);
+  });
+  const ordenado = Object.entries(grupos).sort((a, b) => b[1].valor - a[1].valor).slice(0, 20);
+  let acumulado = 0;
+  const linhas = ordenado.map(([cod, g]) => {
+    const pct = totalGeral ? g.valor / totalGeral : 0;
+    acumulado += pct;
+    const classe = acumulado <= 0.8 ? 'A' : acumulado <= 0.95 ? 'B' : 'C';
+    return `<tr><td>${cod}</td><td>${g.nome}</td><td>${g.qtde}</td><td>${fmtMoeda(g.valor)}</td>
+      <td>${(pct * 100).toFixed(1)}%</td><td>${(acumulado * 100).toFixed(1)}%</td><td>${classe}</td></tr>`;
+  });
+  document.querySelector('#tabela-abc tbody').innerHTML = linhas.join('');
+}
+
+// ---------- Lançamentos ----------
+function renderizarLancamentos() {
+  const busca = document.getElementById('busca').value.trim().toLowerCase();
+  const fOrigem = document.getElementById('filtro-origem').value;
+  const fStatus = document.getElementById('filtro-status').value;
+
+  let itens = state.erp.concat(state.manual).map(i => i);
+  if (fOrigem) itens = itens.filter(i => i.Origem === fOrigem);
+  if (fStatus) itens = itens.filter(i => i.Status === fStatus);
+  if (busca) itens = itens.filter(i =>
+    [i['Razão Social'], i['Histórico'], i['Nº Documento'], i['Código Fornecedor']]
+      .some(v => String(v || '').toLowerCase().includes(busca)));
+
+  itens.sort((a, b) => (paraData(b['Vencimento']) || 0) - (paraData(a['Vencimento']) || 0));
+
+  document.querySelector('#tabela-lancamentos tbody').innerHTML = itens.map(i => {
+    const origemBadge = i.Origem === 'ERP' ? 'badge-erp' : 'badge-manual';
+    const statusBadge = i.Status === 'Duplicado – revisar' ? 'badge-dup' : 'badge-ok';
+    const acao = i.Origem === 'Manual'
+      ? `<button class="btn perigo small" onclick="removerManual('${i.ID}')">Remover</button>`
+      : '';
+    return `<tr>
+      <td><span class="badge ${origemBadge}">${i.Origem}</span></td>
+      <td><span class="badge ${statusBadge}">${i.Status}</span></td>
+      <td>${i.Tipo || ''}</td>
+      <td>${fmtData(i['Data Emissão'])}</td>
+      <td>${i['Nº Documento'] || ''}</td>
+      <td>${i['Código Fornecedor'] || ''}</td>
+      <td>${i['Razão Social'] || ''}</td>
+      <td>${fmtData(i['Vencimento'])}</td>
+      <td>${fmtData(i['Data Baixa'])}</td>
+      <td>${fmtMoeda(i['R$ Valor'])}</td>
+      <td>${i['Histórico'] || ''}</td>
+      <td>${acao}</td>
+    </tr>`;
+  }).join('');
+}
+['busca', 'filtro-origem', 'filtro-status'].forEach(id =>
+  document.getElementById(id).addEventListener('input', renderizarLancamentos));
+
+async function removerManual(id) {
+  if (!confirm('Remover este lançamento manual?')) return;
+  await postarAcao('removerManual', { id });
+  toast('Lançamento removido.');
+}
+
+document.getElementById('form-manual').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const dados = new FormData(form);
+  const item = {};
+  for (const [k, v] of dados.entries()) item[k] = v;
+  item['Vencimento Real'] = item['Vencimento'];
+  await postarAcao('adicionarManual', { item });
+  form.reset();
+  toast('Lançamento manual adicionado.');
+});
+
+// ---------- Importar ----------
+const SEM_ZEROS_ESQUERDA = new Set(['Nº Documento', 'Código Fornecedor', 'Remessa']);
+function removerZerosEsquerda(v) {
+  if (typeof v === 'string' && /^[0-9]+$/.test(v)) {
+    const cortado = v.replace(/^0+/, '');
+    return cortado || '0';
+  }
+  return v;
+}
+
+function celula(ws, ref) { const c = ws[ref]; return c ? c.v : undefined; }
+
+// Normaliza datas para "yyyy-MM-dd" (sem hora), para que a chave de
+// duplicidade calculada no backend bata entre um título vindo do ERP
+// (Date do Excel) e um lançamento manual (input type=date já é yyyy-MM-dd).
+function dataParaISO(v) {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return v;
+}
+
+function parseArquivoProtheus(workbook) {
+  const ws = workbook.Sheets[workbook.SheetNames[0]];
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const itens = [];
+  for (let r = 2; r <= range.e.r; r++) { // linha 3 do Excel = índice 2 (0-based)
+    const linha = r + 1;
+    const tipo = celula(ws, SRC.tipo + linha);
+    if (tipo === undefined || tipo === null || tipo === '') continue;
+    const item = {
+      'Tipo': tipo,
+      'Data Emissão': dataParaISO(celula(ws, SRC.dt_emissao + linha)),
+      'Nº Documento': removerZerosEsquerda(celula(ws, SRC.no_titulo + linha)),
+      'Vencimento Real': dataParaISO(celula(ws, SRC.vencto_real + linha)),
+      'Forma Pagamento': celula(ws, SRC.form_pagto + linha),
+      'Código Fornecedor': removerZerosEsquerda(celula(ws, SRC.fornecedor + linha)),
+      'Parcela': celula(ws, SRC.parcela + linha),
+      'Data Baixa': dataParaISO(celula(ws, SRC.dt_baixa + linha)),
+      'Vencimento': dataParaISO(celula(ws, SRC.vencimento + linha)),
+      'R$ Valor': celula(ws, SRC.vlr_titulo + linha),
+      'Usuário Inclusor': celula(ws, SRC.usuario + linha),
+      'Razão Social': celula(ws, SRC.nome_fornece + linha),
+      'Aprovação Remessa': celula(ws, SRC.aprovacao + linha),
+      'Remessa': removerZerosEsquerda(celula(ws, SRC.remessa + linha)),
+      'Histórico': celula(ws, SRC.historico + linha),
+    };
+    itens.push(item);
+  }
+  return itens;
+}
+
+async function processarArquivo(file) {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  const itens = parseArquivoProtheus(wb);
+  document.getElementById('resumo-importacao').innerHTML =
+    `<div class="aviso">${itens.length} títulos lidos de "${file.name}". Enviando para a planilha…</div>`;
+  await postarAcao('importar', { itens });
+  document.getElementById('resumo-importacao').innerHTML =
+    `<div class="aviso">${itens.length} títulos importados com sucesso. Veja o resultado no Dashboard e em Lançamentos.</div>`;
+  toast('Importação concluída.');
+}
+
+const dropzone = document.getElementById('dropzone');
+const inputArquivo = document.getElementById('arquivo-erp');
+dropzone.onclick = () => inputArquivo.click();
+inputArquivo.onchange = (e) => { if (e.target.files[0]) processarArquivo(e.target.files[0]); };
+['dragover', 'dragleave', 'drop'].forEach(evt => dropzone.addEventListener(evt, (e) => e.preventDefault()));
+dropzone.addEventListener('dragover', () => dropzone.classList.add('sobre'));
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('sobre'));
+dropzone.addEventListener('drop', (e) => {
+  dropzone.classList.remove('sobre');
+  if (e.dataTransfer.files[0]) processarArquivo(e.dataTransfer.files[0]);
+});
+
+// ---------- Início ----------
+function renderizarTudo() { renderizarDashboard(); renderizarLancamentos(); }
+carregarTudo();
+</script>
+</body>
+</html>
