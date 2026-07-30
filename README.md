@@ -28,7 +28,12 @@ manual e um título do ERP são o mesmo (duplicidade).
 
 1. Abra `web/index.html` no navegador (primeira vez: clique em "⚙
    Configurar planilha" e cole a URL do Web App do Apps Script).
-2. Na aba **Importar**, selecione o export mais recente do Protheus.
+2. Na aba **Importar**, selecione o export mais recente da pasta do Drive
+   (`4 - CE 007_ADMINISTRATIVO / 4.11 - FINANCEIRO / 17 CONTAS A PAGAR`).
+   O arquivo deve manter o nome padrão `AAAA.MM.DD.xlsx` (ex.:
+   `2026.07.30.xlsx`) — o app lê essa data do nome do arquivo e mostra no
+   topo da tela como "Base de dados"; o indicador fica em destaque
+   (amarelo) quando o arquivo importado tem 2 dias ou mais.
 3. Na aba **Lançamentos**, cadastre títulos que já existem na prática mas
    ainda não saíram no Protheus; quando o Protheus os incluir, o app
    sinaliza a duplicidade para você remover o lançamento manual.

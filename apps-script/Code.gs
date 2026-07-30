@@ -18,6 +18,15 @@ var HEADERS = [
   'Aprovação Remessa', 'Remessa', 'Histórico', 'Origem', 'Status'
 ];
 
+var PROP_DATA_BASE = 'dataBaseImportacao';
+
+function getDataBase_() {
+  return PropertiesService.getScriptProperties().getProperty(PROP_DATA_BASE);
+}
+function setDataBase_(valor) {
+  if (valor) PropertiesService.getScriptProperties().setProperty(PROP_DATA_BASE, valor);
+}
+
 function getSheet_(nome) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName(nome);
@@ -76,7 +85,7 @@ function recalcularStatus_() {
 
 function doGet(e) {
   return ContentService
-    .createTextOutput(JSON.stringify({ erp: lerAba_('ERP'), manual: lerAba_('Manual') }))
+    .createTextOutput(JSON.stringify({ erp: lerAba_('ERP'), manual: lerAba_('Manual'), dataBase: getDataBase_() }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -101,6 +110,7 @@ function doPost(e) {
     if (linhas.length) {
       sh.getRange(2, 1, linhas.length, HEADERS.length).setValues(linhas);
     }
+    setDataBase_(payload.dataBase);
     recalcularStatus_();
   } else if (acao === 'adicionarManual') {
     var shM = getSheet_('Manual');
@@ -130,6 +140,7 @@ function doPost(e) {
 
   resultado.erp = lerAba_('ERP');
   resultado.manual = lerAba_('Manual');
+  resultado.dataBase = getDataBase_();
   return ContentService
     .createTextOutput(JSON.stringify(resultado))
     .setMimeType(ContentService.MimeType.JSON);

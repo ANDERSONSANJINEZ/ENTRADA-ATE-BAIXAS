@@ -95,13 +95,17 @@
   .toast { position: fixed; bottom: 20px; right: 20px; background: #1e2430; color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none; }
   .toast.mostrar { opacity: 1; }
   canvas { max-height: 320px; }
+  #badge-data-base.desatualizada { background: #fbbf24; color: #1e2430; font-weight: bold; }
 </style>
 </head>
 <body>
 
 <header>
   <h1>Entrada até Baixas — Financeiro Protheus</h1>
-  <button id="btn-config">⚙ Configurar planilha</button>
+  <div style="display:flex; align-items:center; gap:16px;">
+    <span id="badge-data-base" style="font-size:13px; background:rgba(255,255,255,.15); padding:6px 12px; border-radius:6px;">Base de dados: carregando…</span>
+    <button id="btn-config">⚙ Configurar planilha</button>
+  </div>
 </header>
 
 <nav>
@@ -225,7 +229,31 @@ const SRC = { tipo:'B', dt_emissao:'C', no_titulo:'D', form_pagto:'E', fornecedo
   dt_baixa:'L', historico:'M', aprovacao:'S', usuario:'AJ', remessa:'AW' };
 
 const CONFIG_KEY = 'eab_backend_url';
-let state = { erp: [], manual: [] };
+let state = { erp: [], manual: [], dataBase: null };
+
+// Nome do arquivo padrão da pasta do Drive: AAAA.MM.DD.xlsx (ex.: 2026.07.30.xlsx)
+function extrairDataBaseDoNome(nomeArquivo) {
+  const m = nomeArquivo.match(/(\d{4})\.(\d{2})\.(\d{2})/);
+  if (!m) return null;
+  return `${m[1]}-${m[2]}-${m[3]}`; // yyyy-MM-dd
+}
+
+function renderizarDataBase() {
+  const el = document.getElementById('badge-data-base');
+  if (!state.dataBase) {
+    el.textContent = 'Base de dados: não identificada';
+    el.classList.remove('desatualizada');
+    return;
+  }
+  const d = paraData(state.dataBase);
+  el.textContent = 'Base de dados: ' + (d ? d.toLocaleDateString('pt-BR') : state.dataBase);
+  const hoje = inicioDoDia(new Date());
+  const diasDefasagem = d ? Math.round((hoje - inicioDoDia(d)) / 86400000) : 0;
+  el.classList.toggle('desatualizada', diasDefasagem >= 2);
+  el.title = diasDefasagem >= 2
+    ? `Export com ${diasDefasagem} dias — importe um arquivo mais recente da pasta do Drive.`
+    : '';
+}
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -260,6 +288,7 @@ async function carregarTudo() {
     const dados = await chamarBackend({ method: 'GET' });
     state.erp = dados.erp || [];
     state.manual = dados.manual || [];
+    state.dataBase = dados.dataBase || null;
     renderizarTudo();
   } catch (e) {
     toast('Erro ao carregar dados: ' + e.message);
@@ -276,6 +305,7 @@ async function postarAcao(action, extra) {
     if (dados.ok === false) throw new Error(dados.erro || 'falha na operação');
     state.erp = dados.erp || [];
     state.manual = dados.manual || [];
+    if (dados.dataBase !== undefined) state.dataBase = dados.dataBase;
     renderizarTudo();
     return dados;
   } catch (e) {
@@ -534,9 +564,13 @@ async function processarArquivo(file) {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array', cellDates: true });
   const itens = parseArquivoProtheus(wb);
+  const dataBase = extrairDataBaseDoNome(file.name);
+  const avisoData = dataBase
+    ? `Data base identificada pelo nome do arquivo: ${paraData(dataBase).toLocaleDateString('pt-BR')}.`
+    : `Não foi possível identificar a data pelo nome do arquivo (esperado AAAA.MM.DD.xlsx) — a base de dados ficará marcada como "não identificada".`;
   document.getElementById('resumo-importacao').innerHTML =
-    `<div class="aviso">${itens.length} títulos lidos de "${file.name}". Enviando para a planilha…</div>`;
-  await postarAcao('importar', { itens });
+    `<div class="aviso">${itens.length} títulos lidos de "${file.name}". ${avisoData} Enviando para a planilha…</div>`;
+  await postarAcao('importar', { itens, dataBase });
   document.getElementById('resumo-importacao').innerHTML =
     `<div class="aviso">${itens.length} títulos importados com sucesso. Veja o resultado no Dashboard e em Lançamentos.</div>`;
   toast('Importação concluída.');
@@ -555,7 +589,7 @@ dropzone.addEventListener('drop', (e) => {
 });
 
 // ---------- Início ----------
-function renderizarTudo() { renderizarDashboard(); renderizarLancamentos(); }
+function renderizarTudo() { renderizarDataBase(); renderizarDashboard(); renderizarLancamentos(); }
 carregarTudo();
 </script>
 </body>
