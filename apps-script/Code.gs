@@ -166,12 +166,15 @@ function recalcularStatus_() {
   manual.forEach(function (item) { chavesManual[chaveDuplicidade_(item)] = true; });
 
   function aplicarStatus(sheet, itens, chavesOutraAba) {
+    if (!itens.length) return;
     var statusCol = HEADERS.indexOf('Status') + 1;
-    itens.forEach(function (item, i) {
+    var valores = itens.map(function (item) {
       var duplicado = !!chavesOutraAba[chaveDuplicidade_(item)];
-      var status = duplicado ? 'Duplicado – revisar' : 'OK';
-      sheet.getRange(i + 2, statusCol).setValue(status);
+      return [duplicado ? 'Duplicado – revisar' : 'OK'];
     });
+    // Uma única chamada em lote em vez de milhares de setValue() individuais
+    // (que é o que fazia a importação travar por vários minutos).
+    sheet.getRange(2, statusCol, valores.length, 1).setValues(valores);
   }
   aplicarStatus(erpSheet, erp, chavesManual);
   aplicarStatus(manualSheet, manual, chavesErp);
