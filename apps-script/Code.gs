@@ -28,8 +28,12 @@ var DRIVE_FOLDER_ID = '1sVlF29VGWDzHelgBGIeFvVK3OCpMjGmD';
 var NOME_ARQUIVO_RE = /^(\d{4})\.(\d{2})\.(\d{2})\.xlsx$/i;
 
 // Pastas do Drive com os anexos de cada lançamento (botões "Anexos" em
-// Lançamentos). Nome dos arquivos: documentos = Tipo + Nº Documento +
-// Fornecedor; comprovantes = "comprovante" (fixo) + Nº Documento + Fornecedor.
+// Lançamentos). Nome dos arquivos: documentos = Nº Documento + nome do
+// fornecedor; comprovantes = "comprovante" (fixo) + Nº Documento + (parte
+// do) nome/razão social do fornecedor. A busca (buscarArquivosPorNumero_)
+// usa só o Nº Documento como critério principal e o fornecedor só pra
+// desempatar quando há mais de um resultado — então não depende de o nome
+// ter exatamente esse formato/ordem.
 var PASTAS_DOCUMENTOS = ['1P4oN7lQopWk2hgNXEDNIdxIgTp1tqeiK', '18nuIj4SsAEqPJ7jOxlUe8JzJ8TCNcueL'];
 var PASTAS_COMPROVANTES = ['1leuDOfqLFDxdg3PECZ6aij2eIkPGKwq6'];
 
@@ -324,13 +328,59 @@ function api_removerDuplicados(payload) {
   return resultado;
 }
 
+// Deixa só letras/números (maiúsculo) — usado pra comparar nomes de arquivo
+// ignorando pontuação (ex.: "54.610", "Nº 54610" e "54610" batem entre si).
+function normalizarNomeArquivo_(s) {
+  return String(s || '').toUpperCase().replace(/[^A-Z0-9À-Ÿ]/g, '');
+}
+
+// Lista os arquivos de uma pasta do Drive (via Drive API avançada), com
+// paginação. Normaliza a resposta porque o serviço avançado "Drive API"
+// pode ter sido habilitado como v2 (resposta.items, campos
+// title/alternateLink) ou v3 (resposta.files, campos name/webViewLink) — e
+// inclui os parâmetros que fazem a busca alcançar pastas dentro de Drives
+// compartilhados (Shared Drives), que sem eles simplesmente não aparecem.
+function listarArquivosDaPasta_(folderId) {
+  var query = "'" + folderId + "' in parents and trashed = false";
+  var arquivos = [];
+  var pageToken = null;
+  var paginas = 0;
+  do {
+    var opcoesBase = {
+      q: query,
+      pageSize: 1000,
+      maxResults: 1000,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      pageToken: pageToken || undefined,
+    };
+    var resposta;
+    try {
+      // Serviço avançado configurado como Drive API v3.
+      resposta = Drive.Files.list(Object.assign({ fields: 'nextPageToken,files(id,name,webViewLink)' }, opcoesBase));
+    } catch (e1) {
+      // Serviço avançado configurado como Drive API v2 (máscara de campos
+      // de v3 é inválida em v2, então tenta de novo com os nomes de v2).
+      resposta = Drive.Files.list(Object.assign({ fields: 'nextPageToken,items(id,title,alternateLink)' }, opcoesBase));
+    }
+    var pagina = resposta.files || resposta.items || [];
+    pagina.forEach(function (f) {
+      arquivos.push({ nome: f.name || f.title, url: f.webViewLink || f.alternateLink });
+    });
+    pageToken = resposta.nextPageToken || null;
+    paginas++;
+  } while (pageToken && paginas < 20); // trava de segurança: até 20.000 arquivos
+  return arquivos;
+}
+
 // Busca, numa pasta do Drive, arquivos cujo nome contenha o Nº Documento
-// informado (via Drive API avançada, mais rápido que iterar a pasta inteira).
-// Normaliza a resposta porque o serviço avançado "Drive API" pode ter sido
-// habilitado como v2 (resposta em resposta.items, campos title/alternateLink)
-// ou v3 (resposta.files, campos name/webViewLink) — e inclui os parâmetros
-// que fazem a busca alcançar pastas dentro de Drives compartilhados
-// (Shared Drives), que sem eles simplesmente não aparecem nos resultados.
+// informado. Nome dos arquivos, por convenção da equipe: documentos = Nº
+// Documento + nome do fornecedor; comprovantes = "comprovante" (fixo) + Nº
+// Documento + (parte do) nome/razão social do fornecedor.
+// Primeiro tenta uma consulta direta ao Drive (rápida); se não achar nada,
+// cai para listar a pasta inteira e comparar os nomes ignorando pontuação
+// — cobre casos como o nome do arquivo usar "54.610" para o Nº Documento
+// "54610", que a consulta direta (substring exata) não encontraria.
 function buscarArquivosPorNumero_(folderId, numDoc) {
   var escapado = numDoc.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   var query = "'" + folderId + "' in parents and trashed = false and name contains '" + escapado + "'";
@@ -343,16 +393,20 @@ function buscarArquivosPorNumero_(folderId, numDoc) {
   };
   var resposta;
   try {
-    // Serviço avançado configurado como Drive API v3.
     resposta = Drive.Files.list(Object.assign({ fields: 'files(id,name,webViewLink)' }, opcoesBase));
   } catch (e1) {
-    // Serviço avançado configurado como Drive API v2 (máscara de campos
-    // de v3 é inválida em v2, então tenta de novo com os nomes de v2).
     resposta = Drive.Files.list(Object.assign({ fields: 'items(id,title,alternateLink)' }, opcoesBase));
   }
   var arquivos = resposta.files || resposta.items || [];
-  return arquivos.map(function (f) {
+  var encontrados = arquivos.map(function (f) {
     return { nome: f.name || f.title, url: f.webViewLink || f.alternateLink };
+  });
+  if (encontrados.length) return encontrados;
+
+  var alvo = normalizarNomeArquivo_(numDoc);
+  if (!alvo) return [];
+  return listarArquivosDaPasta_(folderId).filter(function (f) {
+    return normalizarNomeArquivo_(f.nome).indexOf(alvo) !== -1;
   });
 }
 

@@ -196,10 +196,8 @@
           <h2>Valor por Remessa</h2>
           <button class="btn secundario small" onclick="exportarXlsx('remessa')">⬇ Exportar Excel</button>
         </div>
-        <div style="overflow-x:auto; max-width:100%;">
-          <div id="remessa-chart-wrap" style="height:300px;">
-            <canvas id="chart-remessa"></canvas>
-          </div>
+        <div id="remessa-chart-wrap" style="height:300px; width:100%;">
+          <canvas id="chart-remessa"></canvas>
         </div>
       </div>
     </div>
@@ -910,9 +908,6 @@ function renderizarValorPorRemessa() {
   if (busca) linhas = linhas.filter(l => contemBusca([l.remessa, l.qtde, fmtMoeda(l.valor)], busca));
   ultimoDadosRemessa = linhas;
 
-  const wrap = document.getElementById('remessa-chart-wrap');
-  wrap.style.width = Math.max(linhas.length * 10, wrap.parentElement.clientWidth) + 'px';
-
   if (chartRemessa) chartRemessa.destroy();
   chartRemessa = new Chart(document.getElementById('chart-remessa'), {
     type: 'line',
@@ -942,7 +937,7 @@ function renderizarValorPorRemessa() {
       },
       scales: {
         y: { beginAtZero: true, title: { display: true, text: 'Valor (R$)' } },
-        x: { title: { display: true, text: 'Remessa' } },
+        x: { title: { display: true, text: 'Remessa' }, ticks: { autoSkip: true, maxRotation: 0 } },
       },
     },
   });
