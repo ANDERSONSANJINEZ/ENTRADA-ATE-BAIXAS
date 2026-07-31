@@ -30,6 +30,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
   }
   header h1 { font-size: 18px; margin: 0; }
   header button {
@@ -58,22 +60,27 @@
     border-bottom: 3px solid transparent;
   }
   nav button.ativo { color: var(--azul); border-bottom-color: var(--azul); font-weight: bold; }
-  main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  main { padding: 24px; max-width: 1600px; margin: 0 auto; width: 100%; }
   .aba { display: none; }
   .aba.ativa { display: block; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 24px; }
-  .card { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px 16px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .card { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px 16px; text-align: center; }
   .card .rotulo { font-size: 12px; color: var(--cinza); margin-bottom: 6px; }
-  .card .valor { font-size: 20px; font-weight: bold; color: var(--azul); }
-  .card.alerta .valor { color: var(--vermelho); }
-  .card.atencao .valor { color: var(--laranja); }
+  .card .card-qtde { font-size: 22px; font-weight: bold; color: var(--azul); line-height: 1.2; }
+  .card .card-rs { font-size: 14px; color: var(--azul); margin-top: 2px; }
+  .card.alerta .card-qtde, .card.alerta .card-rs { color: var(--vermelho); }
+  .card.atencao .card-qtde, .card.atencao .card-rs { color: var(--laranja); }
   .painel { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 16px; margin-bottom: 24px; }
   .painel h2 { font-size: 15px; margin: 0 0 12px; color: var(--azul); }
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--borda); white-space: nowrap; }
   th { background: var(--azul-claro); color: var(--azul); position: sticky; top: 0; }
+  th.ordenavel { cursor: pointer; user-select: none; }
+  th.ordenavel:hover { background: #dbe7f3; }
+  .seta-ordenacao { font-size: 10px; }
   .tabela-scroll { max-height: 480px; overflow: auto; border: 1px solid var(--borda); border-radius: 8px; }
+  .busca-tabela { margin-bottom: 10px; padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; font-size: 13px; width: 100%; max-width: 320px; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }
   .badge-erp { background: #dbeafe; color: #1e40af; }
   .badge-manual { background: #ede9fe; color: #5b21b6; }
@@ -96,13 +103,22 @@
   .toast.mostrar { opacity: 1; }
   canvas { max-height: 320px; }
   #badge-data-base.desatualizada { background: #fbbf24; color: #1e2430; font-weight: bold; }
+  @media (max-width: 960px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    main { padding: 14px; }
+    form.manual { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 600px) {
+    form.manual { grid-template-columns: 1fr; }
+    header { flex-direction: column; align-items: flex-start; }
+  }
 </style>
 </head>
 <body>
 
 <header>
   <h1>Entrada até Baixas — Financeiro Protheus</h1>
-  <div style="display:flex; align-items:center; gap:16px;">
+  <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
     <span id="badge-data-base" style="font-size:13px; background:rgba(255,255,255,.15); padding:6px 12px; border-radius:6px;">Base de dados: carregando…</span>
     <button id="btn-config">⚙ Configurar planilha</button>
   </div>
@@ -128,8 +144,26 @@
         <canvas id="chart-fluxo"></canvas>
       </div>
     </div>
+    <div class="grid-2">
+      <div class="painel">
+        <h2>Documentos: Em aberto vs. Baixado</h2>
+        <canvas id="chart-status-pagamento"></canvas>
+        <div id="legenda-status-pagamento" style="text-align:center;font-size:13px;color:var(--cinza);margin-top:8px;"></div>
+      </div>
+      <div class="painel">
+        <h2>Valor por Remessa</h2>
+        <input id="busca-remessa" class="busca-tabela" placeholder="Buscar remessa…">
+        <div class="tabela-scroll" style="max-height:280px;">
+          <table id="tabela-remessa">
+            <thead><tr><th>Remessa</th><th>Qtde</th><th>Valor</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
     <div class="painel">
       <h2>Resumo por Aporte — títulos em aberto</h2>
+      <input id="busca-aporte" class="busca-tabela" placeholder="Buscar aporte ou período…">
       <div class="tabela-scroll">
         <table id="tabela-aporte">
           <thead><tr><th>Aporte</th><th>Período</th><th>Qtde</th><th>Valor</th></tr></thead>
@@ -139,6 +173,7 @@
     </div>
     <div class="painel">
       <h2>Curva ABC de fornecedores</h2>
+      <input id="busca-abc" class="busca-tabela" placeholder="Buscar fornecedor…">
       <div class="tabela-scroll">
         <table id="tabela-abc">
           <thead><tr><th>Fornecedor</th><th>Razão Social</th><th>Qtde</th><th>Valor Total</th><th>% do Total</th><th>% Acum.</th><th>Classe</th></tr></thead>
@@ -203,8 +238,9 @@
         <table id="tabela-lancamentos">
           <thead><tr>
             <th>Origem</th><th>Status</th><th>Aporte</th><th>Tipo</th><th>Emissão</th><th>Nº Doc.</th>
-            <th>Fornecedor</th><th>Razão Social</th><th>Vencimento</th><th>Baixa</th>
-            <th>Valor</th><th>Histórico</th><th></th>
+            <th>Fornecedor</th><th>Razão Social</th><th>Forma Pgto.</th><th>Parcela</th>
+            <th>Vencimento</th><th>Venc. Real</th><th>Baixa</th><th>Valor</th>
+            <th>Usuário</th><th>Aprovação</th><th>Remessa</th><th>Histórico</th><th></th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -260,12 +296,13 @@ function renderizarDataBase() {
   if (!state.dataBase) {
     el.textContent = 'Base de dados: não identificada';
     el.classList.remove('desatualizada');
+    el.title = '';
     return;
   }
   const d = paraData(state.dataBase);
-  el.textContent = 'Base de dados: ' + (d ? d.toLocaleDateString('pt-BR') : state.dataBase);
-  const hoje = inicioDoDia(new Date());
-  const diasDefasagem = d ? Math.round((hoje - inicioDoDia(d)) / 86400000) : 0;
+  el.textContent = 'Base de dados: ' + (d ? fmtData(d) : state.dataBase);
+  const hoje = hojeCalendario();
+  const diasDefasagem = d ? Math.round((hoje - diaCalendario(d)) / 86400000) : 0;
   el.classList.toggle('desatualizada', diasDefasagem >= 2);
   el.title = diasDefasagem >= 2
     ? `Export com ${diasDefasagem} dias — importe um arquivo mais recente da pasta do Drive.`
@@ -298,21 +335,29 @@ async function chamarBackend(opcoes) {
   return resp.json();
 }
 
+// Evita que a resposta de uma requisição antiga (ex.: o GET inicial da
+// página, se demorar) sobrescreva o estado com dados obsoletos depois que
+// uma ação mais recente (ex.: importar) já respondeu.
+let requisicaoAtual = 0;
+
 async function carregarTudo() {
   const url = getBackendUrl();
   if (!url) return;
+  const minhaRequisicao = ++requisicaoAtual;
   try {
     const dados = await chamarBackend({ method: 'GET' });
+    if (minhaRequisicao !== requisicaoAtual) return; // uma ação mais recente já respondeu
     state.erp = dados.erp || [];
     state.manual = dados.manual || [];
     state.dataBase = dados.dataBase || null;
     renderizarTudo();
   } catch (e) {
-    toast('Erro ao carregar dados: ' + e.message);
+    if (minhaRequisicao === requisicaoAtual) toast('Erro ao carregar dados: ' + e.message);
   }
 }
 
 async function postarAcao(action, extra) {
+  const minhaRequisicao = ++requisicaoAtual;
   try {
     const dados = await chamarBackend({
       method: 'POST',
@@ -320,10 +365,12 @@ async function postarAcao(action, extra) {
       body: JSON.stringify(Object.assign({ action }, extra)),
     });
     if (dados.ok === false) throw new Error(dados.erro || 'falha na operação');
-    state.erp = dados.erp || [];
-    state.manual = dados.manual || [];
-    if (dados.dataBase !== undefined) state.dataBase = dados.dataBase;
-    renderizarTudo();
+    if (minhaRequisicao === requisicaoAtual) {
+      state.erp = dados.erp || [];
+      state.manual = dados.manual || [];
+      if (dados.dataBase !== undefined) state.dataBase = dados.dataBase;
+      renderizarTudo();
+    }
     return dados;
   } catch (e) {
     toast('Erro: ' + e.message);
@@ -349,8 +396,27 @@ function paraData(v) {
   return null;
 }
 function fmtMoeda(v) { return 'R$ ' + paraNumero(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-function fmtData(v) { const d = paraData(v); return d ? d.toLocaleDateString('pt-BR') : ''; }
-function inicioDoDia(d) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
+// Todas as datas do app são "somente data" (sem hora). Formatamos sempre a
+// partir dos componentes UTC do Date — nunca com toLocaleDateString/getters
+// locais — porque essas datas nascem de strings "yyyy-MM-dd" interpretadas
+// como meia-noite UTC; usar hora local deslocaria a data em 1 dia para trás
+// em fusos negativos (ex.: Brasil, UTC-3).
+function fmtData(v) {
+  const d = paraData(v);
+  if (!d) return '';
+  const dia = String(d.getUTCDate()).padStart(2, '0');
+  const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
+  return `${dia}/${mes}/${d.getUTCFullYear()}`;
+}
+// Timestamp (ms) do "dia calendário" em UTC, usado para comparar datas sem
+// hora entre si e com hojeCalendario(), sem deslocamento de fuso.
+function diaCalendario(d) { return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()); }
+// "Hoje" no fuso do usuário (dia calendário local real), ancorado da mesma
+// forma que diaCalendario() para poder comparar os dois diretamente.
+function hojeCalendario() {
+  const agora = new Date();
+  return Date.UTC(agora.getFullYear(), agora.getMonth(), agora.getDate());
+}
 
 // Ciclo semanal de "aporte" (mesma regra usada no AppSheet): semanas de 7
 // dias a partir de 2026-01-31 (a semana que contém essa data é o aporte 23).
@@ -373,7 +439,7 @@ function periodoDoAporte(aporteStr) {
   const base = new Date(APORTE_BASE + 'T00:00:00Z');
   const inicio = new Date(base.getTime() + (n - APORTE_OFFSET) * 7 * 86400000);
   const fim = new Date(inicio.getTime() + 6 * 86400000);
-  return `${inicio.toLocaleDateString('pt-BR')} – ${fim.toLocaleDateString('pt-BR')}`;
+  return `${fmtData(inicio)} – ${fmtData(fim)}`;
 }
 
 // combinado usado para KPIs/gráficos: ERP inteiro + manuais que NÃO batem com um item do ERP
@@ -381,47 +447,159 @@ function combinadoParaAnalise() {
   return state.erp.concat(state.manual.filter(m => m.Status !== 'Duplicado – revisar'));
 }
 
+function contemBusca(valores, busca) {
+  if (!busca) return true;
+  return valores.some(v => String(v == null ? '' : v).toLowerCase().includes(busca));
+}
+
+// ---------- Ordenação por clique no cabeçalho (todas as tabelas) ----------
+const estadoOrdenacao = {}; // tabelaId -> {colIdx, asc}
+
+function aplicarOrdenacao(tabelaId, linhas, extratores) {
+  const est = estadoOrdenacao[tabelaId];
+  if (!est || est.colIdx == null || !extratores[est.colIdx]) return linhas;
+  const extrai = extratores[est.colIdx];
+  const copia = linhas.slice();
+  copia.sort((a, b) => {
+    let va = extrai(a), vb = extrai(b);
+    if (va == null) va = '';
+    if (vb == null) vb = '';
+    if (typeof va === 'string') va = va.toLowerCase();
+    if (typeof vb === 'string') vb = vb.toLowerCase();
+    if (va < vb) return est.asc ? -1 : 1;
+    if (va > vb) return est.asc ? 1 : -1;
+    return 0;
+  });
+  return copia;
+}
+
+function tornarOrdenavel(tabelaId, extratores, aoMudar) {
+  const tabela = document.getElementById(tabelaId);
+  if (tabela.dataset.ordenavel) { atualizarSetasOrdenacao(tabelaId); return; }
+  tabela.dataset.ordenavel = '1';
+  const ths = tabela.querySelectorAll('thead th');
+  ths.forEach((th, idx) => {
+    if (!extratores[idx]) return;
+    th.classList.add('ordenavel');
+    th.title = 'Clique para ordenar';
+    const seta = document.createElement('span');
+    seta.className = 'seta-ordenacao';
+    th.appendChild(seta);
+    th.addEventListener('click', () => {
+      const est = estadoOrdenacao[tabelaId] || { colIdx: null, asc: true };
+      if (est.colIdx === idx) est.asc = !est.asc; else { est.colIdx = idx; est.asc = true; }
+      estadoOrdenacao[tabelaId] = est;
+      atualizarSetasOrdenacao(tabelaId);
+      aoMudar();
+    });
+  });
+}
+
+function atualizarSetasOrdenacao(tabelaId) {
+  const est = estadoOrdenacao[tabelaId];
+  document.querySelectorAll(`#${tabelaId} thead th`).forEach((th, idx) => {
+    const seta = th.querySelector('.seta-ordenacao');
+    if (!seta) return;
+    seta.textContent = est && est.colIdx === idx ? (est.asc ? ' ▲' : ' ▼') : '';
+  });
+}
+
 // ---------- Dashboard ----------
-let chartAging, chartFluxo;
+let chartAging, chartFluxo, chartStatusPagamento;
+let ultimoAbertos = [];
+let ultimoItensAnalise = [];
 
 function renderizarDashboard() {
   const itens = combinadoParaAnalise();
-  const hoje = inicioDoDia(new Date());
+  const hoje = hojeCalendario();
 
   const totalQtde = itens.length;
   const totalValor = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   const abertos = itens.filter(i => !i['Data Baixa']);
   const abertoQtde = abertos.length;
   const abertoValor = abertos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
-  const vencidos = abertos.filter(i => { const v = paraData(i['Vencimento']); return v && inicioDoDia(v) < hoje; });
+  const vencidos = abertos.filter(i => { const v = paraData(i['Vencimento']); return v && diaCalendario(v) < hoje; });
   const vencidoQtde = vencidos.length;
   const vencidoValor = vencidos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   const aguardando = state.erp.filter(i => i['Aprovação Remessa'] === 'Aguardando' || !i['Aprovação Remessa']);
   const aguardandoValor = aguardando.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   const manuaisPendentes = state.manual.filter(m => m.Status !== 'Duplicado – revisar');
   const manuaisPendentesValor = manuaisPendentes.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
-  const duplicados = state.manual.filter(m => m.Status === 'Duplicado – revisar').length;
+  const duplicadosItens = state.manual.filter(m => m.Status === 'Duplicado – revisar');
+  const duplicados = duplicadosItens.length;
+  const duplicadosValor = duplicadosItens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
 
   const cards = [
-    { rotulo: 'Total de títulos', valor: totalQtde.toLocaleString('pt-BR') },
+    { rotulo: 'Total de títulos', qtde: totalQtde.toLocaleString('pt-BR') },
     { rotulo: 'Valor total', valor: fmtMoeda(totalValor) },
-    { rotulo: 'Em aberto (sem baixa)', valor: `${abertoQtde} · ${fmtMoeda(abertoValor)}` },
-    { rotulo: 'Vencido e em aberto', valor: `${vencidoQtde} · ${fmtMoeda(vencidoValor)}`, classe: vencidoQtde ? 'alerta' : '' },
-    { rotulo: 'Aguardando aprovação (ERP)', valor: `${aguardando.length} · ${fmtMoeda(aguardandoValor)}`, classe: aguardando.length ? 'atencao' : '' },
-    { rotulo: 'Lançados manualmente (não conferidos)', valor: `${manuaisPendentes.length} · ${fmtMoeda(manuaisPendentesValor)}` },
-    { rotulo: 'Duplicados a revisar', valor: duplicados.toLocaleString('pt-BR'), classe: duplicados ? 'alerta' : '' },
+    { rotulo: 'Em aberto (sem baixa)', qtde: abertoQtde.toLocaleString('pt-BR'), valor: fmtMoeda(abertoValor) },
+    { rotulo: 'Vencido e em aberto', qtde: vencidoQtde.toLocaleString('pt-BR'), valor: fmtMoeda(vencidoValor), classe: vencidoQtde ? 'alerta' : '' },
+    { rotulo: 'Aguardando aprovação (ERP)', qtde: aguardando.length.toLocaleString('pt-BR'), valor: fmtMoeda(aguardandoValor), classe: aguardando.length ? 'atencao' : '' },
+    { rotulo: 'Lançados manualmente (não conferidos)', qtde: manuaisPendentes.length.toLocaleString('pt-BR'), valor: fmtMoeda(manuaisPendentesValor) },
+    { rotulo: 'Duplicados a revisar', qtde: duplicados.toLocaleString('pt-BR'), valor: fmtMoeda(duplicadosValor), classe: duplicados ? 'alerta' : '' },
   ];
-  document.getElementById('cards-kpi').innerHTML = cards.map(c =>
-    `<div class="card ${c.classe || ''}"><div class="rotulo">${c.rotulo}</div><div class="valor">${c.valor}</div></div>`
-  ).join('');
+  document.getElementById('cards-kpi').innerHTML = cards.map(c => {
+    const linhas = [];
+    if (c.qtde !== undefined) linhas.push(`<div class="card-qtde">${c.qtde}</div>`);
+    if (c.valor !== undefined) linhas.push(`<div class="card-rs">${c.valor}</div>`);
+    return `<div class="card ${c.classe || ''}"><div class="rotulo">${c.rotulo}</div>${linhas.join('')}</div>`;
+  }).join('');
+
+  ultimoAbertos = abertos;
+  ultimoItensAnalise = itens;
 
   renderizarAging(abertos, hoje);
   renderizarFluxoCaixa(abertos, hoje);
+  renderizarStatusPagamento(itens);
+  renderizarValorPorRemessa();
   renderizarResumoAporte(abertos);
   renderizarCurvaAbc(itens);
 }
 
+function renderizarStatusPagamento(itens) {
+  const abertos = itens.filter(i => !i['Data Baixa']);
+  const baixados = itens.filter(i => i['Data Baixa']);
+  const valorAberto = abertos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const valorBaixado = baixados.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+
+  if (chartStatusPagamento) chartStatusPagamento.destroy();
+  chartStatusPagamento = new Chart(document.getElementById('chart-status-pagamento'), {
+    type: 'doughnut',
+    data: {
+      labels: [`Em aberto (${abertos.length})`, `Baixado (${baixados.length})`],
+      datasets: [{ data: [abertos.length, baixados.length], backgroundColor: ['#e08e0b', '#1e7e34'] }],
+    },
+    options: { plugins: { legend: { position: 'bottom' } } },
+  });
+  document.getElementById('legenda-status-pagamento').textContent =
+    `Em aberto: ${fmtMoeda(valorAberto)}  ·  Baixado: ${fmtMoeda(valorBaixado)}`;
+}
+
+const EXTRATORES_REMESSA = [r => r.remessa, r => r.qtde, r => r.valor];
+function renderizarValorPorRemessa() {
+  const grupos = {};
+  state.erp.forEach(i => {
+    const rem = i['Remessa'];
+    if (!rem) return;
+    if (!grupos[rem]) grupos[rem] = { qtde: 0, valor: 0 };
+    grupos[rem].qtde += 1;
+    grupos[rem].valor += paraNumero(i['R$ Valor']);
+  });
+  let linhas = Object.keys(grupos).sort().map(remessa => ({ remessa, qtde: grupos[remessa].qtde, valor: grupos[remessa].valor }));
+
+  const busca = (document.getElementById('busca-remessa').value || '').trim().toLowerCase();
+  if (busca) linhas = linhas.filter(l => contemBusca([l.remessa, l.qtde, fmtMoeda(l.valor)], busca));
+  linhas = aplicarOrdenacao('tabela-remessa', linhas, EXTRATORES_REMESSA);
+
+  document.querySelector('#tabela-remessa tbody').innerHTML = linhas.map(l =>
+    `<tr><td>${l.remessa}</td><td>${l.qtde}</td><td>${fmtMoeda(l.valor)}</td></tr>`
+  ).join('') || '<tr><td colspan="3" style="color:var(--cinza)">Nenhuma remessa encontrada.</td></tr>';
+  tornarOrdenavel('tabela-remessa', EXTRATORES_REMESSA, renderizarValorPorRemessa);
+}
+
+const EXTRATORES_APORTE = [r => r.aporte, r => r.periodo, r => r.qtde, r => r.valor];
 function renderizarResumoAporte(abertos) {
+  ultimoAbertos = abertos;
   const grupos = {};
   abertos.forEach(i => {
     const aporte = calcularAporte(i['Vencimento']);
@@ -430,12 +608,18 @@ function renderizarResumoAporte(abertos) {
     grupos[aporte].qtde += 1;
     grupos[aporte].valor += paraNumero(i['R$ Valor']);
   });
-  const linhas = Object.keys(grupos).sort().map(aporte => {
-    const g = grupos[aporte];
-    return `<tr><td>${aporte}</td><td>${periodoDoAporte(aporte)}</td><td>${g.qtde}</td><td>${fmtMoeda(g.valor)}</td></tr>`;
-  });
-  document.querySelector('#tabela-aporte tbody').innerHTML = linhas.join('') ||
-    '<tr><td colspan="4" style="color:var(--cinza)">Nenhum título em aberto com aporte identificado.</td></tr>';
+  let linhas = Object.keys(grupos).sort().map(aporte => ({
+    aporte, periodo: periodoDoAporte(aporte), qtde: grupos[aporte].qtde, valor: grupos[aporte].valor,
+  }));
+
+  const busca = (document.getElementById('busca-aporte').value || '').trim().toLowerCase();
+  if (busca) linhas = linhas.filter(l => contemBusca([l.aporte, l.periodo, l.qtde, fmtMoeda(l.valor)], busca));
+  linhas = aplicarOrdenacao('tabela-aporte', linhas, EXTRATORES_APORTE);
+
+  document.querySelector('#tabela-aporte tbody').innerHTML = linhas.map(l =>
+    `<tr><td>${l.aporte}</td><td>${l.periodo}</td><td>${l.qtde}</td><td>${fmtMoeda(l.valor)}</td></tr>`
+  ).join('') || '<tr><td colspan="4" style="color:var(--cinza)">Nenhum título em aberto com aporte identificado.</td></tr>';
+  tornarOrdenavel('tabela-aporte', EXTRATORES_APORTE, () => renderizarResumoAporte(ultimoAbertos));
 }
 
 function renderizarAging(abertos, hoje) {
@@ -448,7 +632,7 @@ function renderizarAging(abertos, hoje) {
   ];
   function diasAtraso(d, hoje) { return Math.round((hoje - d) / 86400000); }
   const valores = faixas.map(f => abertos
-    .filter(i => { const v = paraData(i['Vencimento']); return v && f.teste(inicioDoDia(v)); })
+    .filter(i => { const v = paraData(i['Vencimento']); return v && f.teste(diaCalendario(v)); })
     .reduce((s, i) => s + paraNumero(i['R$ Valor']), 0));
 
   if (chartAging) chartAging.destroy();
@@ -461,14 +645,14 @@ function renderizarAging(abertos, hoje) {
 }
 
 function renderizarFluxoCaixa(abertos, hoje) {
-  const vencido = abertos.filter(i => { const v = paraData(i['Vencimento']); return v && inicioDoDia(v) < hoje; })
+  const vencido = abertos.filter(i => { const v = paraData(i['Vencimento']); return v && diaCalendario(v) < hoje; })
     .reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
-  const futuros = abertos.filter(i => { const v = paraData(i['Vencimento']); return v && inicioDoDia(v) >= hoje; });
+  const futuros = abertos.filter(i => { const v = paraData(i['Vencimento']); return v && diaCalendario(v) >= hoje; });
 
   const buckets = {};
   futuros.forEach(i => {
     const v = paraData(i['Vencimento']);
-    const chave = `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}`;
+    const chave = `${v.getUTCFullYear()}-${String(v.getUTCMonth() + 1).padStart(2, '0')}`;
     buckets[chave] = (buckets[chave] || 0) + paraNumero(i['R$ Valor']);
   });
   const chavesOrdenadas = Object.keys(buckets).sort();
@@ -490,7 +674,9 @@ function renderizarFluxoCaixa(abertos, hoje) {
   });
 }
 
+const EXTRATORES_ABC = [l => l.cod, l => l.nome, l => l.qtde, l => l.valor, l => l.pct, l => l.acum, l => l.classe];
 function renderizarCurvaAbc(itens) {
+  ultimoItensAnalise = itens;
   const totalGeral = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   const grupos = {};
   itens.forEach(i => {
@@ -499,17 +685,29 @@ function renderizarCurvaAbc(itens) {
     grupos[cod].qtde += 1;
     grupos[cod].valor += paraNumero(i['R$ Valor']);
   });
-  const ordenado = Object.entries(grupos).sort((a, b) => b[1].valor - a[1].valor).slice(0, 20);
+  const ordenadoBase = Object.entries(grupos).sort((a, b) => b[1].valor - a[1].valor);
   let acumulado = 0;
-  const linhas = ordenado.map(([cod, g]) => {
+  let linhas = ordenadoBase.map(([cod, g]) => {
     const pct = totalGeral ? g.valor / totalGeral : 0;
     acumulado += pct;
     const classe = acumulado <= 0.8 ? 'A' : acumulado <= 0.95 ? 'B' : 'C';
-    return `<tr><td>${cod}</td><td>${g.nome}</td><td>${g.qtde}</td><td>${fmtMoeda(g.valor)}</td>
-      <td>${(pct * 100).toFixed(1)}%</td><td>${(acumulado * 100).toFixed(1)}%</td><td>${classe}</td></tr>`;
+    return { cod, nome: g.nome, qtde: g.qtde, valor: g.valor, pct, acum: acumulado, classe };
   });
-  document.querySelector('#tabela-abc tbody').innerHTML = linhas.join('');
+
+  const busca = (document.getElementById('busca-abc').value || '').trim().toLowerCase();
+  if (busca) linhas = linhas.filter(l => contemBusca([l.cod, l.nome, l.qtde, fmtMoeda(l.valor), l.classe], busca));
+  linhas = aplicarOrdenacao('tabela-abc', linhas, EXTRATORES_ABC);
+
+  document.querySelector('#tabela-abc tbody').innerHTML = linhas.map(l =>
+    `<tr><td>${l.cod}</td><td>${l.nome}</td><td>${l.qtde}</td><td>${fmtMoeda(l.valor)}</td>
+      <td>${(l.pct * 100).toFixed(1)}%</td><td>${(l.acum * 100).toFixed(1)}%</td><td>${l.classe}</td></tr>`
+  ).join('');
+  tornarOrdenavel('tabela-abc', EXTRATORES_ABC, () => renderizarCurvaAbc(ultimoItensAnalise));
 }
+
+document.getElementById('busca-remessa').addEventListener('input', () => renderizarValorPorRemessa());
+document.getElementById('busca-aporte').addEventListener('input', () => renderizarResumoAporte(ultimoAbertos));
+document.getElementById('busca-abc').addEventListener('input', () => renderizarCurvaAbc(ultimoItensAnalise));
 
 // ---------- Lançamentos ----------
 // Junta o valor bruto e o formatado (data/moeda) de todas as colunas exibidas,
@@ -528,6 +726,28 @@ function textoBuscavel(i) {
     i['Aprovação Remessa'], i['Remessa'], i['Histórico'],
   ].map(v => String(v == null ? '' : v).toLowerCase()).join(' ␟ ');
 }
+
+const EXTRATORES_LANCAMENTOS = [
+  i => i.Origem,
+  i => i.Status,
+  i => i.Aporte,
+  i => i.Tipo,
+  i => paraData(i['Data Emissão']),
+  i => i['Nº Documento'],
+  i => i['Código Fornecedor'],
+  i => i['Razão Social'],
+  i => i['Forma Pagamento'],
+  i => i['Parcela'],
+  i => paraData(i['Vencimento']),
+  i => paraData(i['Vencimento Real']),
+  i => paraData(i['Data Baixa']),
+  i => paraNumero(i['R$ Valor']),
+  i => i['Usuário Inclusor'],
+  i => i['Aprovação Remessa'],
+  i => i['Remessa'],
+  i => i['Histórico'],
+  null, // ação (não ordenável)
+];
 
 function renderizarLancamentos() {
   const busca = document.getElementById('busca').value.trim().toLowerCase();
@@ -553,6 +773,7 @@ function renderizarLancamentos() {
   if (busca) itens = itens.filter(i => textoBuscavel(i).includes(busca));
 
   itens.sort((a, b) => (paraData(b['Vencimento']) || 0) - (paraData(a['Vencimento']) || 0));
+  itens = aplicarOrdenacao('tabela-lancamentos', itens, EXTRATORES_LANCAMENTOS);
 
   document.querySelector('#tabela-lancamentos tbody').innerHTML = itens.map(i => {
     const origemBadge = i.Origem === 'ERP' ? 'badge-erp' : 'badge-manual';
@@ -569,13 +790,20 @@ function renderizarLancamentos() {
       <td>${i['Nº Documento'] || ''}</td>
       <td>${i['Código Fornecedor'] || ''}</td>
       <td>${i['Razão Social'] || ''}</td>
+      <td>${i['Forma Pagamento'] || ''}</td>
+      <td>${i['Parcela'] || ''}</td>
       <td>${fmtData(i['Vencimento'])}</td>
+      <td>${fmtData(i['Vencimento Real'])}</td>
       <td>${fmtData(i['Data Baixa'])}</td>
       <td>${fmtMoeda(i['R$ Valor'])}</td>
+      <td>${i['Usuário Inclusor'] || ''}</td>
+      <td>${i['Aprovação Remessa'] || ''}</td>
+      <td>${i['Remessa'] || ''}</td>
       <td>${i['Histórico'] || ''}</td>
       <td>${acao}</td>
     </tr>`;
   }).join('');
+  tornarOrdenavel('tabela-lancamentos', EXTRATORES_LANCAMENTOS, renderizarLancamentos);
 }
 ['busca', 'filtro-origem', 'filtro-status', 'filtro-aporte'].forEach(id =>
   document.getElementById(id).addEventListener('input', renderizarLancamentos));
@@ -654,7 +882,7 @@ async function processarArquivo(file) {
   const itens = parseArquivoProtheus(wb);
   const dataBase = extrairDataBaseDoNome(file.name);
   const avisoData = dataBase
-    ? `Data base identificada pelo nome do arquivo: ${paraData(dataBase).toLocaleDateString('pt-BR')}.`
+    ? `Data base identificada pelo nome do arquivo: ${fmtData(dataBase)}.`
     : `Não foi possível identificar a data pelo nome do arquivo (esperado AAAA.MM.DD.xlsx) — a base de dados ficará marcada como "não identificada".`;
   document.getElementById('resumo-importacao').innerHTML =
     `<div class="aviso">${itens.length} títulos lidos de "${file.name}". ${avisoData} Enviando para a planilha…</div>`;
