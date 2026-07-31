@@ -313,11 +313,28 @@ function toast(msg) {
 // então chamamos as funções do servidor direto via google.script.run — sem
 // URL pra configurar, sem CORS, sem fetch.
 function chamarServidor(acao, payload) {
+  payload = payload || {};
   return new Promise((resolve, reject) => {
-    google.script.run
-      .withSuccessHandler(resolve)
-      .withFailureHandler(erro => reject(new Error(erro && erro.message ? erro.message : String(erro))))
-      ['api_' + acao](payload || {});
+    const trata = (dados) => {
+      // Se o servidor responder null/undefined (ex.: função não encontrada
+      // porque o Code.gs não foi colado por completo), avisa isso em vez de
+      // travar num erro genérico de "reading 'erp'".
+      if (dados == null) {
+        reject(new Error('O backend respondeu vazio. Confirme se o Code.gs foi colado por completo no Apps Script e se a implantação foi atualizada ("Nova versão").'));
+        return;
+      }
+      resolve(dados);
+    };
+    const erroServidor = (erro) => reject(new Error(erro && erro.message ? erro.message : String(erro)));
+    const runner = google.script.run.withSuccessHandler(trata).withFailureHandler(erroServidor);
+    // Chamada explícita (em vez de nome dinâmico via colchetes) — forma
+    // mais padrão de usar google.script.run, evita qualquer ambiguidade.
+    if (acao === 'carregar') runner.api_carregar();
+    else if (acao === 'importar') runner.api_importar(payload);
+    else if (acao === 'importarDoDrive') runner.api_importarDoDrive();
+    else if (acao === 'adicionarManual') runner.api_adicionarManual(payload);
+    else if (acao === 'removerManual') runner.api_removerManual(payload);
+    else reject(new Error('Ação desconhecida: ' + acao));
   });
 }
 
