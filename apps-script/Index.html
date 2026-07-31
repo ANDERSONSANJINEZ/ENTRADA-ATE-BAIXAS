@@ -4,9 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Entrada até Baixas</title>
-<script src="vendor/xlsx.full.min.js"></script>
-<script src="vendor/chart.umd.js"></script>
-<script src="vendor/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
   :root {
     --azul: #1f4e78;
@@ -35,15 +35,6 @@
     gap: 10px;
   }
   header h1 { font-size: 18px; margin: 0; }
-  header button {
-    background: rgba(255,255,255,.15);
-    border: 1px solid rgba(255,255,255,.4);
-    color: #fff;
-    padding: 6px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
-  }
   nav {
     display: flex;
     gap: 4px;
@@ -120,10 +111,7 @@
 
 <header>
   <h1>Entrada até Baixas — Financeiro Protheus</h1>
-  <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-    <span id="badge-data-base" style="font-size:13px; background:rgba(255,255,255,.15); padding:6px 12px; border-radius:6px;">Base de dados: carregando…</span>
-    <button id="btn-config">⚙ Configurar planilha</button>
-  </div>
+  <span id="badge-data-base" style="font-size:13px; background:rgba(255,255,255,.15); padding:6px 12px; border-radius:6px;">Base de dados: carregando…</span>
 </header>
 
 <nav>
@@ -287,7 +275,6 @@ const SRC = { tipo:'B', dt_emissao:'C', no_titulo:'D', form_pagto:'E', fornecedo
   nome_fornece:'G', vencimento:'H', vencto_real:'I', vlr_titulo:'J', parcela:'K',
   dt_baixa:'L', historico:'M', aprovacao:'S', usuario:'AJ', remessa:'AW' };
 
-const CONFIG_KEY = 'eab_backend_url';
 let state = { erp: [], manual: [], dataBase: null };
 
 // Nome do arquivo padrão da pasta do Drive: AAAA.MM.DD.xlsx (ex.: 2026.07.30.xlsx)
@@ -322,42 +309,27 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('mostrar'), 3000);
 }
 
-function getBackendUrl() {
-  let url = localStorage.getItem(CONFIG_KEY);
-  if (!url) url = pedirBackendUrl();
-  return url;
-}
-function pedirBackendUrl() {
-  const url = prompt('Cole a URL do Web App do Apps Script (termina em /exec):', localStorage.getItem(CONFIG_KEY) || '');
-  if (url) localStorage.setItem(CONFIG_KEY, url.trim());
-  return url ? url.trim() : null;
-}
-document.getElementById('btn-config').onclick = () => { pedirBackendUrl(); carregarTudo(); };
-
-async function chamarBackend(opcoes) {
-  const url = getBackendUrl();
-  if (!url) throw new Error('URL do backend não configurada.');
-  // Visitar a URL sem parâmetros abre a tela (Index.html) hospedada no
-  // próprio Apps Script; ?api=json mantém o retorno JSON que este arquivo
-  // local usa para buscar os dados (GET).
-  const urlFinal = (!opcoes.method || opcoes.method === 'GET')
-    ? url + (url.includes('?') ? '&' : '?') + 'api=json'
-    : url;
-  const resp = await fetch(urlFinal, opcoes);
-  return resp.json();
+// Ponte com o backend: a tela é servida pelo mesmo Apps Script do backend,
+// então chamamos as funções do servidor direto via google.script.run — sem
+// URL pra configurar, sem CORS, sem fetch.
+function chamarServidor(acao, payload) {
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(erro => reject(new Error(erro && erro.message ? erro.message : String(erro))))
+      ['api_' + acao](payload || {});
+  });
 }
 
-// Evita que a resposta de uma requisição antiga (ex.: o GET inicial da
-// página, se demorar) sobrescreva o estado com dados obsoletos depois que
+// Evita que a resposta de uma requisição antiga (ex.: o carregamento inicial
+// da página, se demorar) sobrescreva o estado com dados obsoletos depois que
 // uma ação mais recente (ex.: importar) já respondeu.
 let requisicaoAtual = 0;
 
 async function carregarTudo() {
-  const url = getBackendUrl();
-  if (!url) return;
   const minhaRequisicao = ++requisicaoAtual;
   try {
-    const dados = await chamarBackend({ method: 'GET' });
+    const dados = await chamarServidor('carregar', {});
     if (minhaRequisicao !== requisicaoAtual) return; // uma ação mais recente já respondeu
     state.erp = dados.erp || [];
     state.manual = dados.manual || [];
@@ -371,12 +343,7 @@ async function carregarTudo() {
 async function postarAcao(action, extra) {
   const minhaRequisicao = ++requisicaoAtual;
   try {
-    const dados = await chamarBackend({
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(Object.assign({ action }, extra)),
-    });
-    if (dados.ok === false) throw new Error(dados.erro || 'falha na operação');
+    const dados = await chamarServidor(action, extra);
     if (minhaRequisicao === requisicaoAtual) {
       state.erp = dados.erp || [];
       state.manual = dados.manual || [];

@@ -180,10 +180,18 @@ function recalcularStatus_() {
   aplicarStatus(manualSheet, manual, chavesErp);
 }
 
+// Visitar a URL do Web App direto no navegador serve a tela (Index.html).
+// ?api=json mantém o retorno JSON antigo, usado pela versão local de
+// web/index.html (que ainda faz fetch() em vez de google.script.run).
 function doGet(e) {
-  return ContentService
-    .createTextOutput(JSON.stringify({ erp: lerAba_('ERP'), manual: lerAba_('Manual'), dataBase: getDataBase_() }))
-    .setMimeType(ContentService.MimeType.JSON);
+  if (e && e.parameter && e.parameter.api === 'json') {
+    return ContentService
+      .createTextOutput(JSON.stringify(api_carregar()))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('Entrada até Baixas — Financeiro Protheus')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
 // Substitui o conteúdo da aba ERP pelos itens informados e recalcula duplicidade.
@@ -207,54 +215,78 @@ function substituirErp_(itens, dataBase) {
   recalcularStatus_();
 }
 
+// ---------- Ações (chamadas via google.script.run pela tela hospedada, e
+// via doPost/JSON pela versão local de web/index.html — mesma lógica). ----------
+
+function api_carregar() {
+  return { erp: lerAba_('ERP'), manual: lerAba_('Manual'), dataBase: getDataBase_() };
+}
+
+function api_importar(payload) {
+  substituirErp_(payload.itens, payload.dataBase);
+  return api_carregar();
+}
+
+function api_importarDoDrive() {
+  var achado = encontrarArquivoMaisRecenteNoDrive_();
+  if (!achado) throw new Error('Nenhum arquivo AAAA.MM.DD.xlsx encontrado na pasta do Drive.');
+  var dadosPlanilha = lerLinhasDoXlsx_(achado.file);
+  var itensDrive = parseLinhasProtheus_(dadosPlanilha);
+  substituirErp_(itensDrive, achado.dataBase);
+  var resultado = api_carregar();
+  resultado.arquivoUsado = achado.file.getName();
+  resultado.quantidadeImportada = itensDrive.length;
+  return resultado;
+}
+
+function api_adicionarManual(payload) {
+  var shM = getSheet_('Manual');
+  var id = Utilities.getUuid();
+  var linha = HEADERS.map(function (h) {
+    if (h === 'ID') return id;
+    if (h === 'Origem') return 'Manual';
+    if (h === 'Status') return 'OK';
+    return payload.item[h] != null ? payload.item[h] : '';
+  });
+  shM.appendRow(linha);
+  recalcularStatus_();
+  return api_carregar();
+}
+
+function api_removerManual(payload) {
+  var shM = getSheet_('Manual');
+  var idCol = HEADERS.indexOf('ID') + 1;
+  var dados = shM.getRange(2, 1, Math.max(shM.getLastRow() - 1, 0), HEADERS.length).getValues();
+  for (var i = 0; i < dados.length; i++) {
+    if (dados[i][idCol - 1] === payload.id) {
+      shM.deleteRow(i + 2);
+      break;
+    }
+  }
+  recalcularStatus_();
+  return api_carregar();
+}
+
+// doPost continua existindo só para a versão local de web/index.html
+// (que fala HTTP/fetch); a tela hospedada usa google.script.run direto
+// nas funções api_* acima, sem passar por doPost.
 function doPost(e) {
   var payload = JSON.parse(e.postData.contents);
   var acao = payload.action;
-  var resultado = { ok: true };
-
-  if (acao === 'importar') {
-    substituirErp_(payload.itens, payload.dataBase);
-  } else if (acao === 'importarDoDrive') {
-    var achado = encontrarArquivoMaisRecenteNoDrive_();
-    if (!achado) {
-      resultado = { ok: false, erro: 'Nenhum arquivo AAAA.MM.DD.xlsx encontrado na pasta do Drive.' };
-    } else {
-      var dadosPlanilha = lerLinhasDoXlsx_(achado.file);
-      var itensDrive = parseLinhasProtheus_(dadosPlanilha);
-      substituirErp_(itensDrive, achado.dataBase);
-      resultado.arquivoUsado = achado.file.getName();
-      resultado.quantidadeImportada = itensDrive.length;
-    }
-  } else if (acao === 'adicionarManual') {
-    var shM = getSheet_('Manual');
-    var id2 = Utilities.getUuid();
-    var linha = HEADERS.map(function (h) {
-      if (h === 'ID') return id2;
-      if (h === 'Origem') return 'Manual';
-      if (h === 'Status') return 'OK';
-      return payload.item[h] != null ? payload.item[h] : '';
-    });
-    shM.appendRow(linha);
-    recalcularStatus_();
-  } else if (acao === 'removerManual') {
-    var shM2 = getSheet_('Manual');
-    var idCol = HEADERS.indexOf('ID') + 1;
-    var dados = shM2.getRange(2, 1, Math.max(shM2.getLastRow() - 1, 0), HEADERS.length).getValues();
-    for (var i = 0; i < dados.length; i++) {
-      if (dados[i][idCol - 1] === payload.id) {
-        shM2.deleteRow(i + 2);
-        break;
-      }
-    }
-    recalcularStatus_();
-  } else {
-    resultado = { ok: false, erro: 'Ação desconhecida: ' + acao };
+  try {
+    var resultado;
+    if (acao === 'importar') resultado = api_importar(payload);
+    else if (acao === 'importarDoDrive') resultado = api_importarDoDrive();
+    else if (acao === 'adicionarManual') resultado = api_adicionarManual(payload);
+    else if (acao === 'removerManual') resultado = api_removerManual(payload);
+    else throw new Error('Ação desconhecida: ' + acao);
+    resultado.ok = true;
+    return ContentService
+      .createTextOutput(JSON.stringify(resultado))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (erro) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, erro: erro.message }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
-
-  resultado.erp = lerAba_('ERP');
-  resultado.manual = lerAba_('Manual');
-  resultado.dataBase = getDataBase_();
-  return ContentService
-    .createTextOutput(JSON.stringify(resultado))
-    .setMimeType(ContentService.MimeType.JSON);
 }

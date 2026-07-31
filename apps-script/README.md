@@ -1,8 +1,15 @@
-# Backend (Google Sheets + Apps Script)
+# Backend (Google Sheets + Apps Script) — e a tela hospedada
 
 Guarda os lançamentos importados do Protheus e os lançamentos manuais, e
 calcula o status "Duplicado – revisar" quando um lançamento manual e um do
 ERP têm o mesmo Código Fornecedor + Valor + Vencimento.
+
+A partir desta versão, a mesma implantação do Apps Script também **serve a
+tela do app** (`Index.html`) — visitar a URL gerada no passo 9 abaixo, num
+navegador qualquer, já abre o app funcionando. Não precisa mais baixar nem
+abrir arquivo local nenhum. (A versão local `web/index.html` continua
+funcionando como alternativa, apontando para a mesma URL — ver a seção
+"Duas formas de usar" no fim deste documento.)
 
 ## Passo a passo (uma vez só)
 
@@ -11,26 +18,38 @@ ERP têm o mesmo Código Fornecedor + Valor + Vencimento.
 2. Nela, abra **Extensões → Apps Script**.
 3. Apague o conteúdo padrão de `Code.gs` e cole o conteúdo do arquivo
    `apps-script/Code.gs` deste repositório.
-4. Habilite o serviço avançado do Drive (necessário para o botão "Buscar
+4. No menu lateral esquerdo do editor, clique no **+** ao lado de
+   "Arquivos", escolha **HTML**, nomeie exatamente **Index** (sem
+   extensão — o Apps Script adiciona `.html` sozinho) e cole o conteúdo do
+   arquivo `apps-script/Index.html` deste repositório.
+5. Habilite o serviço avançado do Drive (necessário para o botão "Buscar
    arquivo mais recente do Drive" converter o .xlsx em planilha e lê-lo):
    no menu lateral esquerdo, clique no **+** ao lado de "Serviços",
    selecione **Drive API** e clique em Adicionar.
-5. Confirme que sua conta Google tem acesso de visualização à pasta do
+6. Confirme que sua conta Google tem acesso de visualização à pasta do
    Drive `17 CONTAS A PAGAR` (ela aparece em "Compartilhados comigo") —
-   é a mesma conta que vai fazer a implantação como "Eu" no passo 6.
-6. Salve o projeto (ícone de disquete).
-7. Clique em **Implantar → Nova implantação**.
+   é a mesma conta que vai fazer a implantação como "Eu" no passo 8.
+7. Salve o projeto (ícone de disquete).
+8. Clique em **Implantar → Nova implantação**.
    - Tipo: **App da Web**.
    - Executar como: **Eu (seu e-mail)**.
    - Quem pode acessar: **Qualquer pessoa** (necessário para a tela web
      conseguir chamar o backend sem login adicional).
-8. Na primeira execução, o Google vai pedir para autorizar o acesso ao
+9. Na primeira execução, o Google vai pedir para autorizar o acesso ao
    Drive/Planilhas — autorize (é a sua própria conta agindo em seu nome).
-9. Copie a **URL do app da Web** gerada (termina em `/exec`).
-10. Abra `web/index.html` no navegador, cole essa URL no campo de
-    configuração exibido na primeira execução (fica salva no navegador).
+10. Copie a **URL do app da Web** gerada (termina em `/exec`) — **essa é a
+    URL para usar o app**. Salve como favorito no navegador/celular.
 
 As abas `ERP` e `Manual` são criadas automaticamente na primeira chamada.
+
+## Duas formas de usar
+
+- **Link único (recomendado)**: abra a URL do passo 10 direto no navegador
+  — computador, celular, tablet, de qualquer lugar. Não precisa configurar
+  nada nem copiar arquivo.
+- **Arquivo local (`web/index.html`)**: continua funcionando como antes —
+  baixe a pasta `web/` e abra `index.html`, colando a mesma URL do passo
+  10 quando pedido. Útil como alternativa/backup.
 
 ## Importação automática da pasta do Drive
 
