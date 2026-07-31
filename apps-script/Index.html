@@ -73,6 +73,10 @@
   #tabela-lancamentos td.col-historico { white-space: normal; max-width: 320px; word-break: break-word; }
   .anexos-col { display: flex; gap: 4px; }
   .anexos-col button { padding: 3px 6px; font-size: 11px; }
+  tr.separador-grupo td { border-top: 2px solid #1e2430; }
+  #conteudo-analise ul { margin: 0 0 14px; padding-left: 22px; }
+  #conteudo-analise h3 { font-size: 14px; color: var(--azul); margin: 18px 0 6px; }
+  #conteudo-analise h3:first-child { margin-top: 0; }
   .cards-remessa-status { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
   .card-remessa-status { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
   .card-remessa-status .rotulo { font-size: 13px; color: var(--cinza); }
@@ -133,6 +137,8 @@
 <nav>
   <button class="ativo" data-aba="dashboard">Dashboard</button>
   <button data-aba="lancamentos">Lançamentos</button>
+  <button data-aba="detalhe-aporte">Detalhe por Aporte</button>
+  <button data-aba="analise">Análise</button>
   <button data-aba="importar" id="nav-importar">Importar</button>
 </nav>
 
@@ -262,6 +268,35 @@
           <tbody></tbody>
         </table>
       </div>
+    </div>
+  </section>
+
+  <section id="aba-detalhe-aporte" class="aba">
+    <div class="painel">
+      <div class="cabecalho-painel">
+        <h2>Detalhe por Aporte</h2>
+        <button class="btn secundario small" onclick="exportarCsv('detalheAporte')">⬇ Exportar CSV</button>
+      </div>
+      <select id="select-aporte-detalhe" class="busca-tabela" style="max-width:420px;">
+        <option value="">Selecione um aporte…</option>
+      </select>
+      <div id="total-detalhe-aporte" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
+      <div class="tabela-scroll">
+        <table id="tabela-detalhe-aporte">
+          <thead><tr><th>Data</th><th>N/Doc.</th><th>Descrição</th><th>Venc.</th><th>Valor</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="aba-analise" class="aba">
+    <div class="painel">
+      <div class="cabecalho-painel">
+        <h2>Análise dos dados</h2>
+        <button class="btn secundario small" onclick="exportarCsv('analise')">⬇ Exportar CSV</button>
+      </div>
+      <div id="conteudo-analise" style="font-size:14px; line-height:1.9;"></div>
     </div>
   </section>
 
@@ -532,6 +567,17 @@ function exportarCsv(qual) {
   } else if (qual === 'remessa') {
     const linhas = ultimoDadosRemessa.map((l) => [l.remessa, l.qtde, fmtMoeda(l.valor)]);
     baixarCsv('valor_por_remessa.csv', ['Remessa', 'Qtde', 'Valor'], linhas);
+  } else if (qual === 'detalheAporte') {
+    const linhas = ultimoDetalheAporte.map((i) => [
+      fmtData(i['Data Emissão']),
+      `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(),
+      [i['Razão Social'], i['Histórico']].filter(Boolean).join(' - ') + (i['Parcela'] ? ` - PARC.: ${i['Parcela']}` : ''),
+      fmtData(i['Vencimento']),
+      fmtMoeda(i['R$ Valor']),
+    ]);
+    baixarCsv('detalhe_aporte.csv', ['Data', 'N/Doc.', 'Descrição', 'Venc.', 'Valor'], linhas);
+  } else if (qual === 'analise') {
+    baixarCsv('analise.csv', ['Indicador', 'Valor'], ultimoDadosAnalise);
   }
 }
 
@@ -1078,6 +1124,173 @@ function parseArquivoProtheus(workbook) {
   return itens;
 }
 
+// ---------- Detalhe por Aporte ----------
+let ultimoDetalheAporte = [];
+
+function popularSelectAporteDetalhe() {
+  const sel = document.getElementById('select-aporte-detalhe');
+  const disponiveis = Array.from(new Set(ultimoAbertos.map((i) => calcularAporte(i['Vencimento'])).filter(Boolean))).sort();
+  const atual = sel.value;
+  sel.innerHTML = '<option value="">Selecione um aporte…</option>' +
+    disponiveis.map((a) => `<option value="${a}">Aporte ${a} — ${periodoDoAporte(a)}</option>`).join('');
+  sel.value = disponiveis.includes(atual) ? atual : '';
+}
+
+function renderizarDetalheAporte() {
+  const aporte = document.getElementById('select-aporte-detalhe').value;
+  const tbody = document.querySelector('#tabela-detalhe-aporte tbody');
+  const totalEl = document.getElementById('total-detalhe-aporte');
+  if (!aporte) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--cinza)">Selecione um aporte acima.</td></tr>';
+    totalEl.textContent = '';
+    ultimoDetalheAporte = [];
+    return;
+  }
+  let itens = ultimoAbertos.filter((i) => calcularAporte(i['Vencimento']) === aporte);
+  itens.sort((a, b) => (paraData(a['Vencimento']) || 0) - (paraData(b['Vencimento']) || 0));
+  ultimoDetalheAporte = itens;
+
+  let vencAnterior = null;
+  const linhas = itens.map((i) => {
+    const vencAtual = fmtData(i['Vencimento']);
+    const separador = (vencAnterior !== null && vencAnterior !== vencAtual) ? ' class="separador-grupo"' : '';
+    vencAnterior = vencAtual;
+    const nDoc = `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim();
+    const partes = [i['Razão Social'], i['Histórico']].filter(Boolean);
+    let descricao = partes.join(' - ');
+    if (i['Parcela']) descricao += ` - PARC.: ${i['Parcela']}`;
+    return `<tr${separador}><td>${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td>${vencAtual}</td><td>${fmtMoeda(i['R$ Valor'])}</td></tr>`;
+  });
+  tbody.innerHTML = linhas.join('') || '<tr><td colspan="5" style="color:var(--cinza)">Nenhum título em aberto para este aporte.</td></tr>';
+
+  const total = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  totalEl.textContent = `${itens.length.toLocaleString('pt-BR')} título(s) · Total: ${fmtMoeda(total)}`;
+}
+document.getElementById('select-aporte-detalhe').addEventListener('change', renderizarDetalheAporte);
+
+// ---------- Análise (achados analíticos, calculados ao vivo) ----------
+let ultimoDadosAnalise = [];
+
+function renderizarAnalise() {
+  const itens = combinadoParaAnalise();
+  const hoje = hojeCalendario();
+  const totalValor = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const abertos = itens.filter((i) => !i['Data Baixa']);
+  const abertoValor = abertos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const vencidos = abertos.filter((i) => { const v = paraData(i['Vencimento']); return v && diaCalendario(v) < hoje; });
+  const vencidoValor = vencidos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const aguardando = state.erp.filter((i) => i['Aprovação Remessa'] === 'Aguardando' || !i['Aprovação Remessa']);
+  const aguardandoValor = aguardando.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+
+  const porTipo = {};
+  itens.forEach((i) => { porTipo[i.Tipo] = (porTipo[i.Tipo] || 0) + 1; });
+  const tiposOrdenados = Object.entries(porTipo).sort((a, b) => b[1] - a[1]);
+
+  const porFornecedorQtde = {};
+  const nomesFornecedor = {};
+  itens.forEach((i) => {
+    const cod = i['Código Fornecedor'] || '(sem código)';
+    porFornecedorQtde[cod] = (porFornecedorQtde[cod] || 0) + 1;
+    nomesFornecedor[cod] = i['Razão Social'] || cod;
+  });
+  const fornecedoresOrdenados = Object.entries(porFornecedorQtde).sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+  const porUsuario = {};
+  itens.forEach((i) => { const u = i['Usuário Inclusor']; if (u) porUsuario[u] = (porUsuario[u] || 0) + 1; });
+  const usuariosOrdenados = Object.entries(porUsuario).sort((a, b) => b[1] - a[1]);
+
+  const baixados = itens.filter((i) => i['Data Baixa'] && i['Data Emissão']);
+  let dpoMedio = null;
+  if (baixados.length) {
+    const somaDias = baixados.reduce((s, i) => {
+      const emissao = diaCalendario(paraData(i['Data Emissão']));
+      const baixa = diaCalendario(paraData(i['Data Baixa']));
+      return s + (baixa - emissao) / 86400000;
+    }, 0);
+    dpoMedio = somaDias / baixados.length;
+  }
+
+  const porFornecedorValor = {};
+  itens.forEach((i) => {
+    const cod = i['Código Fornecedor'] || '(sem código)';
+    porFornecedorValor[cod] = (porFornecedorValor[cod] || 0) + paraNumero(i['R$ Valor']);
+  });
+  const fornecedoresPorValor = Object.entries(porFornecedorValor).sort((a, b) => b[1] - a[1]);
+  const top3Valor = fornecedoresPorValor.slice(0, 3).reduce((s, [, v]) => s + v, 0);
+  const pctTop3 = totalValor ? (top3Valor / totalValor * 100) : 0;
+
+  function diasAtraso(v) { return Math.round((hoje - diaCalendario(v)) / 86400000); }
+  const faixas = { '1–30 dias': 0, '31–60 dias': 0, '61–90 dias': 0, '90+ dias': 0 };
+  vencidos.forEach((i) => {
+    const d = diasAtraso(paraData(i['Vencimento']));
+    const valor = paraNumero(i['R$ Valor']);
+    if (d <= 30) faixas['1–30 dias'] += valor;
+    else if (d <= 60) faixas['31–60 dias'] += valor;
+    else if (d <= 90) faixas['61–90 dias'] += valor;
+    else faixas['90+ dias'] += valor;
+  });
+
+  const remessasGrupos = {};
+  state.erp.forEach((i) => {
+    const r = i['Remessa'];
+    if (!r) return;
+    if (!remessasGrupos[r]) remessasGrupos[r] = { aprovados: 0, total: 0 };
+    remessasGrupos[r].total += 1;
+    if (i['Aprovação Remessa'] === 'Aprovado') remessasGrupos[r].aprovados += 1;
+  });
+  let remessasAprovadas = 0, remessasAAprovar = 0;
+  Object.values(remessasGrupos).forEach((g) => { if (g.aprovados === g.total) remessasAprovadas++; else remessasAAprovar++; });
+
+  document.getElementById('conteudo-analise').innerHTML = `
+    <h3>Números que saltam aos olhos</h3>
+    <ul>
+      <li><strong>${fmtMoeda(totalValor)}</strong> em valor total de títulos no período (${itens.length.toLocaleString('pt-BR')} títulos).</li>
+      <li><strong>${abertos.length.toLocaleString('pt-BR')}</strong> títulos em aberto (sem baixa) somando <strong>${fmtMoeda(abertoValor)}</strong>.</li>
+      <li>Desses, <strong>${vencidos.length.toLocaleString('pt-BR')}</strong> já venceram e continuam em aberto — <strong>${fmtMoeda(vencidoValor)}</strong> vencido e não baixado.</li>
+      <li><strong>${aguardando.length.toLocaleString('pt-BR')}</strong> títulos aguardando aprovação, totalizando <strong>${fmtMoeda(aguardandoValor)}</strong> parados no fluxo.</li>
+      <li>Tipos: ${tiposOrdenados.map(([t, q]) => `${q} ${t}`).join(', ') || '—'}.</li>
+      <li>Maiores fornecedores por nº de títulos: ${fornecedoresOrdenados.map(([cod, q]) => `${nomesFornecedor[cod]} (${q})`).join(', ') || '—'}.</li>
+      <li>Usuários lançadores: ${usuariosOrdenados.map(([u, q]) => `${u} (${q.toLocaleString('pt-BR')})`).join(', ') || '—'}.</li>
+    </ul>
+    <h3>Aging dos títulos vencidos em aberto</h3>
+    <ul>
+      <li>1–30 dias: ${fmtMoeda(faixas['1–30 dias'])}</li>
+      <li>31–60 dias: ${fmtMoeda(faixas['31–60 dias'])}</li>
+      <li>61–90 dias: ${fmtMoeda(faixas['61–90 dias'])}</li>
+      <li>90+ dias: ${fmtMoeda(faixas['90+ dias'])}</li>
+    </ul>
+    <h3>Concentração de fornecedores (Curva ABC)</h3>
+    <ul>
+      <li>Os 3 maiores fornecedores por valor concentram <strong>${pctTop3.toFixed(1)}%</strong> do valor total dos títulos.</li>
+    </ul>
+    <h3>Prazo de pagamento</h3>
+    <ul>
+      <li>${dpoMedio != null
+        ? `Prazo médio entre emissão e baixa: <strong>${dpoMedio.toFixed(0)} dias</strong> (com base em ${baixados.length.toLocaleString('pt-BR')} títulos já baixados).`
+        : 'Sem títulos baixados suficientes para calcular o prazo médio.'}</li>
+    </ul>
+    <h3>Remessas</h3>
+    <ul>
+      <li><strong>${remessasAprovadas.toLocaleString('pt-BR')}</strong> remessas totalmente aprovadas e <strong>${remessasAAprovar.toLocaleString('pt-BR')}</strong> ainda com pendência de aprovação.</li>
+    </ul>
+  `;
+
+  ultimoDadosAnalise = [
+    ['Valor total', fmtMoeda(totalValor)],
+    ['Qtde de títulos', itens.length],
+    ['Em aberto — qtde', abertos.length],
+    ['Em aberto — valor', fmtMoeda(abertoValor)],
+    ['Vencido em aberto — qtde', vencidos.length],
+    ['Vencido em aberto — valor', fmtMoeda(vencidoValor)],
+    ['Aguardando aprovação — qtde', aguardando.length],
+    ['Aguardando aprovação — valor', fmtMoeda(aguardandoValor)],
+    ['Concentração top 3 fornecedores (%)', pctTop3.toFixed(1)],
+    ['Prazo médio de baixa (dias)', dpoMedio != null ? dpoMedio.toFixed(0) : ''],
+    ['Remessas aprovadas', remessasAprovadas],
+    ['Remessas a aprovar', remessasAAprovar],
+  ];
+}
+
 async function processarArquivo(file) {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array', cellDates: true });
@@ -1132,7 +1345,14 @@ if (MODO_LEITURA) {
 }
 
 // ---------- Início ----------
-function renderizarTudo() { renderizarDataBase(); renderizarDashboard(); renderizarLancamentos(); }
+function renderizarTudo() {
+  renderizarDataBase();
+  renderizarDashboard();
+  renderizarLancamentos();
+  popularSelectAporteDetalhe();
+  renderizarDetalheAporte();
+  renderizarAnalise();
+}
 carregarTudo();
 </script>
 </body>
