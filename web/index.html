@@ -540,8 +540,15 @@ function renderizarDashboard() {
   ];
   document.getElementById('cards-kpi').innerHTML = cards.map(c => {
     const linhas = [];
-    if (c.qtde !== undefined) linhas.push(`<div class="card-qtde">${c.qtde}</div>`);
-    if (c.valor !== undefined) linhas.push(`<div class="card-rs">${c.valor}</div>`);
+    if (c.qtde !== undefined) {
+      // Quando há quantidade, ela é o número em destaque e o R$ vem menor, embaixo.
+      linhas.push(`<div class="card-qtde">${c.qtde}</div>`);
+      if (c.valor !== undefined) linhas.push(`<div class="card-rs">${c.valor}</div>`);
+    } else if (c.valor !== undefined) {
+      // Sem quantidade, o R$ é o único número do card — mesmo tamanho de fonte
+      // dos demais cards, para manter a tipografia padronizada entre todos.
+      linhas.push(`<div class="card-qtde">${c.valor}</div>`);
+    }
     return `<div class="card ${c.classe || ''}"><div class="rotulo">${c.rotulo}</div>${linhas.join('')}</div>`;
   }).join('');
 
@@ -556,23 +563,46 @@ function renderizarDashboard() {
   renderizarCurvaAbc(itens);
 }
 
+// Agrupa por mês/ano do Vencimento e acumula, mês a mês, a quantidade de
+// títulos em aberto vs. baixados (linhas crescentes ao longo do tempo).
 function renderizarStatusPagamento(itens) {
-  const abertos = itens.filter(i => !i['Data Baixa']);
-  const baixados = itens.filter(i => i['Data Baixa']);
-  const valorAberto = abertos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
-  const valorBaixado = baixados.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const buckets = {}; // 'yyyy-mm' -> { aberto, baixado }
+  itens.forEach(i => {
+    const v = paraData(i['Vencimento']);
+    if (!v) return;
+    const chave = `${v.getUTCFullYear()}-${String(v.getUTCMonth() + 1).padStart(2, '0')}`;
+    if (!buckets[chave]) buckets[chave] = { aberto: 0, baixado: 0 };
+    if (i['Data Baixa']) buckets[chave].baixado += 1; else buckets[chave].aberto += 1;
+  });
+  const chaves = Object.keys(buckets).sort();
+  const labels = chaves.map(c => { const [a, m] = c.split('-'); return `${m}/${a}`; });
+
+  let accAberto = 0, accBaixado = 0;
+  const serieAberto = [], serieBaixado = [];
+  chaves.forEach(c => {
+    accAberto += buckets[c].aberto;
+    accBaixado += buckets[c].baixado;
+    serieAberto.push(accAberto);
+    serieBaixado.push(accBaixado);
+  });
 
   if (chartStatusPagamento) chartStatusPagamento.destroy();
   chartStatusPagamento = new Chart(document.getElementById('chart-status-pagamento'), {
-    type: 'doughnut',
+    type: 'line',
     data: {
-      labels: [`Em aberto (${abertos.length})`, `Baixado (${baixados.length})`],
-      datasets: [{ data: [abertos.length, baixados.length], backgroundColor: ['#e08e0b', '#1e7e34'] }],
+      labels,
+      datasets: [
+        { label: 'Em aberto (acumulado)', data: serieAberto, borderColor: '#e08e0b', backgroundColor: '#e08e0b', tension: 0.35 },
+        { label: 'Baixado (acumulado)', data: serieBaixado, borderColor: '#1e7e34', backgroundColor: '#1e7e34', tension: 0.35 },
+      ],
     },
-    options: { plugins: { legend: { position: 'bottom' } } },
+    options: { plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Qtde acumulada' } }, x: { title: { display: true, text: 'Mês/Ano (vencimento)' } } } },
   });
+
+  const totalAberto = itens.filter(i => !i['Data Baixa']).length;
+  const totalBaixado = itens.filter(i => i['Data Baixa']).length;
   document.getElementById('legenda-status-pagamento').textContent =
-    `Em aberto: ${fmtMoeda(valorAberto)}  ·  Baixado: ${fmtMoeda(valorBaixado)}`;
+    `Total em aberto: ${totalAberto}  ·  Total baixado: ${totalBaixado}`;
 }
 
 const EXTRATORES_REMESSA = [r => r.remessa, r => r.qtde, r => r.valor];
@@ -667,7 +697,7 @@ function renderizarFluxoCaixa(abertos, hoje) {
       labels,
       datasets: [
         { type: 'bar', label: 'A pagar no período (R$)', data: valoresMes, backgroundColor: '#1f4e78' },
-        { type: 'line', label: 'Saldo acumulado (R$)', data: saldo, borderColor: '#c0392b', backgroundColor: '#c0392b', yAxisID: 'y' },
+        { type: 'line', label: 'Saldo acumulado (R$)', data: saldo, borderColor: '#c0392b', backgroundColor: '#c0392b', yAxisID: 'y', tension: 0.35 },
       ],
     },
     options: { scales: { y: { beginAtZero: true } } },
