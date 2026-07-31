@@ -73,6 +73,14 @@
   #tabela-lancamentos td.col-historico { white-space: normal; max-width: 320px; word-break: break-word; }
   .anexos-col { display: flex; gap: 4px; }
   .anexos-col button { padding: 3px 6px; font-size: 11px; }
+  .cards-remessa-status { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+  .card-remessa-status { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
+  .card-remessa-status .rotulo { font-size: 13px; color: var(--cinza); }
+  .card-remessa-status .card-qtde { font-size: 22px; font-weight: bold; }
+  .card-remessa-status.aprovadas { border-left: 6px solid var(--verde); }
+  .card-remessa-status.aprovadas .card-qtde { color: var(--verde); }
+  .card-remessa-status.a-aprovar { border-left: 6px solid var(--laranja); }
+  .card-remessa-status.a-aprovar .card-qtde { color: var(--laranja); }
   .grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--borda); white-space: nowrap; }
@@ -133,7 +141,7 @@
   <section id="aba-dashboard" class="aba ativa">
     <input id="busca-dashboard" class="busca-tabela" placeholder="Buscar em Remessa, Aporte e Curva ABC…" style="max-width:420px; margin-bottom:16px;">
     <div class="cards" id="cards-kpi"></div>
-    <div class="cards" id="cards-remessa" style="margin-top:-12px;"></div>
+    <div class="cards-remessa-status" id="cards-remessa"></div>
     <div class="grid-2">
       <div class="painel">
         <h2>Aging — títulos em aberto por faixa de vencimento</h2>
@@ -630,12 +638,38 @@ function renderizarDashboard() {
   ultimoAbertos = abertos;
   ultimoItensAnalise = itens;
 
+  renderizarCardsRemessa();
   renderizarAging(abertos, hoje);
   renderizarFluxoCaixa(abertos, hoje);
   renderizarStatusPagamento(itens);
   renderizarValorPorRemessa();
   renderizarResumoAporte(abertos);
   renderizarCurvaAbc(itens);
+}
+
+// Status de aprovação por remessa (não por documento): uma remessa conta
+// como "aprovada" só quando todos os documentos dela estão Aprovado.
+function renderizarCardsRemessa() {
+  const grupos = {};
+  state.erp.forEach(i => {
+    const rem = i['Remessa'];
+    if (!rem) return;
+    if (!grupos[rem]) grupos[rem] = { aprovados: 0, total: 0 };
+    grupos[rem].total += 1;
+    if (i['Aprovação Remessa'] === 'Aprovado') grupos[rem].aprovados += 1;
+  });
+  let aprovadas = 0, aAprovar = 0;
+  Object.values(grupos).forEach(g => { if (g.aprovados === g.total) aprovadas += 1; else aAprovar += 1; });
+
+  document.getElementById('cards-remessa').innerHTML = `
+    <div class="card-remessa-status aprovadas">
+      <span class="rotulo">Remessas Aprovadas</span>
+      <span class="card-qtde">${aprovadas.toLocaleString('pt-BR')}</span>
+    </div>
+    <div class="card-remessa-status a-aprovar">
+      <span class="rotulo">Remessas a Aprovar</span>
+      <span class="card-qtde">${aAprovar.toLocaleString('pt-BR')}</span>
+    </div>`;
 }
 
 // Agrupa por mês/ano do Vencimento e acumula ao longo do tempo: somatório
