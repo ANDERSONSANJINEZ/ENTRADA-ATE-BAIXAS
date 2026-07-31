@@ -35,6 +35,8 @@
     gap: 10px;
   }
   header h1 { font-size: 18px; margin: 0; }
+  .periodo-filtro input::placeholder { color: rgba(255,255,255,.65); }
+  .periodo-filtro input:focus { outline: 2px solid rgba(255,255,255,.6); }
   nav {
     display: flex;
     gap: 4px;
@@ -131,7 +133,20 @@
 
 <header>
   <h1>Entrada até Baixas — Financeiro Protheus</h1>
-  <span id="badge-data-base" style="font-size:13px; background:rgba(255,255,255,.15); padding:6px 12px; border-radius:6px;">Base de dados: carregando…</span>
+  <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+    <div class="periodo-filtro" style="display:flex; align-items:center; gap:6px; font-size:13px;">
+      <label for="periodo-inicio">De</label>
+      <input id="periodo-inicio" placeholder="dd/mm/aa" maxlength="8" inputmode="numeric" autocomplete="off" style="width:80px; padding:5px 6px; border-radius:4px; border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.12); color:#fff;">
+      <button type="button" class="btn secundario small" onclick="abrirCalendario('periodo-inicio')" title="Selecionar data inicial">📅</button>
+      <input id="periodo-inicio-nativo" type="date" style="position:absolute; opacity:0; width:0; height:0; pointer-events:none;">
+      <label for="periodo-fim">Até</label>
+      <input id="periodo-fim" placeholder="dd/mm/aa" maxlength="8" inputmode="numeric" autocomplete="off" style="width:80px; padding:5px 6px; border-radius:4px; border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.12); color:#fff;">
+      <button type="button" class="btn secundario small" onclick="abrirCalendario('periodo-fim')" title="Selecionar data final">📅</button>
+      <input id="periodo-fim-nativo" type="date" style="position:absolute; opacity:0; width:0; height:0; pointer-events:none;">
+      <button type="button" class="btn secundario small" onclick="limparFiltroPeriodo()" title="Limpar filtro de período">✕</button>
+    </div>
+    <span id="badge-data-base" style="font-size:13px; background:rgba(255,255,255,.15); padding:6px 12px; border-radius:6px;">Base de dados: carregando…</span>
+  </div>
 </header>
 
 <nav>
@@ -511,9 +526,76 @@ function periodoDoAporte(aporteStr) {
   return `${fmtData(inicio)} – ${fmtData(fim)}`;
 }
 
+// ---------- Filtro de período (Data Inicial / Data Final, por Vencimento) ----------
+let filtroPeriodo = { inicio: null, fim: null };
+
+// Converte "dd/mm/aa" em timestamp (dia calendário UTC), ou null se incompleto/inválido.
+function parseDataCurta(str) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{2})$/.exec(str || '');
+  if (!m) return null;
+  const dia = parseInt(m[1], 10), mes = parseInt(m[2], 10), ano = 2000 + parseInt(m[3], 10);
+  const d = new Date(Date.UTC(ano, mes - 1, dia));
+  if (d.getUTCFullYear() !== ano || d.getUTCMonth() !== mes - 1 || d.getUTCDate() !== dia) return null;
+  return d.getTime();
+}
+
+function dentroDoPeriodo(item) {
+  if (!filtroPeriodo.inicio && !filtroPeriodo.fim) return true;
+  const venc = paraData(item['Vencimento']);
+  if (!venc) return false;
+  const t = diaCalendario(venc);
+  if (filtroPeriodo.inicio && t < filtroPeriodo.inicio) return false;
+  if (filtroPeriodo.fim && t > filtroPeriodo.fim) return false;
+  return true;
+}
+
+// Acessores filtrados pelo período selecionado — usar no lugar de state.erp/state.manual
+// em qualquer lugar que exiba/agregue lançamentos, para que o filtro seja global ao app.
+function erpFiltrado() { return state.erp.filter(dentroDoPeriodo); }
+function manualFiltrado() { return state.manual.filter(dentroDoPeriodo); }
+
+function aplicarFiltroPeriodo() {
+  filtroPeriodo.inicio = parseDataCurta(document.getElementById('periodo-inicio').value);
+  filtroPeriodo.fim = parseDataCurta(document.getElementById('periodo-fim').value);
+  renderizarTudo();
+}
+
+function limparFiltroPeriodo() {
+  document.getElementById('periodo-inicio').value = '';
+  document.getElementById('periodo-fim').value = '';
+  filtroPeriodo = { inicio: null, fim: null };
+  renderizarTudo();
+}
+
+function abrirCalendario(idBase) {
+  const nativo = document.getElementById(idBase + '-nativo');
+  if (nativo.showPicker) nativo.showPicker();
+  else nativo.click();
+}
+
+function aplicarMascaraData(input) {
+  input.addEventListener('input', () => {
+    const digitos = input.value.replace(/\D/g, '').slice(0, 6);
+    let formatado = digitos;
+    if (digitos.length > 4) formatado = `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`;
+    else if (digitos.length > 2) formatado = `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
+    input.value = formatado;
+    if (digitos.length === 6 || digitos.length === 0) aplicarFiltroPeriodo();
+  });
+}
+['periodo-inicio', 'periodo-fim'].forEach(id => {
+  aplicarMascaraData(document.getElementById(id));
+  document.getElementById(id + '-nativo').addEventListener('change', (e) => {
+    if (!e.target.value) return;
+    const [ano, mes, dia] = e.target.value.split('-');
+    document.getElementById(id).value = `${dia}/${mes}/${ano.slice(2)}`;
+    aplicarFiltroPeriodo();
+  });
+});
+
 // combinado usado para KPIs/gráficos: ERP inteiro + manuais que NÃO batem com um item do ERP
 function combinadoParaAnalise() {
-  return state.erp.concat(state.manual.filter(m => m.Status !== 'Duplicado – revisar'));
+  return erpFiltrado().concat(manualFiltrado().filter(m => m.Status !== 'Duplicado – revisar'));
 }
 
 function contemBusca(valores, busca) {
@@ -650,11 +732,11 @@ function renderizarDashboard() {
   const vencidos = abertos.filter(i => { const v = paraData(i['Vencimento']); return v && diaCalendario(v) < hoje; });
   const vencidoQtde = vencidos.length;
   const vencidoValor = vencidos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
-  const aguardando = state.erp.filter(i => i['Aprovação Remessa'] === 'Aguardando' || !i['Aprovação Remessa']);
+  const aguardando = erpFiltrado().filter(i => i['Aprovação Remessa'] === 'Aguardando' || !i['Aprovação Remessa']);
   const aguardandoValor = aguardando.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
-  const manuaisPendentes = state.manual.filter(m => m.Status !== 'Duplicado – revisar');
+  const manuaisPendentes = manualFiltrado().filter(m => m.Status !== 'Duplicado – revisar');
   const manuaisPendentesValor = manuaisPendentes.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
-  const duplicadosItens = state.manual.filter(m => m.Status === 'Duplicado – revisar');
+  const duplicadosItens = manualFiltrado().filter(m => m.Status === 'Duplicado – revisar');
   const duplicados = duplicadosItens.length;
   const duplicadosValor = duplicadosItens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
 
@@ -697,7 +779,7 @@ function renderizarDashboard() {
 // como "aprovada" só quando todos os documentos dela estão Aprovado.
 function renderizarCardsRemessa() {
   const grupos = {};
-  state.erp.forEach(i => {
+  erpFiltrado().forEach(i => {
     const rem = i['Remessa'];
     if (!rem) return;
     if (!grupos[rem]) grupos[rem] = { aprovados: 0, total: 0 };
@@ -785,7 +867,7 @@ let ultimoDadosRemessa = [];
 // documentos daquela remessa aparece rotulada acima de cada ponto.
 function renderizarValorPorRemessa() {
   const grupos = {};
-  state.erp.forEach(i => {
+  erpFiltrado().forEach(i => {
     const rem = i['Remessa'];
     if (!rem) return;
     if (!grupos[rem]) grupos[rem] = { qtde: 0, valor: 0 };
@@ -997,7 +1079,7 @@ function renderizarLancamentos() {
   const fStatus = document.getElementById('filtro-status').value;
   const fAporte = document.getElementById('filtro-aporte').value;
 
-  let itens = state.erp.concat(state.manual).map(i => Object.assign({ Aporte: calcularAporte(i['Vencimento']) }, i));
+  let itens = erpFiltrado().concat(manualFiltrado()).map(i => Object.assign({ Aporte: calcularAporte(i['Vencimento']) }, i));
 
   const selectAporte = document.getElementById('filtro-aporte');
   const aportesDisponiveis = Array.from(new Set(itens.map(i => i.Aporte).filter(a => a))).sort();
@@ -1179,7 +1261,7 @@ function renderizarAnalise() {
   const abertoValor = abertos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   const vencidos = abertos.filter((i) => { const v = paraData(i['Vencimento']); return v && diaCalendario(v) < hoje; });
   const vencidoValor = vencidos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
-  const aguardando = state.erp.filter((i) => i['Aprovação Remessa'] === 'Aguardando' || !i['Aprovação Remessa']);
+  const aguardando = erpFiltrado().filter((i) => i['Aprovação Remessa'] === 'Aguardando' || !i['Aprovação Remessa']);
   const aguardandoValor = aguardando.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
 
   const porTipo = {};
@@ -1231,7 +1313,7 @@ function renderizarAnalise() {
   });
 
   const remessasGrupos = {};
-  state.erp.forEach((i) => {
+  erpFiltrado().forEach((i) => {
     const r = i['Remessa'];
     if (!r) return;
     if (!remessasGrupos[r]) remessasGrupos[r] = { aprovados: 0, total: 0 };
