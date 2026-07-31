@@ -4,12 +4,10 @@ Guarda os lançamentos importados do Protheus e os lançamentos manuais, e
 calcula o status "Duplicado – revisar" quando um lançamento manual e um do
 ERP têm o mesmo Código Fornecedor + Valor + Vencimento.
 
-A partir desta versão, a mesma implantação do Apps Script também **serve a
-tela do app** (`Index.html`) — visitar a URL gerada no passo 9 abaixo, num
-navegador qualquer, já abre o app funcionando. Não precisa mais baixar nem
-abrir arquivo local nenhum. (A versão local `web/index.html` continua
-funcionando como alternativa, apontando para a mesma URL — ver a seção
-"Duas formas de usar" no fim deste documento.)
+A mesma implantação do Apps Script **serve a tela do app** (`Index.html`)
+— visitar a URL gerada no passo 9 abaixo, num navegador qualquer, já abre
+o app funcionando. Tudo roda na nuvem: não há arquivo local para baixar ou
+abrir.
 
 ## Passo a passo (uma vez só)
 
@@ -42,14 +40,10 @@ funcionando como alternativa, apontando para a mesma URL — ver a seção
 
 As abas `ERP` e `Manual` são criadas automaticamente na primeira chamada.
 
-## Duas formas de usar
+## Como usar
 
-- **Link único (recomendado)**: abra a URL do passo 10 direto no navegador
-  — computador, celular, tablet, de qualquer lugar. Não precisa configurar
-  nada nem copiar arquivo.
-- **Arquivo local (`web/index.html`)**: continua funcionando como antes —
-  baixe a pasta `web/` e abra `index.html`, colando a mesma URL do passo
-  10 quando pedido. Útil como alternativa/backup.
+Abra a URL do passo 10 direto no navegador — computador, celular, tablet,
+de qualquer lugar. Não precisa configurar nada nem copiar arquivo.
 
 ## Compartilhar com terceiros (modo somente leitura)
 
