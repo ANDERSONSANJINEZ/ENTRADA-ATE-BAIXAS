@@ -535,7 +535,6 @@ function paraData(v) {
   return null;
 }
 function fmtMoeda(v) { return 'R$ ' + paraNumero(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-function escaparHtml(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // Todas as datas do app são "somente data" (sem hora). Formatamos sempre a
 // partir dos componentes UTC do Date — nunca com toLocaleDateString/getters
 // locais — porque essas datas nascem de strings "yyyy-MM-dd" interpretadas
@@ -1416,19 +1415,12 @@ function renderizarAnalise() {
   // Filtra por datas que realmente deram pra interpretar (paraData !== null),
   // não só por o campo bruto não estar vazio — um valor não-vazio mas num
   // formato inesperado ainda vira null em paraData() e quebraria as contas.
-  // Guarda quem foi descartado (itensDataInvalida) pra mostrar na tela —
-  // sem isso não dá pra saber qual lançamento tem o dado ruim.
   const baixados = [];
-  const itensDataInvalida = [];
   itens.forEach((i) => {
     if (!i['Data Emissão'] || !i['Data Baixa']) return; // ainda não baixado, não entra nessa métrica
     const emissao = diaCalendario(paraData(i['Data Emissão']));
     const baixa = diaCalendario(paraData(i['Data Baixa']));
-    if (emissao != null && baixa != null) {
-      baixados.push({ emissao, baixa });
-    } else {
-      itensDataInvalida.push(i);
-    }
+    if (emissao != null && baixa != null) baixados.push({ emissao, baixa });
   });
   let dpoMedio = null;
   if (baixados.length) {
@@ -1494,26 +1486,7 @@ function renderizarAnalise() {
       <li>${dpoMedio != null
         ? `Prazo médio entre emissão e baixa: <strong>${dpoMedio.toFixed(0)} dias</strong> (com base em ${baixados.length.toLocaleString('pt-BR')} títulos já baixados).`
         : 'Sem títulos baixados suficientes para calcular o prazo médio.'}</li>
-      ${itensDataInvalida.length ? `<li style="color:var(--vermelho);">⚠ ${itensDataInvalida.length.toLocaleString('pt-BR')} título(s) com Data Emissão ou Data Baixa num formato que não deu para interpretar — ficaram de fora dessa conta (lista abaixo).</li>` : ''}
     </ul>
-    ${itensDataInvalida.length ? `
-    <h3>⚠ Títulos com data inválida (fora da conta de prazo médio)</h3>
-    <div class="tabela-scroll" style="max-height:220px;">
-      <table>
-        <thead><tr><th>Origem</th><th>Nº Doc.</th><th>Fornecedor</th><th>Razão Social</th><th>Data Emissão (bruta)</th><th>Data Baixa (bruta)</th></tr></thead>
-        <tbody>
-          ${itensDataInvalida.map((i) => `<tr>
-            <td>${escaparHtml(i.Origem)}</td>
-            <td>${escaparHtml(i['Nº Documento'])}</td>
-            <td>${escaparHtml(i['Código Fornecedor'])}</td>
-            <td>${escaparHtml(i['Razão Social'])}</td>
-            <td>${escaparHtml(i['Data Emissão'])}</td>
-            <td>${escaparHtml(i['Data Baixa'])}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>
-    ` : ''}
     <h3>Remessas</h3>
     <ul>
       <li><strong>${remessasAprovadas.toLocaleString('pt-BR')}</strong> remessas totalmente aprovadas e <strong>${remessasAAprovar.toLocaleString('pt-BR')}</strong> ainda com pendência de aprovação.</li>
@@ -1531,7 +1504,6 @@ function renderizarAnalise() {
     ['Aguardando aprovação — valor', fmtMoeda(aguardandoValor)],
     ['Concentração top 3 fornecedores (%)', pctTop3.toFixed(1)],
     ['Prazo médio de baixa (dias)', dpoMedio != null ? dpoMedio.toFixed(0) : ''],
-    ['Títulos com Data Emissão/Baixa inválida (fora do prazo médio)', itensDataInvalida.length],
     ['Remessas aprovadas', remessasAprovadas],
     ['Remessas a aprovar', remessasAAprovar],
   ];
