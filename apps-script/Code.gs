@@ -178,7 +178,7 @@ function lerAba_(nome) {
 }
 
 function chaveDuplicidade_(item) {
-  var fornecedor = String(item['Código Fornecedor'] || '').trim();
+  var fornecedor = removerZerosEsquerda_(String(item['Código Fornecedor'] || '').trim());
   var valor = Number(item['R$ Valor'] || 0).toFixed(2);
   var venc = item['Vencimento'];
   var vencStr = venc instanceof Date
@@ -187,30 +187,46 @@ function chaveDuplicidade_(item) {
   return fornecedor + '|' + valor + '|' + vencStr;
 }
 
-function recalcularStatus_() {
+// Aceita os dados já lidos (evita reler ERP/Manual quando quem chamou —
+// ex.: api_adicionarManual — já tem os dois em mãos).
+function recalcularStatusComDados_(erp, manual) {
   var erpSheet = getSheet_('ERP');
   var manualSheet = getSheet_('Manual');
-  var erp = lerAba_('ERP');
-  var manual = lerAba_('Manual');
 
   var chavesErp = {};
   erp.forEach(function (item) { chavesErp[chaveDuplicidade_(item)] = true; });
-  var chavesManual = {};
-  manual.forEach(function (item) { chavesManual[chaveDuplicidade_(item)] = true; });
 
-  function aplicarStatus(sheet, itens, chavesOutraAba) {
-    if (!itens.length) return;
-    var statusCol = HEADERS.indexOf('Status') + 1;
-    var valores = itens.map(function (item) {
-      var duplicado = !!chavesOutraAba[chaveDuplicidade_(item)];
-      return [duplicado ? 'Duplicado – revisar' : 'OK'];
+  if (erp.length) {
+    var chavesManual = {};
+    manual.forEach(function (item) { chavesManual[chaveDuplicidade_(item)] = true; });
+    var statusColErp = HEADERS.indexOf('Status') + 1;
+    var valoresErp = erp.map(function (item) {
+      return [chavesManual[chaveDuplicidade_(item)] ? 'Duplicado – revisar' : 'OK'];
     });
     // Uma única chamada em lote em vez de milhares de setValue() individuais
     // (que é o que fazia a importação travar por vários minutos).
-    sheet.getRange(2, statusCol, valores.length, 1).setValues(valores);
+    erpSheet.getRange(2, statusColErp, valoresErp.length, 1).setValues(valoresErp);
   }
-  aplicarStatus(erpSheet, erp, chavesManual);
-  aplicarStatus(manualSheet, manual, chavesErp);
+
+  if (manual.length) {
+    // Duplicado se bater com o ERP OU com outro lançamento manual (a partir
+    // da 2ª ocorrência da mesma chave) — sem isso, dois lançamentos manuais
+    // idênticos entre si (ex.: duplo clique no envio) ficavam os dois como
+    // "OK" e o botão "Excluir duplicados" não tinha o que remover.
+    var statusColManual = HEADERS.indexOf('Status') + 1;
+    var vistosNoManual = {};
+    var valoresManual = manual.map(function (item) {
+      var chave = chaveDuplicidade_(item);
+      var duplicado = !!chavesErp[chave] || !!vistosNoManual[chave];
+      vistosNoManual[chave] = true;
+      return [duplicado ? 'Duplicado – revisar' : 'OK'];
+    });
+    manualSheet.getRange(2, statusColManual, valoresManual.length, 1).setValues(valoresManual);
+  }
+}
+
+function recalcularStatus_() {
+  recalcularStatusComDados_(lerAba_('ERP'), lerAba_('Manual'));
 }
 
 // Visitar a URL do Web App direto no navegador serve a tela (Index.html).
@@ -349,8 +365,14 @@ function api_importarDoDrive(payload) {
 
 function api_adicionarManual(payload) {
   validarAcessoEdicao_(payload);
+  // Lê ERP/Manual uma única vez e reaproveita tanto para a conferência de
+  // duplicidade quanto para recalcularStatusComDados_ logo abaixo — antes
+  // isso lia as duas abas inteiras 3x numa mesma chamada (~3800 linhas do
+  // ERP), o que dava a impressão de tela travada ao incluir um lançamento.
+  var erp = lerAba_('ERP');
+  var manual = lerAba_('Manual');
   var chaveNovo = chaveDuplicidade_(payload.item);
-  var jaExiste = lerAba_('ERP').concat(lerAba_('Manual')).some(function (i) {
+  var jaExiste = erp.concat(manual).some(function (i) {
     return chaveDuplicidade_(i) === chaveNovo;
   });
   if (jaExiste) {
@@ -359,14 +381,19 @@ function api_adicionarManual(payload) {
 
   var shM = getSheet_('Manual');
   var id = Utilities.getUuid();
+  var novoItem = {};
   var linha = HEADERS.map(function (h) {
-    if (h === 'ID') return id;
-    if (h === 'Origem') return 'Manual';
-    if (h === 'Status') return 'OK';
-    return payload.item[h] != null ? payload.item[h] : '';
+    var valor;
+    if (h === 'ID') valor = id;
+    else if (h === 'Origem') valor = 'Manual';
+    else if (h === 'Status') valor = 'OK';
+    else valor = payload.item[h] != null ? payload.item[h] : '';
+    novoItem[h] = valor;
+    return valor;
   });
   shM.appendRow(linha);
-  recalcularStatus_();
+  manual.push(novoItem);
+  recalcularStatusComDados_(erp, manual);
   return api_carregar();
 }
 

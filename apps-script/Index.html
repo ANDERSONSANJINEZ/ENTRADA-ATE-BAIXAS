@@ -121,6 +121,7 @@
   .filtros { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
   .filtros input, .filtros select { padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; font-size: 13px; }
   .btn { background: var(--azul); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .btn:disabled { opacity: .6; cursor: wait; }
   .btn.secundario { background: #fff; color: var(--azul); border: 1px solid var(--azul); }
   .btn.perigo { background: var(--vermelho); }
   .btn.small { padding: 4px 10px; font-size: 12px; }
@@ -299,11 +300,11 @@
       <div class="tabela-scroll">
         <table id="tabela-lancamentos">
           <colgroup>
-            <col style="width:3.87%"><col style="width:4.86%"><col style="width:3.87%"><col style="width:2.97%">
+            <col style="width:3.87%"><col style="width:4.36%"><col style="width:3.87%"><col style="width:2.97%">
             <col style="width:5.85%"><col style="width:3.87%"><col style="width:5.35%"><col style="width:5.45%">
-            <col style="width:7.73%"><col style="width:5.85%"><col style="width:5.85%"><col style="width:4.96%">
-            <col style="width:4.06%"><col style="width:5.85%"><col style="width:7.73%"><col style="width:5.25%">
-            <col style="width:4.96%"><col style="width:4.06%"><col style="width:3.96%"><col style="width:3.65%">
+            <col style="width:7.23%"><col style="width:5.85%"><col style="width:5.85%"><col style="width:4.61%">
+            <col style="width:4.06%"><col style="width:5.85%"><col style="width:7.23%"><col style="width:5.25%">
+            <col style="width:4.96%"><col style="width:4.06%"><col style="width:3.96%"><col style="width:5.50%">
           </colgroup>
           <thead><tr>
             <th>Origem</th><th>Status</th><th>Aporte</th><th>Tipo</th><th>Emissão</th><th>Nº Doc.</th>
@@ -1253,11 +1254,19 @@ document.querySelector('#form-manual input[name="Código Fornecedor"]').addEvent
   if (achado && achado['Razão Social']) campoRazao.value = achado['Razão Social'];
 });
 
+// Mesma normalização do backend (removerZerosEsquerda_ em Code.gs): "00123"
+// e "123" são o mesmo fornecedor.
+function removerZerosEsquerdaCliente(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (/^[0-9]+$/.test(s)) return s.replace(/^0+/, '') || '0';
+  return s;
+}
+
 // Mesma chave de duplicidade usada no backend (chaveDuplicidade_ em Code.gs):
 // Código Fornecedor + Valor + Vencimento — barra a duplicidade já no
 // navegador, antes de chamar o servidor (que também confere, por segurança).
 function chaveDuplicidadeCliente(item) {
-  const fornecedor = String(item['Código Fornecedor'] || '').trim();
+  const fornecedor = removerZerosEsquerdaCliente(item['Código Fornecedor']);
   const valor = paraNumero(item['R$ Valor']).toFixed(2);
   const vencData = paraData(item['Vencimento']);
   const vencStr = vencData
@@ -1281,10 +1290,24 @@ document.getElementById('form-manual').addEventListener('submit', async (ev) => 
     return;
   }
 
-  await postarAcao('adicionarManual', { item });
-  form.reset();
-  prefillUsuarioInclusor();
-  toast('Lançamento manual adicionado.');
+  // Mostra que o clique funcionou e algo está acontecendo — sem isso, a
+  // espera pela resposta do servidor (que lê/regrava a planilha) pode
+  // parecer que a tela travou.
+  const botao = form.querySelector('button[type="submit"]');
+  const textoOriginal = botao.textContent;
+  botao.disabled = true;
+  botao.textContent = 'Enviando…';
+  try {
+    await postarAcao('adicionarManual', { item });
+    form.reset();
+    prefillUsuarioInclusor();
+    toast('Lançamento manual adicionado.');
+  } catch (erro) {
+    // erro já mostrado via toast dentro de postarAcao
+  } finally {
+    botao.disabled = false;
+    botao.textContent = textoOriginal;
+  }
 });
 
 // ---------- Importar ----------
