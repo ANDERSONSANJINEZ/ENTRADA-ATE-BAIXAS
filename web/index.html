@@ -6,6 +6,7 @@
 <title>Entrada até Baixas</title>
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="vendor/chart.umd.js"></script>
+<script src="vendor/chartjs-plugin-datalabels.min.js"></script>
 <style>
   :root {
     --azul: #1f4e78;
@@ -64,15 +65,16 @@
   .aba { display: none; }
   .aba.ativa { display: block; }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
-  .card { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px 16px; text-align: center; }
+  .card { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px 16px; text-align: center; display: flex; flex-direction: column; }
   .card .rotulo { font-size: 12px; color: var(--cinza); margin-bottom: 6px; }
+  .card .card-valores { margin-top: auto; }
   .card .card-qtde { font-size: 22px; font-weight: bold; color: var(--azul); line-height: 1.2; }
   .card .card-rs { font-size: 14px; color: var(--azul); margin-top: 2px; }
   .card.alerta .card-qtde, .card.alerta .card-rs { color: var(--vermelho); }
   .card.atencao .card-qtde, .card.atencao .card-rs { color: var(--laranja); }
-  .painel { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 16px; margin-bottom: 24px; }
+  .painel { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 16px; margin-bottom: 24px; min-width: 0; }
   .painel h2 { font-size: 15px; margin: 0 0 12px; color: var(--azul); }
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--borda); white-space: nowrap; }
   th { background: var(--azul-claro); color: var(--azul); position: sticky; top: 0; }
@@ -152,12 +154,12 @@
       </div>
       <div class="painel">
         <h2>Valor por Remessa</h2>
+        <p style="font-size:12px;color:var(--cinza);margin-top:-6px;">O número acima de cada ponto é a quantidade de documentos da remessa.</p>
         <input id="busca-remessa" class="busca-tabela" placeholder="Buscar remessa…">
-        <div class="tabela-scroll" style="max-height:280px;">
-          <table id="tabela-remessa">
-            <thead><tr><th>Remessa</th><th>Qtde</th><th>Valor</th></tr></thead>
-            <tbody></tbody>
-          </table>
+        <div style="overflow-x:auto; max-width:100%;">
+          <div id="remessa-chart-wrap" style="height:300px;">
+            <canvas id="chart-remessa"></canvas>
+          </div>
         </div>
       </div>
     </div>
@@ -273,6 +275,11 @@
 <div class="toast" id="toast"></div>
 
 <script>
+// O plugin não se registra sozinho; registramos uma vez e desligamos por
+// padrão em cada gráfico (options.plugins.datalabels.display:false),
+// ligando explicitamente só onde o rótulo por ponto é útil (Valor por Remessa).
+Chart.register(ChartDataLabels);
+
 const HEADERS = ['ID','Tipo','Data Emissão','Nº Documento','Vencimento Real','Forma Pagamento',
   'Código Fornecedor','Parcela','Data Baixa','Vencimento','R$ Valor','Usuário Inclusor',
   'Razão Social','Aprovação Remessa','Remessa','Histórico','Origem','Status'];
@@ -549,7 +556,7 @@ function renderizarDashboard() {
       // dos demais cards, para manter a tipografia padronizada entre todos.
       linhas.push(`<div class="card-qtde">${c.valor}</div>`);
     }
-    return `<div class="card ${c.classe || ''}"><div class="rotulo">${c.rotulo}</div>${linhas.join('')}</div>`;
+    return `<div class="card ${c.classe || ''}"><div class="rotulo">${c.rotulo}</div><div class="card-valores">${linhas.join('')}</div></div>`;
   }).join('');
 
   ultimoAbertos = abertos;
@@ -563,28 +570,22 @@ function renderizarDashboard() {
   renderizarCurvaAbc(itens);
 }
 
-// Agrupa por mês/ano do Vencimento e acumula, mês a mês, a quantidade de
-// títulos em aberto vs. baixados (linhas crescentes ao longo do tempo).
+// Agrupa por mês/ano do Vencimento: total de documentos do mês vs. quantos
+// desse mês já foram baixados (somatória mensal, não acumulada).
 function renderizarStatusPagamento(itens) {
-  const buckets = {}; // 'yyyy-mm' -> { aberto, baixado }
+  const buckets = {}; // 'yyyy-mm' -> { baixado, total }
   itens.forEach(i => {
     const v = paraData(i['Vencimento']);
     if (!v) return;
     const chave = `${v.getUTCFullYear()}-${String(v.getUTCMonth() + 1).padStart(2, '0')}`;
-    if (!buckets[chave]) buckets[chave] = { aberto: 0, baixado: 0 };
-    if (i['Data Baixa']) buckets[chave].baixado += 1; else buckets[chave].aberto += 1;
+    if (!buckets[chave]) buckets[chave] = { baixado: 0, total: 0 };
+    buckets[chave].total += 1;
+    if (i['Data Baixa']) buckets[chave].baixado += 1;
   });
   const chaves = Object.keys(buckets).sort();
   const labels = chaves.map(c => { const [a, m] = c.split('-'); return `${m}/${a}`; });
-
-  let accAberto = 0, accBaixado = 0;
-  const serieAberto = [], serieBaixado = [];
-  chaves.forEach(c => {
-    accAberto += buckets[c].aberto;
-    accBaixado += buckets[c].baixado;
-    serieAberto.push(accAberto);
-    serieBaixado.push(accBaixado);
-  });
+  const serieBaixado = chaves.map(c => buckets[c].baixado);
+  const serieTotal = chaves.map(c => buckets[c].total);
 
   if (chartStatusPagamento) chartStatusPagamento.destroy();
   chartStatusPagamento = new Chart(document.getElementById('chart-status-pagamento'), {
@@ -592,11 +593,17 @@ function renderizarStatusPagamento(itens) {
     data: {
       labels,
       datasets: [
-        { label: 'Em aberto (acumulado)', data: serieAberto, borderColor: '#e08e0b', backgroundColor: '#e08e0b', tension: 0.35 },
-        { label: 'Baixado (acumulado)', data: serieBaixado, borderColor: '#1e7e34', backgroundColor: '#1e7e34', tension: 0.35 },
+        { label: 'Total de documentos (mês)', data: serieTotal, borderColor: '#1f4e78', backgroundColor: '#1f4e78', tension: 0.35 },
+        { label: 'Baixado (mês)', data: serieBaixado, borderColor: '#1e7e34', backgroundColor: '#1e7e34', tension: 0.35 },
       ],
     },
-    options: { plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Qtde acumulada' } }, x: { title: { display: true, text: 'Mês/Ano (vencimento)' } } } },
+    options: {
+      plugins: { legend: { position: 'bottom' }, datalabels: { display: false } },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'Qtde no mês' } },
+        x: { title: { display: true, text: 'Mês/Ano (vencimento)' } },
+      },
+    },
   });
 
   const totalAberto = itens.filter(i => !i['Data Baixa']).length;
@@ -605,7 +612,9 @@ function renderizarStatusPagamento(itens) {
     `Total em aberto: ${totalAberto}  ·  Total baixado: ${totalBaixado}`;
 }
 
-const EXTRATORES_REMESSA = [r => r.remessa, r => r.qtde, r => r.valor];
+let chartRemessa;
+// Gráfico de linha: eixo X = remessa, eixo Y = valor; a quantidade de
+// documentos daquela remessa aparece rotulada acima de cada ponto.
 function renderizarValorPorRemessa() {
   const grupos = {};
   state.erp.forEach(i => {
@@ -619,12 +628,51 @@ function renderizarValorPorRemessa() {
 
   const busca = (document.getElementById('busca-remessa').value || '').trim().toLowerCase();
   if (busca) linhas = linhas.filter(l => contemBusca([l.remessa, l.qtde, fmtMoeda(l.valor)], busca));
-  linhas = aplicarOrdenacao('tabela-remessa', linhas, EXTRATORES_REMESSA);
 
-  document.querySelector('#tabela-remessa tbody').innerHTML = linhas.map(l =>
-    `<tr><td>${l.remessa}</td><td>${l.qtde}</td><td>${fmtMoeda(l.valor)}</td></tr>`
-  ).join('') || '<tr><td colspan="3" style="color:var(--cinza)">Nenhuma remessa encontrada.</td></tr>';
-  tornarOrdenavel('tabela-remessa', EXTRATORES_REMESSA, renderizarValorPorRemessa);
+  const wrap = document.getElementById('remessa-chart-wrap');
+  wrap.style.width = Math.max(linhas.length * 20, wrap.parentElement.clientWidth) + 'px';
+
+  if (chartRemessa) chartRemessa.destroy();
+  chartRemessa = new Chart(document.getElementById('chart-remessa'), {
+    type: 'line',
+    data: {
+      labels: linhas.map(l => l.remessa),
+      datasets: [{
+        label: 'Valor (R$)',
+        data: linhas.map(l => l.valor),
+        borderColor: '#1f4e78',
+        backgroundColor: '#1f4e78',
+        tension: 0.35,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          display: true,
+          align: 'top',
+          anchor: 'end',
+          offset: 4,
+          font: { size: 9 },
+          color: '#1f4e78',
+          formatter: (_valor, ctx) => linhas[ctx.dataIndex].qtde,
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `Valor: ${fmtMoeda(ctx.parsed.y)}  ·  Qtde: ${linhas[ctx.dataIndex].qtde}`,
+          },
+        },
+      },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'Valor (R$)' } },
+        x: { title: { display: true, text: 'Remessa' } },
+      },
+    },
+  });
 }
 
 const EXTRATORES_APORTE = [r => r.aporte, r => r.periodo, r => r.qtde, r => r.valor];
@@ -670,7 +718,7 @@ function renderizarAging(abertos, hoje) {
     type: 'bar',
     data: { labels: faixas.map(f => f.nome), datasets: [{ label: 'Valor em aberto (R$)', data: valores,
       backgroundColor: ['#1f4e78', '#e08e0b', '#e08e0b', '#c0392b', '#c0392b'] }] },
-    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+    options: { plugins: { legend: { display: false }, datalabels: { display: false } }, scales: { y: { beginAtZero: true } } },
   });
 }
 
@@ -700,7 +748,7 @@ function renderizarFluxoCaixa(abertos, hoje) {
         { type: 'line', label: 'Saldo acumulado (R$)', data: saldo, borderColor: '#c0392b', backgroundColor: '#c0392b', yAxisID: 'y', tension: 0.35 },
       ],
     },
-    options: { scales: { y: { beginAtZero: true } } },
+    options: { plugins: { datalabels: { display: false } }, scales: { y: { beginAtZero: true } } },
   });
 }
 
