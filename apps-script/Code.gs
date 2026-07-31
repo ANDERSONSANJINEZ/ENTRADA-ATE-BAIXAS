@@ -19,6 +19,7 @@ var HEADERS = [
 ];
 
 var PROP_DATA_BASE = 'dataBaseImportacao';
+var PROP_SENHA_EDICAO = 'senhaEdicao';
 
 // Pasta do Drive onde o export diário do Protheus é salvo:
 // Compartilhados comigo / 4 - CE 007_ADMINISTRATIVO / 4.11 - FINANCEIRO / 17 CONTAS A PAGAR
@@ -232,19 +233,39 @@ function substituirErp_(itens, dataBase) {
   recalcularStatus_();
 }
 
-// ---------- Ações (chamadas via google.script.run pela tela hospedada, e
-// via doPost/JSON pela versão local de web/index.html — mesma lógica). ----------
+// ---------- Ações (chamadas via doPost/fetch pela tela hospedada e pela
+// versão local de web/index.html — mesma lógica). ----------
+
+// Ações de escrita (tudo exceto carregar/buscarAnexo) exigem a senha de
+// edição configurada em Propriedades do script. Enquanto ninguém configurar
+// essa propriedade, o app continua liberado (comportamento de antes) — assim
+// a trava só entra em vigor quando o dono decide ativá-la.
+function validarAcessoEdicao_(payload) {
+  var senhaConfigurada = PropertiesService.getScriptProperties().getProperty(PROP_SENHA_EDICAO);
+  if (!senhaConfigurada) return;
+  var senhaFornecida = String((payload && payload.senha) || '');
+  if (senhaFornecida !== senhaConfigurada) {
+    throw new Error('Senha de edição incorreta ou não informada.');
+  }
+}
 
 function api_carregar() {
-  return { erp: lerAba_('ERP'), manual: lerAba_('Manual'), dataBase: getDataBase_() };
+  return {
+    erp: lerAba_('ERP'),
+    manual: lerAba_('Manual'),
+    dataBase: getDataBase_(),
+    senhaConfigurada: !!PropertiesService.getScriptProperties().getProperty(PROP_SENHA_EDICAO),
+  };
 }
 
 function api_importar(payload) {
+  validarAcessoEdicao_(payload);
   substituirErp_(payload.itens, payload.dataBase);
   return api_carregar();
 }
 
-function api_importarDoDrive() {
+function api_importarDoDrive(payload) {
+  validarAcessoEdicao_(payload);
   var achado = encontrarArquivoMaisRecenteNoDrive_();
   if (!achado) throw new Error('Nenhum arquivo AAAA.MM.DD.xlsx encontrado na pasta do Drive.');
   var dadosPlanilha = lerLinhasDoXlsx_(achado.file);
@@ -257,6 +278,15 @@ function api_importarDoDrive() {
 }
 
 function api_adicionarManual(payload) {
+  validarAcessoEdicao_(payload);
+  var chaveNovo = chaveDuplicidade_(payload.item);
+  var jaExiste = lerAba_('ERP').concat(lerAba_('Manual')).some(function (i) {
+    return chaveDuplicidade_(i) === chaveNovo;
+  });
+  if (jaExiste) {
+    throw new Error('Já existe um lançamento com o mesmo Código Fornecedor, Valor e Vencimento (no ERP ou já lançado manualmente). Inclusão bloqueada.');
+  }
+
   var shM = getSheet_('Manual');
   var id = Utilities.getUuid();
   var linha = HEADERS.map(function (h) {
@@ -270,13 +300,60 @@ function api_adicionarManual(payload) {
   return api_carregar();
 }
 
+// Remove de uma vez todos os lançamentos manuais marcados como duplicados
+// (mesma chave de um título do ERP), evitando remover linha por linha.
+function api_removerDuplicados(payload) {
+  validarAcessoEdicao_(payload);
+  var shM = getSheet_('Manual');
+  var ultimaLinha = shM.getLastRow();
+  if (ultimaLinha < 2) return api_carregar();
+
+  var statusCol = HEADERS.indexOf('Status') + 1;
+  var dados = shM.getRange(2, 1, ultimaLinha - 1, HEADERS.length).getValues();
+  var linhasParaRemover = [];
+  for (var i = 0; i < dados.length; i++) {
+    if (dados[i][statusCol - 1] === 'Duplicado – revisar') linhasParaRemover.push(i + 2);
+  }
+  // Remove de baixo para cima para não invalidar os números de linha já calculados.
+  linhasParaRemover.sort(function (a, b) { return b - a; });
+  linhasParaRemover.forEach(function (linha) { shM.deleteRow(linha); });
+
+  recalcularStatus_();
+  var resultado = api_carregar();
+  resultado.quantidadeRemovida = linhasParaRemover.length;
+  return resultado;
+}
+
 // Busca, numa pasta do Drive, arquivos cujo nome contenha o Nº Documento
 // informado (via Drive API avançada, mais rápido que iterar a pasta inteira).
+// Normaliza a resposta porque o serviço avançado "Drive API" pode ter sido
+// habilitado como v2 (resposta em resposta.items, campos title/alternateLink)
+// ou v3 (resposta.files, campos name/webViewLink) — e inclui os parâmetros
+// que fazem a busca alcançar pastas dentro de Drives compartilhados
+// (Shared Drives), que sem eles simplesmente não aparecem nos resultados.
 function buscarArquivosPorNumero_(folderId, numDoc) {
   var escapado = numDoc.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   var query = "'" + folderId + "' in parents and trashed = false and name contains '" + escapado + "'";
-  var resposta = Drive.Files.list({ q: query, fields: 'files(id,name,webViewLink)', pageSize: 25 });
-  return (resposta.files || []).map(function (f) { return { nome: f.name, url: f.webViewLink }; });
+  var opcoesBase = {
+    q: query,
+    pageSize: 25,
+    maxResults: 25,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  };
+  var resposta;
+  try {
+    // Serviço avançado configurado como Drive API v3.
+    resposta = Drive.Files.list(Object.assign({ fields: 'files(id,name,webViewLink)' }, opcoesBase));
+  } catch (e1) {
+    // Serviço avançado configurado como Drive API v2 (máscara de campos
+    // de v3 é inválida em v2, então tenta de novo com os nomes de v2).
+    resposta = Drive.Files.list(Object.assign({ fields: 'items(id,title,alternateLink)' }, opcoesBase));
+  }
+  var arquivos = resposta.files || resposta.items || [];
+  return arquivos.map(function (f) {
+    return { nome: f.name || f.title, url: f.webViewLink || f.alternateLink };
+  });
 }
 
 function api_buscarAnexo(payload) {
@@ -284,11 +361,16 @@ function api_buscarAnexo(payload) {
   var fornecedor = String(payload.fornecedor || '').trim();
   var tipo = payload.tipo === 'comprovante' ? 'comprovante' : 'documento';
   var pastas = tipo === 'comprovante' ? PASTAS_COMPROVANTES : PASTAS_DOCUMENTOS;
-  if (!numDoc) return { encontrados: [] };
+  if (!numDoc) return { encontrados: [], erros: [] };
 
   var encontrados = [];
+  var erros = [];
   pastas.forEach(function (folderId) {
-    encontrados = encontrados.concat(buscarArquivosPorNumero_(folderId, numDoc));
+    try {
+      encontrados = encontrados.concat(buscarArquivosPorNumero_(folderId, numDoc));
+    } catch (e) {
+      erros.push('Pasta ' + folderId + ': ' + e.message);
+    }
   });
 
   // Com mais de um resultado (Nº Documento repetido entre fornecedores),
@@ -301,10 +383,11 @@ function api_buscarAnexo(payload) {
     });
     if (refinado.length) encontrados = refinado;
   }
-  return { encontrados: encontrados };
+  return { encontrados: encontrados, erros: erros };
 }
 
 function api_removerManual(payload) {
+  validarAcessoEdicao_(payload);
   var shM = getSheet_('Manual');
   var idCol = HEADERS.indexOf('ID') + 1;
   var dados = shM.getRange(2, 1, Math.max(shM.getLastRow() - 1, 0), HEADERS.length).getValues();
@@ -318,18 +401,18 @@ function api_removerManual(payload) {
   return api_carregar();
 }
 
-// doPost continua existindo só para a versão local de web/index.html
-// (que fala HTTP/fetch); a tela hospedada usa google.script.run direto
-// nas funções api_* acima, sem passar por doPost.
+// doPost é o único caminho usado pela tela (fetch), tanto para leitura
+// (GET ?api=json) quanto para as ações de escrita abaixo.
 function doPost(e) {
   var payload = JSON.parse(e.postData.contents);
   var acao = payload.action;
   try {
     var resultado;
     if (acao === 'importar') resultado = api_importar(payload);
-    else if (acao === 'importarDoDrive') resultado = api_importarDoDrive();
+    else if (acao === 'importarDoDrive') resultado = api_importarDoDrive(payload);
     else if (acao === 'adicionarManual') resultado = api_adicionarManual(payload);
     else if (acao === 'removerManual') resultado = api_removerManual(payload);
+    else if (acao === 'removerDuplicados') resultado = api_removerDuplicados(payload);
     else if (acao === 'buscarAnexo') resultado = api_buscarAnexo(payload);
     else throw new Error('Ação desconhecida: ' + acao);
     resultado.ok = true;

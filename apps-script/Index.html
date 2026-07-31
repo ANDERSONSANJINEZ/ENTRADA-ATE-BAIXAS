@@ -156,6 +156,7 @@
       <input id="periodo-fim-nativo" type="date" style="position:absolute; opacity:0; width:0; height:0; pointer-events:none;">
       <button type="button" class="btn secundario small" onclick="limparFiltroPeriodo()" title="Limpar filtro de período">✕</button>
     </div>
+    <button type="button" id="btn-acesso" class="btn secundario small"></button>
     <span id="badge-data-base" style="font-size:13px; background:rgba(255,255,255,.15); padding:6px 12px; border-radius:6px;">Base de dados: carregando…</span>
   </div>
 </header>
@@ -235,11 +236,12 @@
         <div>
           <label>Tipo</label>
           <select name="Tipo" required>
-            <option value="NF">NF</option><option value="ISS">ISS</option>
-            <option value="RES">RES</option><option value="TX">TX</option>
-            <option value="INS">INS</option><option value="FOL">FOL</option>
-            <option value="ADI">ADI</option><option value="PA">PA</option>
-            <option value="Outro">Outro</option>
+            <option value="NF">NF</option><option value="NFS">NFS</option>
+            <option value="NFAG">NFAG</option><option value="ND">ND</option>
+            <option value="NF3E">NF3E</option><option value="DACTE">DACTE</option>
+            <option value="BOL">BOL</option><option value="FAT">FAT</option>
+            <option value="FOL">FOL</option><option value="FGTS">FGTS</option>
+            <option value="DARF">DARF</option><option value="DAM">DAM</option>
           </select>
         </div>
         <div><label>Data Emissão</label><input type="date" name="Data Emissão" required></div>
@@ -248,7 +250,7 @@
           <label>Forma Pagamento</label>
           <select name="Forma Pagamento">
             <option value="Boleto">Boleto</option><option value="Pix">Pix</option>
-            <option value="TED">TED</option><option value="Outro">Outro</option>
+            <option value="TED">TED</option>
           </select>
         </div>
         <div><label>Código Fornecedor</label><input type="text" name="Código Fornecedor" required></div>
@@ -264,7 +266,10 @@
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Todos os lançamentos</h2>
-        <button class="btn secundario small" onclick="exportarXlsx('lancamentos')">⬇ Exportar Excel</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn perigo small" id="btn-remover-duplicados" onclick="removerDuplicados()">🗑 Excluir duplicados</button>
+          <button class="btn secundario small" onclick="exportarXlsx('lancamentos')">⬇ Exportar Excel</button>
+        </div>
       </div>
       <input id="busca" class="busca-tabela" placeholder="Buscar em todas as colunas…">
       <div class="filtros">
@@ -363,9 +368,21 @@
 // NÃO é a URL pública do Web App; usamos esta, vinda do servidor, nas
 // chamadas fetch() ao backend.
 const URL_BACKEND = '<?!= urlBackend ?>';
-// Restrição só de interface (esconde importar/lançar/remover); a chamada ao
-// backend em si não diferencia modo leitura — ver aviso no README.
-const MODO_LEITURA = <?!= modoLeitura ? 'true' : 'false' ?>;
+
+// ---------- Acesso leitura/edição ----------
+// ?modo=leitura na URL força somente-leitura, ignorando qualquer senha
+// salva (útil para links repassados a terceiros). Fora isso, o app abre
+// em modo leitura por padrão; "Habilitar edição" pede a senha configurada
+// pelo dono em Propriedades do script e guarda no navegador (localStorage)
+// para as próximas visitas. A validação de verdade acontece no servidor a
+// cada ação de escrita (ver validarAcessoEdicao_ em Code.gs) — diferente do
+// antigo modo=leitura (só escondia botões), aqui a senha errada é
+// recusada mesmo que alguém chame a ação direto por HTTP.
+const FORCAR_LEITURA_URL = <?!= modoLeitura ? 'true' : 'false' ?>;
+const CHAVE_SENHA_LOCAL = 'eab_senha_edicao';
+let senhaEdicao = FORCAR_LEITURA_URL ? '' : (localStorage.getItem(CHAVE_SENHA_LOCAL) || '');
+let MODO_LEITURA = !senhaEdicao;
+let senhaConfiguradaNoServidor = null; // null = ainda não sabemos (primeiro carregamento)
 
 // O plugin não se registra sozinho; registramos uma vez e desligamos por
 // padrão em cada gráfico (options.plugins.datalabels.display:false),
@@ -437,7 +454,7 @@ async function chamarServidor(acao, payload) {
   const resp = await fetch(urlBase(), {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(Object.assign({ action: acao }, payload)),
+    body: JSON.stringify(Object.assign({ action: acao, senha: senhaEdicao }, payload)),
   });
   const dados = await resp.json();
   if (dados.ok === false) throw new Error(dados.erro || 'falha na operação');
@@ -457,6 +474,8 @@ async function carregarTudo() {
     state.erp = dados.erp || [];
     state.manual = dados.manual || [];
     state.dataBase = dados.dataBase || null;
+    senhaConfiguradaNoServidor = !!dados.senhaConfigurada;
+    atualizarUiModoLeitura();
     renderizarTudo();
   } catch (e) {
     if (minhaRequisicao === requisicaoAtual) toast('Erro ao carregar dados: ' + e.message);
@@ -475,7 +494,12 @@ async function postarAcao(action, extra) {
     }
     return dados;
   } catch (e) {
-    toast('Erro: ' + e.message);
+    if (/senha de edição/i.test(e.message)) {
+      desabilitarEdicao();
+      toast('Senha de edição incorreta — voltando para o modo leitura.');
+    } else {
+      toast('Erro: ' + e.message);
+    }
     throw e;
   }
 }
@@ -1153,6 +1177,14 @@ async function removerManual(id) {
   toast('Lançamento removido.');
 }
 
+async function removerDuplicados() {
+  const qtde = state.manual.filter((m) => m.Status === 'Duplicado – revisar').length;
+  if (!qtde) { toast('Não há lançamentos manuais duplicados para remover.'); return; }
+  if (!confirm(`Remover ${qtde} lançamento(s) manual(is) marcado(s) como "Duplicado – revisar"?`)) return;
+  const dados = await postarAcao('removerDuplicados', {});
+  toast(`${dados.quantidadeRemovida ?? qtde} lançamento(s) duplicado(s) removido(s).`);
+}
+
 // Busca no Drive (pastas de documentos/comprovantes) o(s) arquivo(s) cujo
 // nome contenha o Nº Documento informado, refinando pelo fornecedor quando
 // há mais de um resultado. Não usa postarAcao pois a resposta não traz
@@ -1163,14 +1195,43 @@ async function baixarAnexo(numDoc, tipo, fornecedor) {
   try {
     const resp = await chamarServidor('buscarAnexo', { numDoc, tipo, fornecedor });
     const encontrados = resp.encontrados || [];
+    const erros = resp.erros || [];
     if (!encontrados.length) {
-      toast(`Nenhum ${rotulo} encontrado no Drive para o Nº Documento ${numDoc}.`);
+      if (erros.length) {
+        toast(`Erro ao acessar a pasta do Drive: ${erros[0]}`);
+      } else {
+        toast(`Nenhum ${rotulo} encontrado no Drive para o Nº Documento ${numDoc}.`);
+      }
       return;
     }
     encontrados.forEach(a => window.open(a.url, '_blank'));
   } catch (erro) {
     toast(`Falha ao buscar ${rotulo}: ` + erro.message);
   }
+}
+
+// Ao sair do campo Código Fornecedor, tenta preencher a Razão Social
+// automaticamente com base em um lançamento já existente com esse código.
+document.querySelector('#form-manual input[name="Código Fornecedor"]').addEventListener('blur', function () {
+  const codigo = this.value.trim();
+  if (!codigo) return;
+  const campoRazao = document.querySelector('#form-manual input[name="Razão Social"]');
+  if (campoRazao.value.trim()) return; // não sobrescreve o que já foi digitado
+  const achado = state.erp.concat(state.manual).find((i) => String(i['Código Fornecedor'] || '').trim() === codigo);
+  if (achado && achado['Razão Social']) campoRazao.value = achado['Razão Social'];
+});
+
+// Mesma chave de duplicidade usada no backend (chaveDuplicidade_ em Code.gs):
+// Código Fornecedor + Valor + Vencimento — barra a duplicidade já no
+// navegador, antes de chamar o servidor (que também confere, por segurança).
+function chaveDuplicidadeCliente(item) {
+  const fornecedor = String(item['Código Fornecedor'] || '').trim();
+  const valor = paraNumero(item['R$ Valor']).toFixed(2);
+  const vencData = paraData(item['Vencimento']);
+  const vencStr = vencData
+    ? `${vencData.getUTCFullYear()}-${String(vencData.getUTCMonth() + 1).padStart(2, '0')}-${String(vencData.getUTCDate()).padStart(2, '0')}`
+    : '';
+  return fornecedor + '|' + valor + '|' + vencStr;
 }
 
 document.getElementById('form-manual').addEventListener('submit', async (ev) => {
@@ -1180,6 +1241,14 @@ document.getElementById('form-manual').addEventListener('submit', async (ev) => 
   const item = {};
   for (const [k, v] of dados.entries()) item[k] = v;
   item['Vencimento Real'] = item['Vencimento'];
+
+  const chaveNovo = chaveDuplicidadeCliente(item);
+  const jaExiste = state.erp.concat(state.manual).some((i) => chaveDuplicidadeCliente(i) === chaveNovo);
+  if (jaExiste) {
+    alert('Já existe um lançamento com o mesmo Código Fornecedor, Valor e Vencimento (no ERP ou já lançado manualmente). Inclusão bloqueada.');
+    return;
+  }
+
   await postarAcao('adicionarManual', { item });
   form.reset();
   toast('Lançamento manual adicionado.');
@@ -1412,10 +1481,14 @@ async function processarArquivo(file) {
     : `Não foi possível identificar a data pelo nome do arquivo (esperado AAAA.MM.DD.xlsx) — a base de dados ficará marcada como "não identificada".`;
   document.getElementById('resumo-importacao').innerHTML =
     `<div class="aviso">${itens.length} títulos lidos de "${file.name}". ${avisoData} Enviando para a planilha…</div>`;
-  await postarAcao('importar', { itens, dataBase });
-  document.getElementById('resumo-importacao').innerHTML =
-    `<div class="aviso">${itens.length} títulos importados com sucesso. Veja o resultado no Dashboard e em Lançamentos.</div>`;
-  toast('Importação concluída.');
+  try {
+    await postarAcao('importar', { itens, dataBase });
+    document.getElementById('resumo-importacao').innerHTML =
+      `<div class="aviso">${itens.length} títulos importados com sucesso. Veja o resultado no Dashboard e em Lançamentos.</div>`;
+    toast('Importação concluída.');
+  } catch (e) {
+    document.getElementById('resumo-importacao').innerHTML = `<div class="aviso">Falha ao importar: ${e.message}</div>`;
+  }
 }
 
 const dropzone = document.getElementById('dropzone');
@@ -1442,18 +1515,51 @@ document.getElementById('btn-importar-drive').addEventListener('click', async ()
   }
 });
 
-// ---------- Modo somente leitura (?modo=leitura) ----------
-// Restrição de interface: esconde as ações de escrita. Não é uma barreira de
-// segurança no backend — quem tiver o link ainda roda com as permissões do
-// dono do script (ver aviso no apps-script/README.md).
-if (MODO_LEITURA) {
-  document.getElementById('nav-importar').style.display = 'none';
-  document.getElementById('painel-lancamento-manual').style.display = 'none';
-  const avisoLeitura = document.createElement('span');
-  avisoLeitura.textContent = '👁 Somente leitura';
-  avisoLeitura.style.cssText = 'font-size:13px; background:rgba(255,255,255,.15); padding:6px 12px; border-radius:6px;';
-  document.querySelector('header').insertBefore(avisoLeitura, document.getElementById('badge-data-base'));
+// ---------- Modo somente leitura / edição ----------
+// Diferente do antigo modo=leitura (só escondia botões), a senha de edição
+// é validada de verdade no servidor a cada ação de escrita — ver
+// validarAcessoEdicao_ em Code.gs. Aqui só refletimos o estado na tela.
+function habilitarEdicao() {
+  if (FORCAR_LEITURA_URL) {
+    toast('Este link foi aberto em modo leitura (?modo=leitura) — abra o link normal para editar.');
+    return;
+  }
+  const senha = prompt('Digite a senha de edição:');
+  if (senha == null) return; // cancelado
+  senhaEdicao = senha.trim();
+  localStorage.setItem(CHAVE_SENHA_LOCAL, senhaEdicao);
+  MODO_LEITURA = !senhaEdicao;
+  atualizarUiModoLeitura();
+  if (senhaConfiguradaNoServidor === false) {
+    toast('Aviso: nenhuma senha de edição foi configurada no servidor ainda — qualquer senha libera a edição. Veja o README para configurar uma.');
+  } else {
+    toast('Modo edição habilitado. Se a senha estiver errada, a primeira ação vai avisar.');
+  }
 }
+
+function desabilitarEdicao() {
+  senhaEdicao = '';
+  localStorage.removeItem(CHAVE_SENHA_LOCAL);
+  MODO_LEITURA = true;
+  atualizarUiModoLeitura();
+}
+
+function atualizarUiModoLeitura() {
+  document.getElementById('nav-importar').style.display = MODO_LEITURA ? 'none' : '';
+  document.getElementById('painel-lancamento-manual').style.display = MODO_LEITURA ? 'none' : '';
+  const btnRemoverDuplicados = document.getElementById('btn-remover-duplicados');
+  if (btnRemoverDuplicados) btnRemoverDuplicados.style.display = MODO_LEITURA ? 'none' : '';
+  const btnAcesso = document.getElementById('btn-acesso');
+  btnAcesso.textContent = MODO_LEITURA ? '🔓 Habilitar edição' : '🔒 Voltar para leitura';
+  btnAcesso.title = FORCAR_LEITURA_URL ? 'Link aberto em modo leitura' : '';
+  btnAcesso.onclick = MODO_LEITURA ? habilitarEdicao : desabilitarEdicao;
+  // Se a aba Importar estava ativa e foi escondida, volta para o Dashboard.
+  if (MODO_LEITURA && document.getElementById('nav-importar').classList.contains('ativo')) {
+    document.querySelector('nav button[data-aba="dashboard"]').click();
+  }
+  renderizarLancamentos(); // atualiza os botões "Remover" nas linhas
+}
+atualizarUiModoLeitura();
 
 // ---------- Início ----------
 function renderizarTudo() {

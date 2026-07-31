@@ -45,24 +45,40 @@ As abas `ERP` e `Manual` são criadas automaticamente na primeira chamada.
 Abra a URL do passo 10 direto no navegador — computador, celular, tablet,
 de qualquer lugar. Não precisa configurar nada nem copiar arquivo.
 
-## Compartilhar com terceiros (modo somente leitura)
+## Acesso leitura/edição (senha de edição)
 
-Repassar a URL do passo 10 dá acesso **completo** — quem tiver o link
-importa, lança manual e remove, igual ao dono da planilha (o script sempre
-roda "como você", não como quem está acessando). Para compartilhar uma
-versão que esconde essas ações, acrescente `?modo=leitura` no fim da URL:
+Por padrão, qualquer pessoa que abrir a URL do app vê tudo (dashboard,
+lançamentos, exportações) mas **não consegue editar** — a aba **Importar**,
+o formulário de lançamento manual e o botão de excluir duplicados ficam
+escondidos. Para habilitar a edição, a pessoa clica em **🔓 Habilitar
+edição** (topo direito) e digita a senha de edição da equipe; o navegador
+guarda essa senha (localStorage) para não pedir de novo nas próximas
+visitas, até clicar em **🔒 Voltar para leitura**.
 
-```
-https://script.google.com/macros/s/SEU_ID/exec?modo=leitura
-```
+Diferente do antigo `?modo=leitura` (que só escondia botões na tela), essa
+senha é conferida de verdade no servidor a cada ação de escrita — então
+mesmo que alguém tente chamar a ação direto por HTTP, sem a senha certa a
+ação é recusada.
 
-Isso esconde a aba **Importar** e o formulário de lançamento manual na
-tela. **É só uma restrição de interface**, não uma trava de segurança real:
-tecnicamente ainda é possível chamar as ações de escrita direto (via
-requisição HTTP), já que o backend não diferencia quem está pedindo. Para
-uma restrição de verdade (por login/conta Google), seria necessário mudar
-"Quem pode acessar" na implantação — o que exige Google Workspace para
-restringir a contas específicas.
+**Para configurar a senha** (recomendado fazer isso assim que implantar o
+app):
+1. No editor do Apps Script, clique no ícone de engrenagem **⚙️
+   Configurações do projeto** no menu lateral esquerdo.
+2. Em **Propriedades do script**, clique em **Adicionar propriedade do
+   script**.
+3. Propriedade: `senhaEdicao` — Valor: a senha que a equipe vai usar.
+   Salve.
+
+Enquanto essa propriedade não for configurada, o app libera a edição com
+**qualquer** senha digitada (ou seja, sem trava real) — assim a introdução
+dessa funcionalidade não quebra o uso de quem ainda não configurou nada.
+Configure a propriedade assim que possível para que a trava valha de
+verdade.
+
+O parâmetro `?modo=leitura` na URL continua funcionando como antes, como
+reforço: força a tela em modo leitura mesmo que o navegador já tenha uma
+senha de edição salva — útil para um link específico que você quer
+garantir que nunca vai editar nada, independentemente de quem o abra.
 
 ## Importação automática da pasta do Drive
 
@@ -83,6 +99,17 @@ arquivo correspondente e abrem em nova aba. As pastas de busca estão fixas
 em `Code.gs` (`PASTAS_DOCUMENTOS`, `PASTAS_COMPROVANTES`) e sua conta Google
 precisa ter acesso de visualização a elas, do mesmo jeito que à pasta do
 export diário. Se algum dia essas pastas mudarem, atualize os IDs ali.
+
+Se o botão disser "Nenhum documento/comprovante encontrado" mas você sabe
+que o arquivo existe na pasta, o clique agora mostra o erro real do Drive
+(em vez de simplesmente não achar nada) — normalmente é uma destas causas:
+- O serviço avançado **Drive API** foi adicionado como v2 em vez de v3 (o
+  código já tenta os dois formatos automaticamente, mas confirme no passo
+  5 acima que o serviço está habilitado).
+- As pastas estão dentro de um **Drive compartilhado** (Shared Drive) da
+  organização e a conta que fez a implantação não tem acesso a elas.
+- O nome do arquivo no Drive não contém o Nº Documento exatamente como
+  está na planilha (ex.: zeros à esquerda a mais/a menos).
 
 ## Atualizações do código
 
