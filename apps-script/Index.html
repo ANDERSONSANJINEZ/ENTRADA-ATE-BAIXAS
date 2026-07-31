@@ -83,6 +83,7 @@
   #tabela-lancamentos td.col-anexos, #tabela-lancamentos td.col-acao { overflow: visible; text-overflow: clip; }
   .anexos-col { display: flex; gap: 4px; }
   .anexos-col button { padding: 3px 6px; font-size: 11px; }
+  .anexos-col button.anexo-definido { background: var(--azul); color: #fff; border-color: var(--azul); }
   tr.separador-grupo td { border-top: 2px solid #1e2430; }
   #conteudo-analise ul { margin: 0 0 14px; padding-left: 22px; }
   #conteudo-analise h3 { font-size: 14px; color: var(--azul); margin: 18px 0 6px; }
@@ -193,7 +194,7 @@
       </div>
       <div class="painel">
         <div class="cabecalho-painel">
-          <h2>Valor por Remessa</h2>
+          <h2>Valor por Remessa (últimas 30)</h2>
           <button class="btn secundario small" onclick="exportarXlsx('remessa')">⬇ Exportar Excel</button>
         </div>
         <div id="remessa-chart-wrap" style="height:300px; width:100%;">
@@ -911,22 +912,22 @@ function renderizarValorPorRemessa() {
 
   const busca = (document.getElementById('busca-dashboard').value || '').trim().toLowerCase();
   if (busca) linhas = linhas.filter(l => contemBusca([l.remessa, l.qtde, fmtMoeda(l.valor)], busca));
-  ultimoDadosRemessa = linhas;
+  ultimoDadosRemessa = linhas; // export continua com todas as remessas, não só as exibidas no gráfico
+
+  // O gráfico mostra só as últimas 30 (maiores números de remessa) — com
+  // ~500 remessas no total, mostrar tudo de uma vez fica poluído demais
+  // pra ler; como "linhas" já vem em ordem decrescente, isso é o começo dela.
+  const linhasGrafico = linhas.slice(0, 30);
 
   if (chartRemessa) chartRemessa.destroy();
   chartRemessa = new Chart(document.getElementById('chart-remessa'), {
-    type: 'line',
+    type: 'bar',
     data: {
-      labels: linhas.map(l => l.remessa),
+      labels: linhasGrafico.map(l => l.remessa),
       datasets: [{
         label: 'Valor (R$)',
-        data: linhas.map(l => l.valor),
-        borderColor: '#1f4e78',
+        data: linhasGrafico.map(l => l.valor),
         backgroundColor: '#1f4e78',
-        borderWidth: 1.5,
-        tension: 0, // linha reta entre pontos: com dados tão espetados, suavizar só cria "barrigas" que não existem nos valores reais
-        pointRadius: 1.5,
-        pointHoverRadius: 5,
       }],
     },
     options: {
@@ -937,7 +938,7 @@ function renderizarValorPorRemessa() {
         datalabels: { display: false },
         tooltip: {
           callbacks: {
-            label: (ctx) => `Valor: ${fmtMoeda(ctx.parsed.y)}  ·  Qtde: ${linhas[ctx.dataIndex].qtde}`,
+            label: (ctx) => `Valor: ${fmtMoeda(ctx.parsed.y)}  ·  Qtde: ${linhasGrafico[ctx.dataIndex].qtde}`,
           },
         },
       },
@@ -1138,11 +1139,12 @@ function renderizarLancamentos() {
       : '';
     const escaparAtributo = (v) => String(v || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const escaparHtml = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-    const numDoc = escaparAtributo(i['Nº Documento']);
-    const fornecedorNome = escaparAtributo(i['Razão Social']);
+    const idEsc = escaparAtributo(i.ID);
+    const linkDoc = i['Link Documento'] || '';
+    const linkComp = i['Link Comprovante'] || '';
     const anexos = `<div class="anexos-col">
-        <button class="btn secundario small" title="Abrir documento no Drive" onclick="baixarAnexo('${numDoc}','documento','${fornecedorNome}')">📄</button>
-        <button class="btn secundario small" title="Abrir comprovante no Drive" onclick="baixarAnexo('${numDoc}','comprovante','${fornecedorNome}')">🧾</button>
+        <button class="btn secundario small ${linkDoc ? 'anexo-definido' : ''}" title="${linkDoc ? 'Abrir/editar link do documento' : 'Adicionar link do documento'}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','documento','${escaparAtributo(linkDoc)}')">📄</button>
+        <button class="btn secundario small ${linkComp ? 'anexo-definido' : ''}" title="${linkComp ? 'Abrir/editar link do comprovante' : 'Adicionar link do comprovante'}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','comprovante','${escaparAtributo(linkComp)}')">🧾</button>
       </div>`;
     return `<tr>
       <td><span class="badge ${origemBadge}">${i.Origem}</span></td>
@@ -1190,24 +1192,26 @@ async function removerDuplicados() {
 // nome contenha o Nº Documento informado, refinando pelo fornecedor quando
 // há mais de um resultado. Não usa postarAcao pois a resposta não traz
 // erp/manual — chama chamarServidor direto para não sobrescrever o state.
-async function baixarAnexo(numDoc, tipo, fornecedor) {
-  if (!numDoc) { toast('Este lançamento não tem Nº Documento.'); return; }
+// Link de anexo (documento/comprovante) cadastrado manualmente — a busca
+// automática no Drive foi removida por não encontrar os arquivos de forma
+// confiável. Clicar sempre abre um campo pré-preenchido com o link atual
+// (vazio se ainda não tiver um): editar e confirmar salva o novo link;
+// confirmar sem mudar nada só abre o link em outra aba; cancelar não faz nada.
+async function definirOuAbrirAnexo(id, origem, tipo, linkAtual) {
   const rotulo = tipo === 'comprovante' ? 'comprovante' : 'documento';
+  const novoLink = prompt(`Link do ${rotulo} (cole o link do Google Drive ou de onde o arquivo estiver salvo):`, linkAtual || '');
+  if (novoLink == null) return; // cancelado
+  const limpo = novoLink.trim();
+  if (limpo === (linkAtual || '')) {
+    if (limpo) window.open(limpo, '_blank');
+    return;
+  }
   try {
-    const resp = await chamarServidor('buscarAnexo', { numDoc, tipo, fornecedor });
-    const encontrados = resp.encontrados || [];
-    const erros = resp.erros || [];
-    if (!encontrados.length) {
-      if (erros.length) {
-        toast(`Erro ao acessar a pasta do Drive: ${erros[0]}`, 6000);
-      } else {
-        toast(`Nenhum ${rotulo} encontrado no Drive para o Nº Documento ${numDoc} (varridos ${resp.totalVarrido ?? 0} arquivo(s) na(s) pasta(s), incluindo subpastas).`, 6000);
-      }
-      return;
-    }
-    encontrados.forEach(a => window.open(a.url, '_blank'));
+    await postarAcao('definirAnexo', { id, origem, tipo, url: limpo });
+    toast(limpo ? `Link do ${rotulo} salvo.` : `Link do ${rotulo} removido.`);
+    if (limpo) window.open(limpo, '_blank');
   } catch (erro) {
-    toast(`Falha ao buscar ${rotulo}: ` + erro.message);
+    // erro já mostrado via toast dentro de postarAcao
   }
 }
 

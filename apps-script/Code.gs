@@ -15,7 +15,8 @@ var HEADERS = [
   'ID', 'Tipo', 'Data Emissão', 'Nº Documento', 'Vencimento Real',
   'Forma Pagamento', 'Código Fornecedor', 'Parcela', 'Data Baixa',
   'Vencimento', 'R$ Valor', 'Usuário Inclusor', 'Razão Social',
-  'Aprovação Remessa', 'Remessa', 'Histórico', 'Origem', 'Status'
+  'Aprovação Remessa', 'Remessa', 'Histórico', 'Origem', 'Status',
+  'Link Documento', 'Link Comprovante'
 ];
 
 var PROP_DATA_BASE = 'dataBaseImportacao';
@@ -26,16 +27,6 @@ var PROP_SENHA_EDICAO = 'senhaEdicao';
 // Nome do arquivo esperado: AAAA.MM.DD.xlsx (ex.: 2026.07.30.xlsx)
 var DRIVE_FOLDER_ID = '1sVlF29VGWDzHelgBGIeFvVK3OCpMjGmD';
 var NOME_ARQUIVO_RE = /^(\d{4})\.(\d{2})\.(\d{2})\.xlsx$/i;
-
-// Pastas do Drive com os anexos de cada lançamento (botões "Anexos" em
-// Lançamentos). Nome dos arquivos: documentos = Nº Documento + nome do
-// fornecedor; comprovantes = "comprovante" (fixo) + Nº Documento + (parte
-// do) nome/razão social do fornecedor. A busca (buscarArquivosPorNumero_)
-// usa só o Nº Documento como critério principal e o fornecedor só pra
-// desempatar quando há mais de um resultado — então não depende de o nome
-// ter exatamente esse formato/ordem.
-var PASTAS_DOCUMENTOS = ['1P4oN7lQopWk2hgNXEDNIdxIgTp1tqeiK', '18nuIj4SsAEqPJ7jOxlUe8JzJ8TCNcueL'];
-var PASTAS_COMPROVANTES = ['1leuDOfqLFDxdg3PECZ6aij2eIkPGKwq6'];
 
 var SRC = {
   tipo: 'B', dt_emissao: 'C', no_titulo: 'D', form_pagto: 'E', fornecedor: 'F',
@@ -139,6 +130,14 @@ function getSheet_(nome) {
     sh = ss.insertSheet(nome);
     sh.appendRow(HEADERS);
     sh.setFrozenRows(1);
+    return sh;
+  }
+  // Se HEADERS ganhou colunas novas desde a criação da planilha (ex.: Link
+  // Documento/Comprovante), completa o cabeçalho — sem isso, as colunas
+  // novas ficariam sem título na aba (os dados continuam sendo gravados
+  // certo, já que lerAba_/escrita sempre usam HEADERS.length).
+  if (sh.getLastColumn() < HEADERS.length) {
+    sh.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
   }
   return sh;
 }
@@ -217,16 +216,47 @@ function doGet(e) {
 }
 
 // Substitui o conteúdo da aba ERP pelos itens informados e recalcula duplicidade.
+// Chave estável de um título entre uma importação e a próxima (o ID em si
+// não é estável — é regenerado a cada import). Usada só para preservar os
+// links de anexo (ver substituirErp_), não para duplicidade.
+function chaveAnexo_(item) {
+  return String(item['Nº Documento'] || '').trim() + '|' +
+    String(item['Código Fornecedor'] || '').trim() + '|' +
+    String(item['Parcela'] || '').trim();
+}
+
 function substituirErp_(itens, dataBase) {
   var sh = getSheet_('ERP');
+
+  // Antes de apagar tudo, guarda os links de anexo já cadastrados
+  // manualmente, pra não perdê-los na reimportação diária (o ERP inteiro é
+  // substituído a cada import, então sem isso todo link se perderia).
+  var linksAnteriores = {};
+  var ultimaLinhaAntiga = sh.getLastRow();
+  if (ultimaLinhaAntiga > 1) {
+    var colDoc = HEADERS.indexOf('Link Documento');
+    var colComp = HEADERS.indexOf('Link Comprovante');
+    var dadosAntigos = sh.getRange(2, 1, ultimaLinhaAntiga - 1, HEADERS.length).getValues();
+    dadosAntigos.forEach(function (linha) {
+      var linkDoc = linha[colDoc], linkComp = linha[colComp];
+      if (!linkDoc && !linkComp) return;
+      var obj = {};
+      HEADERS.forEach(function (h, i) { obj[h] = linha[i]; });
+      linksAnteriores[chaveAnexo_(obj)] = { doc: linkDoc, comp: linkComp };
+    });
+  }
+
   sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), HEADERS.length).clearContent();
   sh.appendRow(HEADERS);
   var linhas = itens.map(function (item) {
     var id = Utilities.getUuid();
+    var preservado = linksAnteriores[chaveAnexo_(item)];
     return HEADERS.map(function (h) {
       if (h === 'ID') return id;
       if (h === 'Origem') return 'ERP';
       if (h === 'Status') return 'OK';
+      if (h === 'Link Documento') return (preservado && preservado.doc) || '';
+      if (h === 'Link Comprovante') return (preservado && preservado.comp) || '';
       return item[h] != null ? item[h] : '';
     });
   });
@@ -328,138 +358,28 @@ function api_removerDuplicados(payload) {
   return resultado;
 }
 
-// Deixa só letras/números (maiúsculo) — usado pra comparar nomes de arquivo
-// ignorando pontuação (ex.: "54.610", "Nº 54610" e "54610" batem entre si).
-function normalizarNomeArquivo_(s) {
-  return String(s || '').toUpperCase().replace(/[^A-Z0-9À-Ÿ]/g, '');
-}
+// Grava o link de anexo (documento ou comprovante) digitado manualmente
+// pelo usuário para um lançamento — a busca automática no Drive foi
+// removida (não achava os arquivos de forma confiável). payload:
+// { id, origem: 'ERP'|'Manual', tipo: 'documento'|'comprovante', url }.
+function api_definirAnexo(payload) {
+  validarAcessoEdicao_(payload);
+  var origem = payload.origem === 'Manual' ? 'Manual' : 'ERP';
+  var coluna = payload.tipo === 'comprovante' ? 'Link Comprovante' : 'Link Documento';
+  var colIdx = HEADERS.indexOf(coluna) + 1;
+  var idCol = HEADERS.indexOf('ID') + 1;
 
-// Lista os arquivos de uma pasta do Drive E de todas as subpastas dela
-// (várias equipes organizam os documentos em subpastas por mês/fornecedor,
-// e uma busca só na pasta-raiz nunca acharia esses arquivos). Via Drive API
-// avançada, com paginação. Normaliza a resposta porque o serviço avançado
-// "Drive API" pode ter sido habilitado como v2 (resposta.items, campos
-// title/alternateLink) ou v3 (resposta.files, campos name/webViewLink) — e
-// inclui os parâmetros que fazem a busca alcançar pastas dentro de Drives
-// compartilhados (Shared Drives), que sem eles simplesmente não aparecem.
-var MIME_PASTA_DRIVE = 'application/vnd.google-apps.folder';
-function listarArquivosDaPasta_(folderId) {
-  var arquivos = [];
-  var filaPastas = [folderId];
-  var visitadas = {};
-  var pastasProcessadas = 0;
-
-  while (filaPastas.length && pastasProcessadas < 200) { // trava de segurança
-    var pastaAtual = filaPastas.shift();
-    if (visitadas[pastaAtual]) continue;
-    visitadas[pastaAtual] = true;
-    pastasProcessadas++;
-
-    var query = "'" + pastaAtual + "' in parents and trashed = false";
-    var pageToken = null;
-    var paginas = 0;
-    do {
-      var opcoesBase = {
-        q: query,
-        pageSize: 1000,
-        maxResults: 1000,
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-        pageToken: pageToken || undefined,
-      };
-      var resposta;
-      try {
-        // Serviço avançado configurado como Drive API v3.
-        resposta = Drive.Files.list(Object.assign({ fields: 'nextPageToken,files(id,name,webViewLink,mimeType)' }, opcoesBase));
-      } catch (e1) {
-        // Serviço avançado configurado como Drive API v2 (máscara de campos
-        // de v3 é inválida em v2, então tenta de novo com os nomes de v2).
-        resposta = Drive.Files.list(Object.assign({ fields: 'nextPageToken,items(id,title,alternateLink,mimeType)' }, opcoesBase));
-      }
-      var pagina = resposta.files || resposta.items || [];
-      pagina.forEach(function (f) {
-        if (f.mimeType === MIME_PASTA_DRIVE) {
-          filaPastas.push(f.id);
-        } else {
-          arquivos.push({ nome: f.name || f.title, url: f.webViewLink || f.alternateLink });
-        }
-      });
-      pageToken = resposta.nextPageToken || null;
-      paginas++;
-    } while (pageToken && paginas < 20); // trava de segurança: até 20.000 arquivos por pasta
-  }
-  return arquivos;
-}
-
-// Busca, numa pasta do Drive, arquivos cujo nome contenha o Nº Documento
-// informado. Nome dos arquivos, por convenção da equipe: documentos = Nº
-// Documento + nome do fornecedor; comprovantes = "comprovante" (fixo) + Nº
-// Documento + (parte do) nome/razão social do fornecedor.
-// Primeiro tenta uma consulta direta ao Drive (rápida); se não achar nada,
-// cai para listar a pasta inteira e comparar os nomes ignorando pontuação
-// — cobre casos como o nome do arquivo usar "54.610" para o Nº Documento
-// "54610", que a consulta direta (substring exata) não encontraria.
-function buscarArquivosPorNumero_(folderId, numDoc) {
-  var escapado = numDoc.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  var query = "'" + folderId + "' in parents and trashed = false and name contains '" + escapado + "'";
-  var opcoesBase = {
-    q: query,
-    pageSize: 25,
-    maxResults: 25,
-    supportsAllDrives: true,
-    includeItemsFromAllDrives: true,
-  };
-  var resposta;
-  try {
-    resposta = Drive.Files.list(Object.assign({ fields: 'files(id,name,webViewLink)' }, opcoesBase));
-  } catch (e1) {
-    resposta = Drive.Files.list(Object.assign({ fields: 'items(id,title,alternateLink)' }, opcoesBase));
-  }
-  var arquivos = resposta.files || resposta.items || [];
-  var encontrados = arquivos.map(function (f) {
-    return { nome: f.name || f.title, url: f.webViewLink || f.alternateLink };
-  });
-  if (encontrados.length) return { encontrados: encontrados, totalVarrido: encontrados.length };
-
-  var todosDaPasta = listarArquivosDaPasta_(folderId);
-  var alvo = normalizarNomeArquivo_(numDoc);
-  var viaListagem = alvo
-    ? todosDaPasta.filter(function (f) { return normalizarNomeArquivo_(f.nome).indexOf(alvo) !== -1; })
-    : [];
-  return { encontrados: viaListagem, totalVarrido: todosDaPasta.length };
-}
-
-function api_buscarAnexo(payload) {
-  var numDoc = String(payload.numDoc || '').trim();
-  var fornecedor = String(payload.fornecedor || '').trim();
-  var tipo = payload.tipo === 'comprovante' ? 'comprovante' : 'documento';
-  var pastas = tipo === 'comprovante' ? PASTAS_COMPROVANTES : PASTAS_DOCUMENTOS;
-  if (!numDoc) return { encontrados: [], erros: [] };
-
-  var encontrados = [];
-  var erros = [];
-  var totalVarrido = 0;
-  pastas.forEach(function (folderId) {
-    try {
-      var resultado = buscarArquivosPorNumero_(folderId, numDoc);
-      encontrados = encontrados.concat(resultado.encontrados);
-      totalVarrido += resultado.totalVarrido;
-    } catch (e) {
-      erros.push('Pasta ' + folderId + ': ' + e.message);
+  var sh = getSheet_(origem);
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha < 2) throw new Error('Lançamento não encontrado.');
+  var ids = sh.getRange(2, idCol, ultimaLinha - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (ids[i][0] === payload.id) {
+      sh.getRange(i + 2, colIdx).setValue(String(payload.url || ''));
+      return api_carregar();
     }
-  });
-
-  // Com mais de um resultado (Nº Documento repetido entre fornecedores),
-  // refina pelo nome do fornecedor para achar o arquivo certo.
-  if (encontrados.length > 1 && fornecedor) {
-    var palavras = fornecedor.toUpperCase().split(/\s+/).filter(function (p) { return p.length > 2; });
-    var refinado = encontrados.filter(function (a) {
-      var nome = a.nome.toUpperCase();
-      return palavras.some(function (p) { return nome.indexOf(p) !== -1; });
-    });
-    if (refinado.length) encontrados = refinado;
   }
-  return { encontrados: encontrados, erros: erros, totalVarrido: totalVarrido };
+  throw new Error('Lançamento não encontrado (pode ter sido removido ou reimportado).');
 }
 
 function api_removerManual(payload) {
@@ -489,7 +409,7 @@ function doPost(e) {
     else if (acao === 'adicionarManual') resultado = api_adicionarManual(payload);
     else if (acao === 'removerManual') resultado = api_removerManual(payload);
     else if (acao === 'removerDuplicados') resultado = api_removerDuplicados(payload);
-    else if (acao === 'buscarAnexo') resultado = api_buscarAnexo(payload);
+    else if (acao === 'definirAnexo') resultado = api_definirAnexo(payload);
     else throw new Error('Ação desconhecida: ' + acao);
     resultado.ok = true;
     return ContentService

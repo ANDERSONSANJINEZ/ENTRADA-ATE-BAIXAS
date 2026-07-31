@@ -93,23 +93,21 @@ de importar por upload continua disponível como alternativa.
 ## Anexos (documentos e comprovantes) por lançamento
 
 Na aba **Lançamentos**, a coluna "Anexos" de cada linha tem dois botões (📄
-documento, 🧾 comprovante) que buscam no Drive, pelo Nº Documento (e
-refinando pelo nome do fornecedor quando há mais de um resultado), o
-arquivo correspondente e abrem em nova aba. As pastas de busca estão fixas
-em `Code.gs` (`PASTAS_DOCUMENTOS`, `PASTAS_COMPROVANTES`) e sua conta Google
-precisa ter acesso de visualização a elas, do mesmo jeito que à pasta do
-export diário. Se algum dia essas pastas mudarem, atualize os IDs ali.
+documento, 🧾 comprovante). Diferente de versões anteriores, o link **não é
+mais buscado automaticamente no Drive** (a busca automática não conseguia
+achar os arquivos de forma confiável) — agora é colado manualmente:
 
-Se o botão disser "Nenhum documento/comprovante encontrado" mas você sabe
-que o arquivo existe na pasta, o clique agora mostra o erro real do Drive
-(em vez de simplesmente não achar nada) — normalmente é uma destas causas:
-- O serviço avançado **Drive API** foi adicionado como v2 em vez de v3 (o
-  código já tenta os dois formatos automaticamente, mas confirme no passo
-  5 acima que o serviço está habilitado).
-- As pastas estão dentro de um **Drive compartilhado** (Shared Drive) da
-  organização e a conta que fez a implantação não tem acesso a elas.
-- O nome do arquivo no Drive não contém o Nº Documento exatamente como
-  está na planilha (ex.: zeros à esquerda a mais/a menos).
+- Clicar num botão sem link ainda cadastrado abre um campo pra colar o link
+  (do Google Drive ou de onde o arquivo estiver salvo) e salva.
+- Clicar num botão que já tem link cadastrado abre o mesmo campo,
+  pré-preenchido — dá pra só confirmar pra abrir o link, ou editar e
+  confirmar pra trocá-lo. O botão fica azul quando já tem um link salvo.
+
+Os links ficam guardados nas colunas `Link Documento`/`Link Comprovante` da
+planilha (abas `ERP` e `Manual`) e são **preservados entre reimportações**
+do ERP — a reimportação diária substitui todos os títulos, mas reconhece o
+mesmo título pela combinação Nº Documento + Código Fornecedor + Parcela e
+recoloca o link que já tinha sido salvo para ele.
 
 ## Atualizações do código
 

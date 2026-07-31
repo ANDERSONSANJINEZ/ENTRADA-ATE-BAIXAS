@@ -30,8 +30,8 @@ Funcionalidades:
   (ERP/Manual) e **Status**; quando um lançamento manual bate com um
   título do ERP (mesmo Código Fornecedor + Valor + Vencimento), ambos são
   marcados como "Duplicado – revisar" para que o manual seja removido.
-  Cada linha tem botões para abrir, direto do Drive, o documento e o
-  comprovante correspondentes.
+  Cada linha tem botões para cadastrar/abrir o link (documento e
+  comprovante) salvo manualmente para aquele lançamento.
 - Aba **Detalhe por Aporte**: escolhe um aporte numa lista suspensa e mostra
   os títulos em aberto daquele ciclo, agrupados por vencimento.
 - Aba **Análise**: achados analíticos calculados ao vivo a partir dos dados
