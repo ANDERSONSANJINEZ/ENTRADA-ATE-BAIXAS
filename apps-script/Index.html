@@ -549,7 +549,7 @@ function fmtData(v) {
 }
 // Timestamp (ms) do "dia calendário" em UTC, usado para comparar datas sem
 // hora entre si e com hojeCalendario(), sem deslocamento de fuso.
-function diaCalendario(d) { return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()); }
+function diaCalendario(d) { return d ? Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) : null; }
 // "Hoje" no fuso do usuário (dia calendário local real), ancorado da mesma
 // forma que diaCalendario() para poder comparar os dois diretamente.
 function hojeCalendario() {
@@ -1412,14 +1412,15 @@ function renderizarAnalise() {
   itens.forEach((i) => { const u = i['Usuário Inclusor']; if (u) porUsuario[u] = (porUsuario[u] || 0) + 1; });
   const usuariosOrdenados = Object.entries(porUsuario).sort((a, b) => b[1] - a[1]);
 
-  const baixados = itens.filter((i) => i['Data Baixa'] && i['Data Emissão']);
+  // Filtra por datas que realmente deram pra interpretar (paraData !== null),
+  // não só por o campo bruto não estar vazio — um valor não-vazio mas num
+  // formato inesperado ainda vira null em paraData() e quebraria as contas.
+  const baixados = itens
+    .map((i) => ({ emissao: diaCalendario(paraData(i['Data Emissão'])), baixa: diaCalendario(paraData(i['Data Baixa'])) }))
+    .filter((d) => d.emissao != null && d.baixa != null);
   let dpoMedio = null;
   if (baixados.length) {
-    const somaDias = baixados.reduce((s, i) => {
-      const emissao = diaCalendario(paraData(i['Data Emissão']));
-      const baixa = diaCalendario(paraData(i['Data Baixa']));
-      return s + (baixa - emissao) / 86400000;
-    }, 0);
+    const somaDias = baixados.reduce((s, d) => s + (d.baixa - d.emissao) / 86400000, 0);
     dpoMedio = somaDias / baixados.length;
   }
 
