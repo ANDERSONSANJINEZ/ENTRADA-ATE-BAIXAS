@@ -11,12 +11,15 @@
  * comparando Código Fornecedor + Valor + Vencimento entre as duas abas.
  */
 
+// Novas colunas (ex.: Chave Pix) sempre vão no FIM da lista, nunca no meio —
+// getSheet_ completa colunas novas só ao final da planilha existente; inserir
+// no meio desalinharia todos os dados já gravados nas linhas antigas.
 var HEADERS = [
   'ID', 'Tipo', 'Data Emissão', 'Nº Documento', 'Vencimento Real',
   'Forma Pagamento', 'Código Fornecedor', 'Parcela', 'Data Baixa',
   'Vencimento', 'R$ Valor', 'Usuário Inclusor', 'Razão Social',
   'Aprovação Remessa', 'Remessa', 'Histórico', 'Origem', 'Status',
-  'Link Documento', 'Link Comprovante'
+  'Link Documento', 'Link Comprovante', 'Chave Pix'
 ];
 
 var PROP_DATA_BASE = 'dataBaseImportacao';

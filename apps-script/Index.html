@@ -85,10 +85,19 @@
        numa linha, a próxima palavra desce para a linha de baixo. */
     white-space: normal; word-break: keep-all; overflow-wrap: normal;
     font-size: 12px; line-height: 1.25; vertical-align: middle;
+    text-align: center; position: relative;
   }
   #tabela-lancamentos td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #tabela-lancamentos td.col-historico, #tabela-lancamentos td.col-razao { white-space: normal; word-break: break-word; text-overflow: clip; }
   #tabela-lancamentos td.col-anexos, #tabela-lancamentos td.col-acao { overflow: visible; text-overflow: clip; }
+  /* Alça de redimensionar colunas (estilo planilha) — ver
+     tornarColunasRedimensionaveis(); fica colada na borda direita do
+     cabeçalho, sem atrapalhar o clique de ordenação. */
+  #tabela-lancamentos th .alca-redimensionar {
+    position: absolute; top: 0; right: -4px; bottom: 0; width: 8px;
+    cursor: col-resize; z-index: 5;
+  }
+  #tabela-lancamentos th .alca-redimensionar:hover { background: rgba(31,78,120,.35); }
   .anexos-col { display: flex; gap: 4px; }
   .anexos-col button { padding: 3px 6px; font-size: 11px; }
   .anexos-col button.anexo-definido { background: var(--azul); color: #fff; border-color: var(--azul); }
@@ -189,7 +198,7 @@
     <div class="cards-remessa-status" id="cards-remessa"></div>
     <div class="grid-2">
       <div class="painel">
-        <h2>Aging — títulos em aberto por faixa de vencimento</h2>
+        <h2>Títulos em aberto por faixa de vencimento</h2>
         <canvas id="chart-aging"></canvas>
       </div>
       <div class="painel">
@@ -218,6 +227,7 @@
         <h2>Resumo por Aporte — títulos em aberto</h2>
         <button class="btn secundario small" onclick="exportarXlsx('aporte')">⬇ Exportar Excel</button>
       </div>
+      <div id="total-aporte" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
       <div class="tabela-scroll">
         <table id="tabela-aporte">
           <thead><tr><th>Aporte</th><th>Período</th><th>Qtde</th><th>Valor</th></tr></thead>
@@ -230,6 +240,7 @@
         <h2>Curva ABC de fornecedores</h2>
         <button class="btn secundario small" onclick="exportarXlsx('abc')">⬇ Exportar Excel</button>
       </div>
+      <div id="total-abc" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
       <div class="tabela-scroll">
         <table id="tabela-abc">
           <thead><tr><th>Fornecedor</th><th>Razão Social</th><th>Qtde</th><th>Valor Total</th><th>% do Total</th><th>% Acum.</th><th>Classe</th></tr></thead>
@@ -263,6 +274,7 @@
             <option value="TED">TED</option>
           </select>
         </div>
+        <div><label>Chave Pix do Fornecedor</label><input type="text" name="Chave Pix" placeholder="CPF/CNPJ, e-mail, telefone ou aleatória"></div>
         <div><label>Código Fornecedor</label><input type="text" name="Código Fornecedor" required></div>
         <div class="full"><label>Razão Social</label><input type="text" name="Razão Social" required></div>
         <div><label>Vencimento</label><input type="date" name="Vencimento" required></div>
@@ -297,18 +309,20 @@
           <option value="">Aporte: todos</option>
         </select>
       </div>
+      <div id="total-lancamentos" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
       <div class="tabela-scroll">
         <table id="tabela-lancamentos">
           <colgroup>
-            <col style="width:3.87%"><col style="width:4.36%"><col style="width:3.87%"><col style="width:2.97%">
-            <col style="width:5.85%"><col style="width:3.87%"><col style="width:5.35%"><col style="width:5.45%">
-            <col style="width:7.23%"><col style="width:5.85%"><col style="width:5.85%"><col style="width:4.61%">
-            <col style="width:4.06%"><col style="width:5.85%"><col style="width:7.23%"><col style="width:5.25%">
-            <col style="width:4.96%"><col style="width:4.06%"><col style="width:3.96%"><col style="width:5.50%">
+            <col style="width:3.66%"><col style="width:4.12%"><col style="width:3.66%"><col style="width:2.81%">
+            <col style="width:5.53%"><col style="width:3.66%"><col style="width:5.05%"><col style="width:5.00%">
+            <col style="width:5.15%"><col style="width:6.83%"><col style="width:5.53%"><col style="width:5.53%">
+            <col style="width:4.36%"><col style="width:3.84%"><col style="width:5.53%"><col style="width:6.83%">
+            <col style="width:4.96%"><col style="width:4.69%"><col style="width:3.84%"><col style="width:3.96%">
+            <col style="width:5.50%">
           </colgroup>
           <thead><tr>
             <th>Origem</th><th>Status</th><th>Aporte</th><th>Tipo</th><th>Emissão</th><th>Nº Doc.</th>
-            <th>Forma Pgto.</th><th>Fornecedor</th><th>Razão Social</th>
+            <th>Forma Pgto.</th><th>Chave Pix</th><th>Fornecedor</th><th>Razão Social</th>
             <th>Vencimento</th><th>Venc. Real</th><th>Valor</th><th>Parcela</th><th>Baixa</th>
             <th>Histórico</th><th>Aprovação</th><th>Usuário</th><th>Remessa</th>
             <th>Anexos</th><th></th>
@@ -659,6 +673,71 @@ function contemBusca(valores, busca) {
   return valores.some(v => String(v == null ? '' : v).toLowerCase().includes(busca));
 }
 
+// Mesmo formato de totalizador em todas as planilhas da tela: "N
+// título(s) · Total: R$ X" — antes só existia em Detalhe por Aporte.
+function definirTotalizador(elId, itens) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const total = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  el.textContent = `${itens.length.toLocaleString('pt-BR')} título(s) · Total: ${fmtMoeda(total)}`;
+}
+
+// Alças de redimensionamento arrastáveis nas colunas de uma tabela (estilo
+// planilha): ao arrastar, só a coluna arrastada muda de largura — as demais
+// ficam como estavam — e a tabela cresce na mesma medida, rolando
+// horizontalmente dentro do .tabela-scroll quando não couber mais.
+function tornarColunasRedimensionaveis(tabelaId) {
+  const tabela = document.getElementById(tabelaId);
+  if (tabela.dataset.redimensionavel) return;
+  tabela.dataset.redimensionavel = '1';
+  const colgroup = tabela.querySelector('colgroup');
+  if (!colgroup) return;
+  const cols = Array.from(colgroup.children);
+  const ths = Array.from(tabela.querySelectorAll('thead th'));
+  let colunaAtual = null, larguraInicialColuna = 0, larguraInicialTabela = 0, xInicial = 0;
+
+  function congelarLargurasEmPixel() {
+    if (tabela.dataset.congelada) return;
+    tabela.dataset.congelada = '1';
+    ths.forEach((th, i) => { cols[i].style.width = th.getBoundingClientRect().width + 'px'; });
+    tabela.style.width = tabela.getBoundingClientRect().width + 'px';
+  }
+
+  function aoMover(ev) {
+    if (!colunaAtual) return;
+    const delta = ev.clientX - xInicial;
+    const novaLargura = Math.max(40, larguraInicialColuna + delta);
+    colunaAtual.style.width = novaLargura + 'px';
+    tabela.style.width = (larguraInicialTabela + (novaLargura - larguraInicialColuna)) + 'px';
+  }
+  function aoSoltar() {
+    colunaAtual = null;
+    document.body.style.cursor = '';
+    document.removeEventListener('mousemove', aoMover);
+    document.removeEventListener('mouseup', aoSoltar);
+  }
+
+  ths.forEach((th, i) => {
+    const alca = document.createElement('span');
+    alca.className = 'alca-redimensionar';
+    alca.title = 'Arraste para ajustar a largura da coluna';
+    alca.addEventListener('click', (ev) => ev.stopPropagation()); // não aciona a ordenação do cabeçalho
+    alca.addEventListener('mousedown', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      congelarLargurasEmPixel();
+      colunaAtual = cols[i];
+      larguraInicialColuna = colunaAtual.getBoundingClientRect().width;
+      larguraInicialTabela = tabela.getBoundingClientRect().width;
+      xInicial = ev.clientX;
+      document.body.style.cursor = 'col-resize';
+      document.addEventListener('mousemove', aoMover);
+      document.addEventListener('mouseup', aoSoltar);
+    });
+    th.appendChild(alca);
+  });
+}
+
 // ---------- Exportar Excel (.xlsx) ----------
 function baixarXlsx(nomeArquivo, cabecalhos, linhas) {
   const planilha = XLSX.utils.aoa_to_sheet([cabecalhos].concat(linhas));
@@ -676,7 +755,7 @@ function exportarXlsx(qual) {
       Array.from(tr.children).slice(0, -2).map((td) => td.textContent.trim())
     );
     baixarXlsx('lancamentos.xlsx', [
-      'Origem', 'Status', 'Aporte', 'Tipo', 'Emissão', 'Nº Documento', 'Forma Pagamento',
+      'Origem', 'Status', 'Aporte', 'Tipo', 'Emissão', 'Nº Documento', 'Forma Pagamento', 'Chave Pix',
       'Código Fornecedor', 'Razão Social', 'Vencimento', 'Vencimento Real', 'Valor',
       'Parcela', 'Data Baixa', 'Histórico', 'Aprovação Remessa', 'Usuário Inclusor', 'Remessa',
     ], linhas);
@@ -987,6 +1066,7 @@ function renderizarResumoAporte(abertos) {
   document.querySelector('#tabela-aporte tbody').innerHTML = linhas.map(l =>
     `<tr><td>${l.aporte}</td><td>${l.periodo}</td><td>${l.qtde}</td><td>${fmtMoeda(l.valor)}</td></tr>`
   ).join('') || '<tr><td colspan="4" style="color:var(--cinza)">Nenhum título em aberto com aporte identificado.</td></tr>';
+  definirTotalizador('total-aporte', abertos);
   tornarOrdenavel('tabela-aporte', EXTRATORES_APORTE, () => renderizarResumoAporte(ultimoAbertos));
 }
 
@@ -1070,6 +1150,7 @@ function renderizarCurvaAbc(itens) {
     `<tr><td>${l.cod}</td><td>${l.nome}</td><td>${l.qtde}</td><td>${fmtMoeda(l.valor)}</td>
       <td>${(l.pct * 100).toFixed(1)}%</td><td>${(l.acum * 100).toFixed(1)}%</td><td>${l.classe}</td></tr>`
   ).join('');
+  definirTotalizador('total-abc', itens);
   tornarOrdenavel('tabela-abc', EXTRATORES_ABC, () => renderizarCurvaAbc(ultimoItensAnalise));
 }
 
@@ -1086,7 +1167,7 @@ function textoBuscavel(i) {
   return [
     i.Origem, i.Status, i.Aporte, i.Tipo,
     i['Data Emissão'], fmtData(i['Data Emissão']),
-    i['Nº Documento'], i['Forma Pagamento'],
+    i['Nº Documento'], i['Forma Pagamento'], i['Chave Pix'],
     i['Código Fornecedor'], i['Parcela'],
     i['Vencimento'], fmtData(i['Vencimento']),
     i['Vencimento Real'], fmtData(i['Vencimento Real']),
@@ -1105,6 +1186,7 @@ const EXTRATORES_LANCAMENTOS = [
   i => paraData(i['Data Emissão']),
   i => i['Nº Documento'],
   i => i['Forma Pagamento'],
+  i => i['Chave Pix'],
   i => i['Código Fornecedor'],
   i => i['Razão Social'],
   i => paraData(i['Vencimento']),
@@ -1175,6 +1257,7 @@ function renderizarLancamentos() {
       <td>${fmtData(i['Data Emissão'])}</td>
       <td>${i['Nº Documento'] || ''}</td>
       <td title="${escaparHtml(i['Forma Pagamento'])}">${i['Forma Pagamento'] || ''}</td>
+      <td title="${escaparHtml(i['Chave Pix'])}">${i['Chave Pix'] || ''}</td>
       <td title="${escaparHtml(i['Código Fornecedor'])}">${i['Código Fornecedor'] || ''}</td>
       <td class="col-razao">${i['Razão Social'] || ''}</td>
       <td>${fmtData(i['Vencimento'])}</td>
@@ -1190,7 +1273,9 @@ function renderizarLancamentos() {
       <td class="col-acao">${acao}</td>
     </tr>`;
   }).join('');
+  definirTotalizador('total-lancamentos', itens);
   tornarOrdenavel('tabela-lancamentos', EXTRATORES_LANCAMENTOS, renderizarLancamentos);
+  tornarColunasRedimensionaveis('tabela-lancamentos');
 }
 ['busca', 'filtro-origem', 'filtro-status', 'filtro-aporte'].forEach(id =>
   document.getElementById(id).addEventListener('input', renderizarLancamentos));
@@ -1398,9 +1483,7 @@ function renderizarDetalheAporte() {
     return `<tr${separador}><td>${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td>${vencAtual}</td><td>${fmtMoeda(i['R$ Valor'])}</td></tr>`;
   });
   tbody.innerHTML = linhas.join('') || '<tr><td colspan="5" style="color:var(--cinza)">Nenhum título em aberto para este aporte.</td></tr>';
-
-  const total = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
-  totalEl.textContent = `${itens.length.toLocaleString('pt-BR')} título(s) · Total: ${fmtMoeda(total)}`;
+  definirTotalizador('total-detalhe-aporte', itens);
 }
 document.getElementById('select-aporte-detalhe').addEventListener('change', renderizarDetalheAporte);
 
