@@ -1105,10 +1105,12 @@ function renderizarLancamentos() {
     const acao = (!MODO_LEITURA && i.Origem === 'Manual')
       ? `<button class="btn perigo small" onclick="removerManual('${i.ID}')">Remover</button>`
       : '';
-    const numDoc = String(i['Nº Documento'] || '').replace(/'/g, "\\'");
+    const escaparAtributo = (v) => String(v || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const numDoc = escaparAtributo(i['Nº Documento']);
+    const fornecedorNome = escaparAtributo(i['Razão Social']);
     const anexos = `<div class="anexos-col">
-        <button class="btn secundario small" title="Abrir documento no Drive" onclick="baixarAnexo('${numDoc}','documento')">📄</button>
-        <button class="btn secundario small" title="Abrir comprovante no Drive" onclick="baixarAnexo('${numDoc}','comprovante')">🧾</button>
+        <button class="btn secundario small" title="Abrir documento no Drive" onclick="baixarAnexo('${numDoc}','documento','${fornecedorNome}')">📄</button>
+        <button class="btn secundario small" title="Abrir comprovante no Drive" onclick="baixarAnexo('${numDoc}','comprovante','${fornecedorNome}')">🧾</button>
       </div>`;
     return `<tr>
       <td><span class="badge ${origemBadge}">${i.Origem}</span></td>
@@ -1142,6 +1144,26 @@ async function removerManual(id) {
   if (!confirm('Remover este lançamento manual?')) return;
   await postarAcao('removerManual', { id });
   toast('Lançamento removido.');
+}
+
+// Busca no Drive (pastas de documentos/comprovantes) o(s) arquivo(s) cujo
+// nome contenha o Nº Documento informado, refinando pelo fornecedor quando
+// há mais de um resultado. Não usa postarAcao pois a resposta não traz
+// erp/manual — chama chamarServidor direto para não sobrescrever o state.
+async function baixarAnexo(numDoc, tipo, fornecedor) {
+  if (!numDoc) { toast('Este lançamento não tem Nº Documento.'); return; }
+  const rotulo = tipo === 'comprovante' ? 'comprovante' : 'documento';
+  try {
+    const resp = await chamarServidor('buscarAnexo', { numDoc, tipo, fornecedor });
+    const encontrados = resp.encontrados || [];
+    if (!encontrados.length) {
+      toast(`Nenhum ${rotulo} encontrado no Drive para o Nº Documento ${numDoc}.`);
+      return;
+    }
+    encontrados.forEach(a => window.open(a.url, '_blank'));
+  } catch (erro) {
+    toast(`Falha ao buscar ${rotulo}: ` + erro.message);
+  }
 }
 
 document.getElementById('form-manual').addEventListener('submit', async (ev) => {

@@ -80,6 +80,16 @@ Sheets temporariamente para ler os dados, e apaga a cópia temporária em
 seguida. Não é preciso baixar/selecionar o arquivo manualmente — a opção
 de importar por upload continua disponível como alternativa.
 
+## Anexos (documentos e comprovantes) por lançamento
+
+Na aba **Lançamentos**, a coluna "Anexos" de cada linha tem dois botões (📄
+documento, 🧾 comprovante) que buscam no Drive, pelo Nº Documento (e
+refinando pelo nome do fornecedor quando há mais de um resultado), o
+arquivo correspondente e abrem em nova aba. As pastas de busca estão fixas
+em `Code.gs` (`PASTAS_DOCUMENTOS`, `PASTAS_COMPROVANTES`) e sua conta Google
+precisa ter acesso de visualização a elas, do mesmo jeito que à pasta do
+export diário. Se algum dia essas pastas mudarem, atualize os IDs ali.
+
 ## Atualizações do código
 
 Sempre que `apps-script/Code.gs` for alterado neste repositório, repita os

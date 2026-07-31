@@ -26,6 +26,12 @@ var PROP_DATA_BASE = 'dataBaseImportacao';
 var DRIVE_FOLDER_ID = '1sVlF29VGWDzHelgBGIeFvVK3OCpMjGmD';
 var NOME_ARQUIVO_RE = /^(\d{4})\.(\d{2})\.(\d{2})\.xlsx$/i;
 
+// Pastas do Drive com os anexos de cada lançamento (botões "Anexos" em
+// Lançamentos). Nome dos arquivos: documentos = Tipo + Nº Documento +
+// Fornecedor; comprovantes = "comprovante" (fixo) + Nº Documento + Fornecedor.
+var PASTAS_DOCUMENTOS = ['1P4oN7lQopWk2hgNXEDNIdxIgTp1tqeiK', '18nuIj4SsAEqPJ7jOxlUe8JzJ8TCNcueL'];
+var PASTAS_COMPROVANTES = ['1leuDOfqLFDxdg3PECZ6aij2eIkPGKwq6'];
+
 var SRC = {
   tipo: 'B', dt_emissao: 'C', no_titulo: 'D', form_pagto: 'E', fornecedor: 'F',
   nome_fornece: 'G', vencimento: 'H', vencto_real: 'I', vlr_titulo: 'J', parcela: 'K',
@@ -264,6 +270,40 @@ function api_adicionarManual(payload) {
   return api_carregar();
 }
 
+// Busca, numa pasta do Drive, arquivos cujo nome contenha o Nº Documento
+// informado (via Drive API avançada, mais rápido que iterar a pasta inteira).
+function buscarArquivosPorNumero_(folderId, numDoc) {
+  var escapado = numDoc.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var query = "'" + folderId + "' in parents and trashed = false and name contains '" + escapado + "'";
+  var resposta = Drive.Files.list({ q: query, fields: 'files(id,name,webViewLink)', pageSize: 25 });
+  return (resposta.files || []).map(function (f) { return { nome: f.name, url: f.webViewLink }; });
+}
+
+function api_buscarAnexo(payload) {
+  var numDoc = String(payload.numDoc || '').trim();
+  var fornecedor = String(payload.fornecedor || '').trim();
+  var tipo = payload.tipo === 'comprovante' ? 'comprovante' : 'documento';
+  var pastas = tipo === 'comprovante' ? PASTAS_COMPROVANTES : PASTAS_DOCUMENTOS;
+  if (!numDoc) return { encontrados: [] };
+
+  var encontrados = [];
+  pastas.forEach(function (folderId) {
+    encontrados = encontrados.concat(buscarArquivosPorNumero_(folderId, numDoc));
+  });
+
+  // Com mais de um resultado (Nº Documento repetido entre fornecedores),
+  // refina pelo nome do fornecedor para achar o arquivo certo.
+  if (encontrados.length > 1 && fornecedor) {
+    var palavras = fornecedor.toUpperCase().split(/\s+/).filter(function (p) { return p.length > 2; });
+    var refinado = encontrados.filter(function (a) {
+      var nome = a.nome.toUpperCase();
+      return palavras.some(function (p) { return nome.indexOf(p) !== -1; });
+    });
+    if (refinado.length) encontrados = refinado;
+  }
+  return { encontrados: encontrados };
+}
+
 function api_removerManual(payload) {
   var shM = getSheet_('Manual');
   var idCol = HEADERS.indexOf('ID') + 1;
@@ -290,6 +330,7 @@ function doPost(e) {
     else if (acao === 'importarDoDrive') resultado = api_importarDoDrive();
     else if (acao === 'adicionarManual') resultado = api_adicionarManual(payload);
     else if (acao === 'removerManual') resultado = api_removerManual(payload);
+    else if (acao === 'buscarAnexo') resultado = api_buscarAnexo(payload);
     else throw new Error('Ação desconhecida: ' + acao);
     resultado.ok = true;
     return ContentService
