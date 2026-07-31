@@ -1146,9 +1146,15 @@ function renderizarLancamentos() {
     const idEsc = escaparAtributo(i.ID);
     const linkDoc = i['Link Documento'] || '';
     const linkComp = i['Link Comprovante'] || '';
+    const tituloDoc = MODO_LEITURA
+      ? (linkDoc ? 'Abrir documento' : 'Nenhum documento cadastrado')
+      : (linkDoc ? 'Abrir/editar link do documento' : 'Adicionar link do documento');
+    const tituloComp = MODO_LEITURA
+      ? (linkComp ? 'Abrir comprovante' : 'Nenhum comprovante cadastrado')
+      : (linkComp ? 'Abrir/editar link do comprovante' : 'Adicionar link do comprovante');
     const anexos = `<div class="anexos-col">
-        <button class="btn secundario small ${linkDoc ? 'anexo-definido' : ''}" title="${linkDoc ? 'Abrir/editar link do documento' : 'Adicionar link do documento'}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','documento','${escaparAtributo(linkDoc)}')">📄</button>
-        <button class="btn secundario small ${linkComp ? 'anexo-definido' : ''}" title="${linkComp ? 'Abrir/editar link do comprovante' : 'Adicionar link do comprovante'}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','comprovante','${escaparAtributo(linkComp)}')">🧾</button>
+        <button class="btn secundario small ${linkDoc ? 'anexo-definido' : ''}" title="${tituloDoc}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','documento','${escaparAtributo(linkDoc)}')">📄</button>
+        <button class="btn secundario small ${linkComp ? 'anexo-definido' : ''}" title="${tituloComp}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','comprovante','${escaparAtributo(linkComp)}')">🧾</button>
       </div>`;
     return `<tr>
       <td><span class="badge ${origemBadge}">${i.Origem}</span></td>
@@ -1203,6 +1209,13 @@ async function removerDuplicados() {
 // confirmar sem mudar nada só abre o link em outra aba; cancelar não faz nada.
 async function definirOuAbrirAnexo(id, origem, tipo, linkAtual) {
   const rotulo = tipo === 'comprovante' ? 'comprovante' : 'documento';
+  // Em modo leitura só é permitido abrir um link já cadastrado — nunca
+  // criar/editar um, igual às outras ações de escrita do app.
+  if (MODO_LEITURA) {
+    if (linkAtual) window.open(linkAtual, '_blank');
+    else toast(`Nenhum link de ${rotulo} cadastrado para este lançamento.`);
+    return;
+  }
   const novoLink = prompt(`Link do ${rotulo} (cole o link do Google Drive ou de onde o arquivo estiver salvo):`, linkAtual || '');
   if (novoLink == null) return; // cancelado
   const limpo = novoLink.trim();
