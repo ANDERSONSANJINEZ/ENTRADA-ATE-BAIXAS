@@ -195,6 +195,11 @@ function doGet(e) {
   // template, para o Index.html usar nas chamadas fetch() ao backend.
   var template = HtmlService.createTemplateFromFile('Index');
   template.urlBackend = ScriptApp.getService().getUrl();
+  // ?modo=leitura esconde as ações de escrita na tela (importar, lançar,
+  // remover) — é uma restrição só de interface (o link compartilhado com
+  // terceiros continua rodando com as mesmas permissões do dono do script;
+  // ver aviso no apps-script/README.md).
+  template.modoLeitura = !!(e && e.parameter && e.parameter.modo === 'leitura');
   return template.evaluate()
     .setTitle('Entrada até Baixas — Financeiro Protheus')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');

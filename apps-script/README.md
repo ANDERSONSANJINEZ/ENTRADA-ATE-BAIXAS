@@ -51,6 +51,25 @@ As abas `ERP` e `Manual` são criadas automaticamente na primeira chamada.
   baixe a pasta `web/` e abra `index.html`, colando a mesma URL do passo
   10 quando pedido. Útil como alternativa/backup.
 
+## Compartilhar com terceiros (modo somente leitura)
+
+Repassar a URL do passo 10 dá acesso **completo** — quem tiver o link
+importa, lança manual e remove, igual ao dono da planilha (o script sempre
+roda "como você", não como quem está acessando). Para compartilhar uma
+versão que esconde essas ações, acrescente `?modo=leitura` no fim da URL:
+
+```
+https://script.google.com/macros/s/SEU_ID/exec?modo=leitura
+```
+
+Isso esconde a aba **Importar** e o formulário de lançamento manual na
+tela. **É só uma restrição de interface**, não uma trava de segurança real:
+tecnicamente ainda é possível chamar as ações de escrita direto (via
+requisição HTTP), já que o backend não diferencia quem está pedindo. Para
+uma restrição de verdade (por login/conta Google), seria necessário mudar
+"Quem pode acessar" na implantação — o que exige Google Workspace para
+restringir a contas específicas.
+
 ## Importação automática da pasta do Drive
 
 Na aba **Importar** da tela, o botão "🔄 Buscar arquivo mais recente do

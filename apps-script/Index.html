@@ -117,7 +117,7 @@
 <nav>
   <button class="ativo" data-aba="dashboard">Dashboard</button>
   <button data-aba="lancamentos">Lançamentos</button>
-  <button data-aba="importar">Importar</button>
+  <button data-aba="importar" id="nav-importar">Importar</button>
 </nav>
 
 <main>
@@ -173,7 +173,7 @@
   </section>
 
   <section id="aba-lancamentos" class="aba">
-    <div class="painel">
+    <div class="painel" id="painel-lancamento-manual">
       <h2>Novo lançamento manual</h2>
       <form class="manual" id="form-manual">
         <div>
@@ -267,6 +267,9 @@
 // NÃO é a URL pública do Web App; usamos esta, vinda do servidor, nas
 // chamadas fetch() ao backend.
 const URL_BACKEND = '<?!= urlBackend ?>';
+// Restrição só de interface (esconde importar/lançar/remover); a chamada ao
+// backend em si não diferencia modo leitura — ver aviso no README.
+const MODO_LEITURA = <?!= modoLeitura ? 'true' : 'false' ?>;
 
 // O plugin não se registra sozinho; registramos uma vez e desligamos por
 // padrão em cada gráfico (options.plugins.datalabels.display:false),
@@ -863,7 +866,7 @@ function renderizarLancamentos() {
   document.querySelector('#tabela-lancamentos tbody').innerHTML = itens.map(i => {
     const origemBadge = i.Origem === 'ERP' ? 'badge-erp' : 'badge-manual';
     const statusBadge = i.Status === 'Duplicado – revisar' ? 'badge-dup' : 'badge-ok';
-    const acao = i.Origem === 'Manual'
+    const acao = (!MODO_LEITURA && i.Origem === 'Manual')
       ? `<button class="btn perigo small" onclick="removerManual('${i.ID}')">Remover</button>`
       : '';
     return `<tr>
@@ -1000,6 +1003,19 @@ document.getElementById('btn-importar-drive').addEventListener('click', async ()
     resumo.innerHTML = `<div class="aviso">Falha ao importar do Drive: ${e.message}</div>`;
   }
 });
+
+// ---------- Modo somente leitura (?modo=leitura) ----------
+// Restrição de interface: esconde as ações de escrita. Não é uma barreira de
+// segurança no backend — quem tiver o link ainda roda com as permissões do
+// dono do script (ver aviso no apps-script/README.md).
+if (MODO_LEITURA) {
+  document.getElementById('nav-importar').style.display = 'none';
+  document.getElementById('painel-lancamento-manual').style.display = 'none';
+  const avisoLeitura = document.createElement('span');
+  avisoLeitura.textContent = '👁 Somente leitura';
+  avisoLeitura.style.cssText = 'font-size:13px; background:rgba(255,255,255,.15); padding:6px 12px; border-radius:6px;';
+  document.querySelector('header').insertBefore(avisoLeitura, document.getElementById('badge-data-base'));
+}
 
 // ---------- Início ----------
 function renderizarTudo() { renderizarDataBase(); renderizarDashboard(); renderizarLancamentos(); }
