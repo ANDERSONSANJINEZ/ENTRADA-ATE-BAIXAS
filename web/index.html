@@ -605,7 +605,19 @@ function renderizarStatusPagamento(itens) {
       ],
     },
     options: {
-      plugins: { legend: { position: 'bottom' }, datalabels: { display: false } },
+      plugins: {
+        legend: { position: 'bottom' },
+        datalabels: { display: false },
+        tooltip: {
+          callbacks: {
+            afterBody: (tooltipItems) => {
+              const idx = tooltipItems[0].dataIndex;
+              const diferenca = serieTotal[idx] - serieBaixado[idx];
+              return [`Diferença (ainda em aberto): ${diferenca.toLocaleString('pt-BR')}`];
+            },
+          },
+        },
+      },
       scales: {
         y: { beginAtZero: true, title: { display: true, text: 'Qtde acumulada' } },
         x: { title: { display: true, text: 'Mês/Ano (vencimento)' } },
