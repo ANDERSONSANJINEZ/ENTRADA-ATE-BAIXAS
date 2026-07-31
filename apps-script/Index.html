@@ -422,11 +422,11 @@ function renderizarDataBase() {
     : '';
 }
 
-function toast(msg) {
+function toast(msg, duracaoMs) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('mostrar');
-  setTimeout(() => t.classList.remove('mostrar'), 3000);
+  setTimeout(() => t.classList.remove('mostrar'), duracaoMs || 3000);
 }
 
 // Ponte com o backend: a tela é servida pelo mesmo Apps Script do backend,
@@ -902,7 +902,12 @@ function renderizarValorPorRemessa() {
     grupos[rem].qtde += 1;
     grupos[rem].valor += paraNumero(i['R$ Valor']);
   });
-  let linhas = Object.keys(grupos).sort().map(remessa => ({ remessa, qtde: grupos[remessa].qtde, valor: grupos[remessa].valor }));
+  // Ordena numericamente (não como texto — "32" < "295" como string mas
+  // deveria vir depois) e decrescente, senão o eixo X fica fora de ordem e a
+  // linha "zigzagueia" sem sentido entre remessas distantes.
+  let linhas = Object.keys(grupos)
+    .sort((a, b) => Number(b) - Number(a))
+    .map(remessa => ({ remessa, qtde: grupos[remessa].qtde, valor: grupos[remessa].valor }));
 
   const busca = (document.getElementById('busca-dashboard').value || '').trim().toLowerCase();
   if (busca) linhas = linhas.filter(l => contemBusca([l.remessa, l.qtde, fmtMoeda(l.valor)], busca));
@@ -918,8 +923,9 @@ function renderizarValorPorRemessa() {
         data: linhas.map(l => l.valor),
         borderColor: '#1f4e78',
         backgroundColor: '#1f4e78',
-        tension: 0.35,
-        pointRadius: 3,
+        borderWidth: 1.5,
+        tension: 0, // linha reta entre pontos: com dados tão espetados, suavizar só cria "barrigas" que não existem nos valores reais
+        pointRadius: 1.5,
         pointHoverRadius: 5,
       }],
     },
@@ -1193,9 +1199,9 @@ async function baixarAnexo(numDoc, tipo, fornecedor) {
     const erros = resp.erros || [];
     if (!encontrados.length) {
       if (erros.length) {
-        toast(`Erro ao acessar a pasta do Drive: ${erros[0]}`);
+        toast(`Erro ao acessar a pasta do Drive: ${erros[0]}`, 6000);
       } else {
-        toast(`Nenhum ${rotulo} encontrado no Drive para o Nº Documento ${numDoc}.`);
+        toast(`Nenhum ${rotulo} encontrado no Drive para o Nº Documento ${numDoc} (varridos ${resp.totalVarrido ?? 0} arquivo(s) na(s) pasta(s), incluindo subpastas).`, 6000);
       }
       return;
     }

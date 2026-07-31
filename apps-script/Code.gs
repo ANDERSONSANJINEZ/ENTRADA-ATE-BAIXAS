@@ -334,42 +334,60 @@ function normalizarNomeArquivo_(s) {
   return String(s || '').toUpperCase().replace(/[^A-Z0-9À-Ÿ]/g, '');
 }
 
-// Lista os arquivos de uma pasta do Drive (via Drive API avançada), com
-// paginação. Normaliza a resposta porque o serviço avançado "Drive API"
-// pode ter sido habilitado como v2 (resposta.items, campos
+// Lista os arquivos de uma pasta do Drive E de todas as subpastas dela
+// (várias equipes organizam os documentos em subpastas por mês/fornecedor,
+// e uma busca só na pasta-raiz nunca acharia esses arquivos). Via Drive API
+// avançada, com paginação. Normaliza a resposta porque o serviço avançado
+// "Drive API" pode ter sido habilitado como v2 (resposta.items, campos
 // title/alternateLink) ou v3 (resposta.files, campos name/webViewLink) — e
 // inclui os parâmetros que fazem a busca alcançar pastas dentro de Drives
 // compartilhados (Shared Drives), que sem eles simplesmente não aparecem.
+var MIME_PASTA_DRIVE = 'application/vnd.google-apps.folder';
 function listarArquivosDaPasta_(folderId) {
-  var query = "'" + folderId + "' in parents and trashed = false";
   var arquivos = [];
-  var pageToken = null;
-  var paginas = 0;
-  do {
-    var opcoesBase = {
-      q: query,
-      pageSize: 1000,
-      maxResults: 1000,
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-      pageToken: pageToken || undefined,
-    };
-    var resposta;
-    try {
-      // Serviço avançado configurado como Drive API v3.
-      resposta = Drive.Files.list(Object.assign({ fields: 'nextPageToken,files(id,name,webViewLink)' }, opcoesBase));
-    } catch (e1) {
-      // Serviço avançado configurado como Drive API v2 (máscara de campos
-      // de v3 é inválida em v2, então tenta de novo com os nomes de v2).
-      resposta = Drive.Files.list(Object.assign({ fields: 'nextPageToken,items(id,title,alternateLink)' }, opcoesBase));
-    }
-    var pagina = resposta.files || resposta.items || [];
-    pagina.forEach(function (f) {
-      arquivos.push({ nome: f.name || f.title, url: f.webViewLink || f.alternateLink });
-    });
-    pageToken = resposta.nextPageToken || null;
-    paginas++;
-  } while (pageToken && paginas < 20); // trava de segurança: até 20.000 arquivos
+  var filaPastas = [folderId];
+  var visitadas = {};
+  var pastasProcessadas = 0;
+
+  while (filaPastas.length && pastasProcessadas < 200) { // trava de segurança
+    var pastaAtual = filaPastas.shift();
+    if (visitadas[pastaAtual]) continue;
+    visitadas[pastaAtual] = true;
+    pastasProcessadas++;
+
+    var query = "'" + pastaAtual + "' in parents and trashed = false";
+    var pageToken = null;
+    var paginas = 0;
+    do {
+      var opcoesBase = {
+        q: query,
+        pageSize: 1000,
+        maxResults: 1000,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+        pageToken: pageToken || undefined,
+      };
+      var resposta;
+      try {
+        // Serviço avançado configurado como Drive API v3.
+        resposta = Drive.Files.list(Object.assign({ fields: 'nextPageToken,files(id,name,webViewLink,mimeType)' }, opcoesBase));
+      } catch (e1) {
+        // Serviço avançado configurado como Drive API v2 (máscara de campos
+        // de v3 é inválida em v2, então tenta de novo com os nomes de v2).
+        resposta = Drive.Files.list(Object.assign({ fields: 'nextPageToken,items(id,title,alternateLink,mimeType)' }, opcoesBase));
+      }
+      var pagina = resposta.files || resposta.items || [];
+      pagina.forEach(function (f) {
+        if (f.mimeType === MIME_PASTA_DRIVE) {
+          filaPastas.push(f.id);
+        } else {
+          arquivos.push({ nome: f.name || f.title, url: f.webViewLink || f.alternateLink });
+        }
+      });
+      pageToken = resposta.nextPageToken || null;
+      paginas++;
+    } while (pageToken && paginas < 20); // trava de segurança: até 20.000 arquivos por pasta
+  }
   return arquivos;
 }
 
@@ -401,13 +419,14 @@ function buscarArquivosPorNumero_(folderId, numDoc) {
   var encontrados = arquivos.map(function (f) {
     return { nome: f.name || f.title, url: f.webViewLink || f.alternateLink };
   });
-  if (encontrados.length) return encontrados;
+  if (encontrados.length) return { encontrados: encontrados, totalVarrido: encontrados.length };
 
+  var todosDaPasta = listarArquivosDaPasta_(folderId);
   var alvo = normalizarNomeArquivo_(numDoc);
-  if (!alvo) return [];
-  return listarArquivosDaPasta_(folderId).filter(function (f) {
-    return normalizarNomeArquivo_(f.nome).indexOf(alvo) !== -1;
-  });
+  var viaListagem = alvo
+    ? todosDaPasta.filter(function (f) { return normalizarNomeArquivo_(f.nome).indexOf(alvo) !== -1; })
+    : [];
+  return { encontrados: viaListagem, totalVarrido: todosDaPasta.length };
 }
 
 function api_buscarAnexo(payload) {
@@ -419,9 +438,12 @@ function api_buscarAnexo(payload) {
 
   var encontrados = [];
   var erros = [];
+  var totalVarrido = 0;
   pastas.forEach(function (folderId) {
     try {
-      encontrados = encontrados.concat(buscarArquivosPorNumero_(folderId, numDoc));
+      var resultado = buscarArquivosPorNumero_(folderId, numDoc);
+      encontrados = encontrados.concat(resultado.encontrados);
+      totalVarrido += resultado.totalVarrido;
     } catch (e) {
       erros.push('Pasta ' + folderId + ': ' + e.message);
     }
@@ -437,7 +459,7 @@ function api_buscarAnexo(payload) {
     });
     if (refinado.length) encontrados = refinado;
   }
-  return { encontrados: encontrados, erros: erros };
+  return { encontrados: encontrados, erros: erros, totalVarrido: totalVarrido };
 }
 
 function api_removerManual(payload) {
