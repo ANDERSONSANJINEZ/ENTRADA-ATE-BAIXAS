@@ -189,7 +189,13 @@ function doGet(e) {
       .createTextOutput(JSON.stringify(api_carregar()))
       .setMimeType(ContentService.MimeType.JSON);
   }
-  return HtmlService.createHtmlOutputFromFile('Index')
+  // A página roda dentro de um iframe isolado (googleusercontent.com), então
+  // location.href ali dentro NÃO é a URL pública do Web App — por isso
+  // injetamos a URL certa (ScriptApp.getService().getUrl()) como variável de
+  // template, para o Index.html usar nas chamadas fetch() ao backend.
+  var template = HtmlService.createTemplateFromFile('Index');
+  template.urlBackend = ScriptApp.getService().getUrl();
+  return template.evaluate()
     .setTitle('Entrada até Baixas — Financeiro Protheus')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }

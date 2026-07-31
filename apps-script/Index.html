@@ -262,6 +262,12 @@
 <div class="toast" id="toast"></div>
 
 <script>
+// Injetado pelo doGet (ScriptApp.getService().getUrl()) — a página roda
+// dentro de um iframe isolado do Google, então location.href aqui dentro
+// NÃO é a URL pública do Web App; usamos esta, vinda do servidor, nas
+// chamadas fetch() ao backend.
+const URL_BACKEND = '<?!= urlBackend ?>';
+
 // O plugin não se registra sozinho; registramos uma vez e desligamos por
 // padrão em cada gráfico (options.plugins.datalabels.display:false),
 // ligando explicitamente só onde o rótulo por ponto é útil (Valor por Remessa).
@@ -320,7 +326,7 @@ function toast(msg) {
 // sem erro nenhum — HTTP direto é mais simples de depurar (dá pra ver no
 // DevTools → Network) e é o mesmo caminho já testado da versão local.
 function urlBase() {
-  return location.href.split('?')[0];
+  return URL_BACKEND;
 }
 
 async function chamarServidor(acao, payload) {
