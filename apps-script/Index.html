@@ -72,7 +72,15 @@
   /* Histórico: texto bem mais longo que as outras colunas — quebra normal
      com largura máxima em vez de "nowrap", pra não esticar a linha inteira
      nem parecer com fonte diferente das demais colunas. */
-  #tabela-lancamentos td.col-historico { white-space: normal; max-width: 320px; word-break: break-word; }
+  #tabela-lancamentos { table-layout: fixed; }
+  #tabela-lancamentos th {
+    white-space: normal; word-break: normal; overflow-wrap: break-word;
+    hyphens: auto; -webkit-hyphens: auto;
+    font-size: 12px; line-height: 1.25; vertical-align: bottom;
+  }
+  #tabela-lancamentos td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #tabela-lancamentos td.col-historico, #tabela-lancamentos td.col-razao { white-space: normal; word-break: break-word; text-overflow: clip; }
+  #tabela-lancamentos td.col-anexos, #tabela-lancamentos td.col-acao { overflow: visible; text-overflow: clip; }
   .anexos-col { display: flex; gap: 4px; }
   .anexos-col button { padding: 3px 6px; font-size: 11px; }
   tr.separador-grupo td { border-top: 2px solid #1e2430; }
@@ -185,7 +193,7 @@
       <div class="painel">
         <div class="cabecalho-painel">
           <h2>Valor por Remessa</h2>
-          <button class="btn secundario small" onclick="exportarCsv('remessa')">⬇ Exportar CSV</button>
+          <button class="btn secundario small" onclick="exportarXlsx('remessa')">⬇ Exportar Excel</button>
         </div>
         <div style="overflow-x:auto; max-width:100%;">
           <div id="remessa-chart-wrap" style="height:300px;">
@@ -197,7 +205,7 @@
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Resumo por Aporte — títulos em aberto</h2>
-        <button class="btn secundario small" onclick="exportarCsv('aporte')">⬇ Exportar CSV</button>
+        <button class="btn secundario small" onclick="exportarXlsx('aporte')">⬇ Exportar Excel</button>
       </div>
       <div class="tabela-scroll">
         <table id="tabela-aporte">
@@ -209,7 +217,7 @@
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Curva ABC de fornecedores</h2>
-        <button class="btn secundario small" onclick="exportarCsv('abc')">⬇ Exportar CSV</button>
+        <button class="btn secundario small" onclick="exportarXlsx('abc')">⬇ Exportar Excel</button>
       </div>
       <div class="tabela-scroll">
         <table id="tabela-abc">
@@ -256,7 +264,7 @@
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Todos os lançamentos</h2>
-        <button class="btn secundario small" onclick="exportarCsv('lancamentos')">⬇ Exportar CSV</button>
+        <button class="btn secundario small" onclick="exportarXlsx('lancamentos')">⬇ Exportar Excel</button>
       </div>
       <input id="busca" class="busca-tabela" placeholder="Buscar em todas as colunas…">
       <div class="filtros">
@@ -276,6 +284,13 @@
       </div>
       <div class="tabela-scroll">
         <table id="tabela-lancamentos">
+          <colgroup>
+            <col style="width:3.9%"><col style="width:5.4%"><col style="width:3.92%"><col style="width:3.19%">
+            <col style="width:5.9%"><col style="width:3.92%"><col style="width:5.4%"><col style="width:5.0%">
+            <col style="width:8.2%"><col style="width:5.9%"><col style="width:5.9%"><col style="width:5.0%">
+            <col style="width:3.0%"><col style="width:5.9%"><col style="width:8.2%"><col style="width:5.3%">
+            <col style="width:5.5%"><col style="width:3.0%"><col style="width:3.6%"><col style="width:3.87%">
+          </colgroup>
           <thead><tr>
             <th>Origem</th><th>Status</th><th>Aporte</th><th>Tipo</th><th>Emissão</th><th>Nº Doc.</th>
             <th>Forma Pgto.</th><th>Fornecedor</th><th>Razão Social</th>
@@ -293,7 +308,7 @@
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Detalhe por Aporte</h2>
-        <button class="btn secundario small" onclick="exportarCsv('detalheAporte')">⬇ Exportar CSV</button>
+        <button class="btn secundario small" onclick="exportarXlsx('detalheAporte')">⬇ Exportar Excel</button>
       </div>
       <select id="select-aporte-detalhe" class="busca-tabela" style="max-width:420px;">
         <option value="">Selecione um aporte…</option>
@@ -312,7 +327,7 @@
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Análise dos dados</h2>
-        <button class="btn secundario small" onclick="exportarCsv('analise')">⬇ Exportar CSV</button>
+        <button class="btn secundario small" onclick="exportarXlsx('analise')">⬇ Exportar Excel</button>
       </div>
       <div id="conteudo-analise" style="font-size:14px; line-height:1.9;"></div>
     </div>
@@ -606,35 +621,23 @@ function contemBusca(valores, busca) {
   return valores.some(v => String(v == null ? '' : v).toLowerCase().includes(busca));
 }
 
-// ---------- Exportar CSV ----------
-function baixarCsv(nomeArquivo, cabecalhos, linhas) {
-  const escapar = (v) => {
-    const s = String(v == null ? '' : v);
-    return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  };
-  const conteudo = [cabecalhos.map(escapar).join(';')]
-    .concat(linhas.map((l) => l.map(escapar).join(';')))
-    .join('\r\n');
-  const blob = new Blob(['﻿' + conteudo], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = nomeArquivo;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+// ---------- Exportar Excel (.xlsx) ----------
+function baixarXlsx(nomeArquivo, cabecalhos, linhas) {
+  const planilha = XLSX.utils.aoa_to_sheet([cabecalhos].concat(linhas));
+  const livro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(livro, planilha, 'Dados');
+  XLSX.writeFile(livro, nomeArquivo);
   toast('Exportado: ' + nomeArquivo);
 }
 
 // Exporta os dados exatamente como estão na tela (com os filtros/ordenação
 // aplicados no momento).
-function exportarCsv(qual) {
+function exportarXlsx(qual) {
   if (qual === 'lancamentos') {
     const linhas = Array.from(document.querySelectorAll('#tabela-lancamentos tbody tr')).map((tr) =>
       Array.from(tr.children).slice(0, -2).map((td) => td.textContent.trim())
     );
-    baixarCsv('lancamentos.csv', [
+    baixarXlsx('lancamentos.xlsx', [
       'Origem', 'Status', 'Aporte', 'Tipo', 'Emissão', 'Nº Documento', 'Forma Pagamento',
       'Código Fornecedor', 'Razão Social', 'Vencimento', 'Vencimento Real', 'Valor',
       'Parcela', 'Data Baixa', 'Histórico', 'Aprovação Remessa', 'Usuário Inclusor', 'Remessa',
@@ -643,15 +646,15 @@ function exportarCsv(qual) {
     const linhas = Array.from(document.querySelectorAll('#tabela-aporte tbody tr')).map((tr) =>
       Array.from(tr.children).map((td) => td.textContent.trim())
     );
-    baixarCsv('resumo_aporte.csv', ['Aporte', 'Período', 'Qtde', 'Valor'], linhas);
+    baixarXlsx('resumo_aporte.xlsx', ['Aporte', 'Período', 'Qtde', 'Valor'], linhas);
   } else if (qual === 'abc') {
     const linhas = Array.from(document.querySelectorAll('#tabela-abc tbody tr')).map((tr) =>
       Array.from(tr.children).map((td) => td.textContent.trim())
     );
-    baixarCsv('curva_abc.csv', ['Fornecedor', 'Razão Social', 'Qtde', 'Valor Total', '% do Total', '% Acum.', 'Classe'], linhas);
+    baixarXlsx('curva_abc.xlsx', ['Fornecedor', 'Razão Social', 'Qtde', 'Valor Total', '% do Total', '% Acum.', 'Classe'], linhas);
   } else if (qual === 'remessa') {
     const linhas = ultimoDadosRemessa.map((l) => [l.remessa, l.qtde, fmtMoeda(l.valor)]);
-    baixarCsv('valor_por_remessa.csv', ['Remessa', 'Qtde', 'Valor'], linhas);
+    baixarXlsx('valor_por_remessa.xlsx', ['Remessa', 'Qtde', 'Valor'], linhas);
   } else if (qual === 'detalheAporte') {
     const linhas = ultimoDetalheAporte.map((i) => [
       fmtData(i['Data Emissão']),
@@ -660,9 +663,9 @@ function exportarCsv(qual) {
       fmtData(i['Vencimento']),
       fmtMoeda(i['R$ Valor']),
     ]);
-    baixarCsv('detalhe_aporte.csv', ['Data', 'N/Doc.', 'Descrição', 'Venc.', 'Valor'], linhas);
+    baixarXlsx('detalhe_aporte.xlsx', ['Data', 'N/Doc.', 'Descrição', 'Venc.', 'Valor'], linhas);
   } else if (qual === 'analise') {
-    baixarCsv('analise.csv', ['Indicador', 'Valor'], ultimoDadosAnalise);
+    baixarXlsx('analise.xlsx', ['Indicador', 'Valor'], ultimoDadosAnalise);
   }
 }
 
@@ -1109,6 +1112,7 @@ function renderizarLancamentos() {
       ? `<button class="btn perigo small" onclick="removerManual('${i.ID}')">Remover</button>`
       : '';
     const escaparAtributo = (v) => String(v || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const escaparHtml = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
     const numDoc = escaparAtributo(i['Nº Documento']);
     const fornecedorNome = escaparAtributo(i['Razão Social']);
     const anexos = `<div class="anexos-col">
@@ -1117,25 +1121,25 @@ function renderizarLancamentos() {
       </div>`;
     return `<tr>
       <td><span class="badge ${origemBadge}">${i.Origem}</span></td>
-      <td><span class="badge ${statusBadge}">${i.Status}</span></td>
+      <td title="${escaparHtml(i.Status)}"><span class="badge ${statusBadge}">${i.Status}</span></td>
       <td>${i.Aporte || ''}</td>
       <td>${i.Tipo || ''}</td>
       <td>${fmtData(i['Data Emissão'])}</td>
       <td>${i['Nº Documento'] || ''}</td>
-      <td>${i['Forma Pagamento'] || ''}</td>
-      <td>${i['Código Fornecedor'] || ''}</td>
-      <td>${i['Razão Social'] || ''}</td>
+      <td title="${escaparHtml(i['Forma Pagamento'])}">${i['Forma Pagamento'] || ''}</td>
+      <td title="${escaparHtml(i['Código Fornecedor'])}">${i['Código Fornecedor'] || ''}</td>
+      <td class="col-razao">${i['Razão Social'] || ''}</td>
       <td>${fmtData(i['Vencimento'])}</td>
       <td>${fmtData(i['Vencimento Real'])}</td>
-      <td>${fmtMoeda(i['R$ Valor'])}</td>
+      <td title="${escaparHtml(fmtMoeda(i['R$ Valor']))}">${fmtMoeda(i['R$ Valor'])}</td>
       <td>${i['Parcela'] || ''}</td>
       <td>${fmtData(i['Data Baixa'])}</td>
       <td class="col-historico">${i['Histórico'] || ''}</td>
-      <td>${i['Aprovação Remessa'] || ''}</td>
-      <td>${i['Usuário Inclusor'] || ''}</td>
+      <td title="${escaparHtml(i['Aprovação Remessa'])}">${i['Aprovação Remessa'] || ''}</td>
+      <td title="${escaparHtml(i['Usuário Inclusor'])}">${i['Usuário Inclusor'] || ''}</td>
       <td>${i['Remessa'] || ''}</td>
-      <td>${anexos}</td>
-      <td>${acao}</td>
+      <td class="col-anexos">${anexos}</td>
+      <td class="col-acao">${acao}</td>
     </tr>`;
   }).join('');
   tornarOrdenavel('tabela-lancamentos', EXTRATORES_LANCAMENTOS, renderizarLancamentos);
