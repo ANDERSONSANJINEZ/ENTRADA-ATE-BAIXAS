@@ -45,40 +45,42 @@ As abas `ERP` e `Manual` são criadas automaticamente na primeira chamada.
 Abra a URL do passo 10 direto no navegador — computador, celular, tablet,
 de qualquer lugar. Não precisa configurar nada nem copiar arquivo.
 
-## Acesso leitura/edição (senha de edição)
+## Acesso leitura/edição (uma senha por pessoa)
 
 Por padrão, qualquer pessoa que abrir a URL do app vê tudo (dashboard,
 lançamentos, exportações) mas **não consegue editar** — a aba **Importar**,
 o formulário de lançamento manual e o botão de excluir duplicados ficam
 escondidos. Para habilitar a edição, a pessoa clica em **🔓 Habilitar
-edição** (topo direito) e digita a senha de edição da equipe; o navegador
-guarda essa senha (localStorage) para não pedir de novo nas próximas
-visitas, até clicar em **🔒 Voltar para leitura**.
+edição** (topo direito) e digita a sua senha; se for válida, o app já
+mostra "bem-vindo(a), <nome>" e o navegador guarda a sessão (localStorage)
+até clicar em **🔒 Voltar para leitura**.
 
-Diferente do antigo `?modo=leitura` (que só escondia botões na tela), essa
-senha é conferida de verdade no servidor a cada ação de escrita — então
-mesmo que alguém tente chamar a ação direto por HTTP, sem a senha certa a
-ação é recusada.
+A validação é conferida de verdade no servidor (não só uma restrição de
+tela) — mesmo que alguém tente chamar uma ação de escrita direto por HTTP,
+sem uma senha válida a ação é recusada.
 
-**Para configurar a senha** (recomendado fazer isso assim que implantar o
-app):
-1. No editor do Apps Script, clique no ícone de engrenagem **⚙️
-   Configurações do projeto** no menu lateral esquerdo.
-2. Em **Propriedades do script**, clique em **Adicionar propriedade do
-   script**.
-3. Propriedade: `senhaEdicao` — Valor: a senha que a equipe vai usar.
-   Salve.
+**Para cadastrar quem pode editar** (quantas pessoas você quiser, cada uma
+com a própria senha):
+1. Abra a Google Sheet do app — vai ter surgido uma aba nova chamada
+   **Usuários** (criada automaticamente assim que alguém abrir a tela pela
+   primeira vez após esta atualização, ou você pode criá-la à mão se
+   preferir).
+2. Nela, cada linha é uma pessoa: coluna **Nome** e coluna **Senha**. Para
+   adicionar alguém, é só preencher uma linha nova; para revogar o acesso
+   de alguém, apague a linha dela; para trocar a senha de alguém, edite o
+   valor da célula. Tudo direto na planilha, sem precisar mexer em código
+   nem reimplantar o Apps Script.
+3. Não existe limite de quantas pessoas cadastrar.
 
-Enquanto essa propriedade não for configurada, o app libera a edição com
-**qualquer** senha digitada (ou seja, sem trava real) — assim a introdução
-dessa funcionalidade não quebra o uso de quem ainda não configurou nada.
-Configure a propriedade assim que possível para que a trava valha de
-verdade.
+Enquanto a aba **Usuários** estiver vazia (nenhuma linha de dados), o app
+libera a edição com **qualquer** senha digitada — assim a introdução dessa
+trava não quebra o uso de quem ainda não cadastrou ninguém. Cadastre pelo
+menos uma pessoa assim que possível para que a trava valha de verdade.
 
-O parâmetro `?modo=leitura` na URL continua funcionando como antes, como
-reforço: força a tela em modo leitura mesmo que o navegador já tenha uma
-senha de edição salva — útil para um link específico que você quer
-garantir que nunca vai editar nada, independentemente de quem o abra.
+O parâmetro `?modo=leitura` na URL continua funcionando como reforço: força
+a tela em modo leitura mesmo que o navegador já tenha uma sessão salva —
+útil para um link específico que você quer garantir que nunca vai editar
+nada, independentemente de quem o abra.
 
 ## Importação automática da pasta do Drive
 

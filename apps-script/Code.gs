@@ -20,8 +20,6 @@ var HEADERS = [
 ];
 
 var PROP_DATA_BASE = 'dataBaseImportacao';
-var PROP_SENHA_EDICAO = 'senhaEdicao';
-
 // Pasta do Drive onde o export diário do Protheus é salvo:
 // Compartilhados comigo / 4 - CE 007_ADMINISTRATIVO / 4.11 - FINANCEIRO / 17 CONTAS A PAGAR
 // Nome do arquivo esperado: AAAA.MM.DD.xlsx (ex.: 2026.07.30.xlsx)
@@ -140,6 +138,31 @@ function getSheet_(nome) {
     sh.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
   }
   return sh;
+}
+
+// Aba "Usuários" (Nome + Senha) — cadastro de quem pode editar o app. Uma
+// planilha separada da HEADERS de ERP/Manual, editável direto pelo dono
+// sem mexer em código: acrescentar, trocar ou apagar uma linha já
+// cadastra/revoga o acesso daquela pessoa na próxima vez que ela tentar.
+var USUARIOS_HEADERS = ['Nome', 'Senha'];
+function getSheetUsuarios_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName('Usuários');
+  if (!sh) {
+    sh = ss.insertSheet('Usuários');
+    sh.appendRow(USUARIOS_HEADERS);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function listarUsuarios_() {
+  var sh = getSheetUsuarios_();
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha < 2) return [];
+  var valores = sh.getRange(2, 1, ultimaLinha - 1, 2).getValues();
+  return valores
+    .map(function (linha) { return { nome: String(linha[0] || '').trim(), senha: String(linha[1] || '').trim() }; })
+    .filter(function (u) { return u.nome && u.senha; });
 }
 
 function lerAba_(nome) {
@@ -270,17 +293,30 @@ function substituirErp_(itens, dataBase) {
 // ---------- Ações (chamadas via doPost/fetch pela tela hospedada e pela
 // versão local de web/index.html — mesma lógica). ----------
 
-// Ações de escrita (tudo exceto carregar/buscarAnexo) exigem a senha de
-// edição configurada em Propriedades do script. Enquanto ninguém configurar
-// essa propriedade, o app continua liberado (comportamento de antes) — assim
-// a trava só entra em vigor quando o dono decide ativá-la.
+// Ações de escrita (tudo exceto carregar) exigem uma senha que bata com
+// alguma linha da aba "Usuários". Enquanto essa aba estiver vazia, o app
+// continua liberado (comportamento de antes) — assim a trava só entra em
+// vigor quando o dono cadastrar o primeiro usuário.
 function validarAcessoEdicao_(payload) {
-  var senhaConfigurada = PropertiesService.getScriptProperties().getProperty(PROP_SENHA_EDICAO);
-  if (!senhaConfigurada) return;
-  var senhaFornecida = String((payload && payload.senha) || '');
-  if (senhaFornecida !== senhaConfigurada) {
+  var usuarios = listarUsuarios_();
+  if (!usuarios.length) return;
+  var senhaFornecida = String((payload && payload.senha) || '').trim();
+  var valido = usuarios.some(function (u) { return u.senha === senhaFornecida; });
+  if (!valido) {
     throw new Error('Senha de edição incorreta ou não informada.');
   }
+}
+
+// Confere a senha e devolve de quem ela é — usado só na hora de "Habilitar
+// edição" na tela, pra confirmar antes de liberar a interface (em vez de só
+// descobrir que a senha está errada na primeira ação de escrita).
+function api_validarEdicao(payload) {
+  var usuarios = listarUsuarios_();
+  if (!usuarios.length) return { nome: null, semRestricao: true };
+  var senhaFornecida = String((payload && payload.senha) || '').trim();
+  var encontrado = usuarios.filter(function (u) { return u.senha === senhaFornecida; })[0];
+  if (!encontrado) throw new Error('Senha de edição incorreta ou não informada.');
+  return { nome: encontrado.nome };
 }
 
 function api_carregar() {
@@ -288,7 +324,7 @@ function api_carregar() {
     erp: lerAba_('ERP'),
     manual: lerAba_('Manual'),
     dataBase: getDataBase_(),
-    senhaConfigurada: !!PropertiesService.getScriptProperties().getProperty(PROP_SENHA_EDICAO),
+    usuariosConfigurados: listarUsuarios_().length > 0,
   };
 }
 
@@ -410,6 +446,7 @@ function doPost(e) {
     else if (acao === 'removerManual') resultado = api_removerManual(payload);
     else if (acao === 'removerDuplicados') resultado = api_removerDuplicados(payload);
     else if (acao === 'definirAnexo') resultado = api_definirAnexo(payload);
+    else if (acao === 'validarEdicao') resultado = api_validarEdicao(payload);
     else throw new Error('Ação desconhecida: ' + acao);
     resultado.ok = true;
     return ContentService

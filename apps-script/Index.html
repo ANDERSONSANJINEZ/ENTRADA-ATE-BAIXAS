@@ -370,18 +370,22 @@ const URL_BACKEND = '<?!= urlBackend ?>';
 
 // ---------- Acesso leitura/edição ----------
 // ?modo=leitura na URL força somente-leitura, ignorando qualquer senha
-// salva (útil para links repassados a terceiros). Fora isso, o app abre
-// em modo leitura por padrão; "Habilitar edição" pede a senha configurada
-// pelo dono em Propriedades do script e guarda no navegador (localStorage)
-// para as próximas visitas. A validação de verdade acontece no servidor a
-// cada ação de escrita (ver validarAcessoEdicao_ em Code.gs) — diferente do
-// antigo modo=leitura (só escondia botões), aqui a senha errada é
-// recusada mesmo que alguém chame a ação direto por HTTP.
+// salva (útil para links repassados a terceiros). Fora isso, o app abre em
+// modo leitura por padrão; "Habilitar edição" pede a senha de uma pessoa
+// cadastrada na aba "Usuários" da planilha (cada uma com a sua) e guarda no
+// navegador (localStorage) para as próximas visitas. A validação de
+// verdade acontece no servidor (ver validarAcessoEdicao_/api_validarEdicao
+// em Code.gs) — diferente do antigo modo=leitura (só escondia botões),
+// aqui a senha errada é recusada mesmo que alguém chame a ação direto por
+// HTTP, e a senha é conferida já ao clicar em "Habilitar edição", não só
+// na primeira ação de escrita.
 const FORCAR_LEITURA_URL = <?!= modoLeitura ? 'true' : 'false' ?>;
 const CHAVE_SENHA_LOCAL = 'eab_senha_edicao';
+const CHAVE_USUARIO_LOCAL = 'eab_usuario_edicao';
 let senhaEdicao = FORCAR_LEITURA_URL ? '' : (localStorage.getItem(CHAVE_SENHA_LOCAL) || '');
+let usuarioEdicaoNome = FORCAR_LEITURA_URL ? '' : (localStorage.getItem(CHAVE_USUARIO_LOCAL) || '');
 let MODO_LEITURA = !senhaEdicao;
-let senhaConfiguradaNoServidor = null; // null = ainda não sabemos (primeiro carregamento)
+let usuariosConfiguradosNoServidor = null; // null = ainda não sabemos (primeiro carregamento)
 
 // O plugin não se registra sozinho; registramos uma vez e desligamos por
 // padrão em cada gráfico (options.plugins.datalabels.display:false),
@@ -473,7 +477,7 @@ async function carregarTudo() {
     state.erp = dados.erp || [];
     state.manual = dados.manual || [];
     state.dataBase = dados.dataBase || null;
-    senhaConfiguradaNoServidor = !!dados.senhaConfigurada;
+    usuariosConfiguradosNoServidor = !!dados.usuariosConfigurados;
     atualizarUiModoLeitura();
     renderizarTudo();
   } catch (e) {
@@ -1256,6 +1260,7 @@ document.getElementById('form-manual').addEventListener('submit', async (ev) => 
 
   await postarAcao('adicionarManual', { item });
   form.reset();
+  prefillUsuarioInclusor();
   toast('Lançamento manual adicionado.');
 });
 
@@ -1522,31 +1527,53 @@ document.getElementById('btn-importar-drive').addEventListener('click', async ()
 
 // ---------- Modo somente leitura / edição ----------
 // Diferente do antigo modo=leitura (só escondia botões), a senha de edição
-// é validada de verdade no servidor a cada ação de escrita — ver
-// validarAcessoEdicao_ em Code.gs. Aqui só refletimos o estado na tela.
-function habilitarEdicao() {
+// é validada de verdade no servidor — ver validarAcessoEdicao_/
+// api_validarEdicao em Code.gs. Cada usuário cadastrado na aba "Usuários"
+// da planilha tem a própria senha; a validação já acontece aqui (ao
+// clicar em "Habilitar edição"), não só na primeira ação de escrita.
+async function habilitarEdicao() {
   if (FORCAR_LEITURA_URL) {
     toast('Este link foi aberto em modo leitura (?modo=leitura) — abra o link normal para editar.');
     return;
   }
-  const senha = prompt('Digite a senha de edição:');
+  const senha = prompt('Digite sua senha de edição:');
   if (senha == null) return; // cancelado
-  senhaEdicao = senha.trim();
-  localStorage.setItem(CHAVE_SENHA_LOCAL, senhaEdicao);
-  MODO_LEITURA = !senhaEdicao;
-  atualizarUiModoLeitura();
-  if (senhaConfiguradaNoServidor === false) {
-    toast('Aviso: nenhuma senha de edição foi configurada no servidor ainda — qualquer senha libera a edição. Veja o README para configurar uma.');
-  } else {
-    toast('Modo edição habilitado. Se a senha estiver errada, a primeira ação vai avisar.');
+  const senhaLimpa = senha.trim();
+  try {
+    const resp = await chamarServidor('validarEdicao', { senha: senhaLimpa });
+    senhaEdicao = senhaLimpa;
+    usuarioEdicaoNome = resp.nome || '';
+    localStorage.setItem(CHAVE_SENHA_LOCAL, senhaEdicao);
+    localStorage.setItem(CHAVE_USUARIO_LOCAL, usuarioEdicaoNome);
+    MODO_LEITURA = false;
+    atualizarUiModoLeitura();
+    prefillUsuarioInclusor();
+    if (resp.semRestricao) {
+      toast('Aviso: nenhum usuário de edição foi cadastrado ainda — qualquer senha libera a edição. Veja o README para cadastrar usuários.');
+    } else {
+      toast(usuarioEdicaoNome ? `Edição habilitada — bem-vindo(a), ${usuarioEdicaoNome}!` : 'Edição habilitada.');
+    }
+  } catch (e) {
+    toast('Senha de edição incorreta.');
   }
 }
 
 function desabilitarEdicao() {
   senhaEdicao = '';
+  usuarioEdicaoNome = '';
   localStorage.removeItem(CHAVE_SENHA_LOCAL);
+  localStorage.removeItem(CHAVE_USUARIO_LOCAL);
   MODO_LEITURA = true;
   atualizarUiModoLeitura();
+}
+
+// Pré-preenche o campo "Usuário Inclusor" do lançamento manual com o nome
+// de quem está logado, pra não precisar digitar toda vez — só quando o
+// campo está vazio, pra não sobrescrever algo já digitado.
+function prefillUsuarioInclusor() {
+  if (!usuarioEdicaoNome) return;
+  const campo = document.querySelector('#form-manual input[name="Usuário Inclusor"]');
+  if (campo && !campo.value.trim()) campo.value = usuarioEdicaoNome;
 }
 
 function atualizarUiModoLeitura() {
@@ -1565,6 +1592,7 @@ function atualizarUiModoLeitura() {
   renderizarLancamentos(); // atualiza os botões "Remover" nas linhas
 }
 atualizarUiModoLeitura();
+prefillUsuarioInclusor(); // se a senha já tiver sido salva numa visita anterior
 
 // ---------- Início ----------
 function renderizarTudo() {
