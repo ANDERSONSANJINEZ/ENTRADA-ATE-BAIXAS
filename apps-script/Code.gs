@@ -62,22 +62,29 @@ function dataParaISO_(v) {
 }
 
 // Encontra, na pasta do Drive, o arquivo AAAA.MM.DD.xlsx com a data mais recente no nome.
+// Usa a API avançada do Drive (Files.list) em vez de DriveApp.getFiles(): depois de
+// meses de export diário a pasta acumulou centenas de arquivos, e percorrer
+// um por um (DriveApp) ficou lento o bastante pra estourar o limite de
+// execução do Apps Script — a tela nem chegava a receber resposta e mostrava
+// "Failed to fetch" (erro de rede genérico do navegador, sem nenhuma
+// mensagem específica, porque a chamada nunca terminou). Files.list já
+// devolve os arquivos ordenados pelo nome (que é a própria data, AAAA.MM.DD)
+// direto do servidor do Drive, então não precisa mais ler a pasta inteira.
 function encontrarArquivoMaisRecenteNoDrive_() {
-  var pasta = DriveApp.getFolderById(DRIVE_FOLDER_ID);
-  var arquivos = pasta.getFiles();
-  var melhor = null;
-  var melhorData = null;
-  while (arquivos.hasNext()) {
-    var f = arquivos.next();
-    var m = f.getName().match(NOME_ARQUIVO_RE);
-    if (!m) continue;
-    var dataStr = m[1] + '-' + m[2] + '-' + m[3];
-    if (!melhorData || dataStr > melhorData) {
-      melhor = f;
-      melhorData = dataStr;
+  var resposta = Drive.Files.list({
+    q: "'" + DRIVE_FOLDER_ID + "' in parents and trashed = false and name contains '.xlsx'",
+    orderBy: 'name desc',
+    pageSize: 25,
+    fields: 'files(id,name)',
+  });
+  var arquivos = resposta.files || [];
+  for (var i = 0; i < arquivos.length; i++) {
+    var m = arquivos[i].name.match(NOME_ARQUIVO_RE);
+    if (m) {
+      return { file: DriveApp.getFileById(arquivos[i].id), dataBase: m[1] + '-' + m[2] + '-' + m[3] };
     }
   }
-  return melhor ? { file: melhor, dataBase: melhorData } : null;
+  return null;
 }
 
 // Converte o .xlsx (via Drive API avançada) para Google Sheets temporário,
