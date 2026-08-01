@@ -253,6 +253,10 @@ function chaveDuplicidade_(item) {
 
 // Aceita os dados já lidos (evita reler ERP/Manual quando quem chamou —
 // ex.: api_adicionarManual — já tem os dois em mãos).
+// Além de gravar o Status recalculado na planilha, atualiza também o campo
+// Status dos próprios objetos "erp"/"manual" recebidos (são passados por
+// referência) — assim quem chamou pode devolver esses mesmos arrays pro
+// cliente sem precisar reler a planilha inteira só pra pegar o Status novo.
 function recalcularStatusComDados_(erp, manual) {
   var erpSheet = getSheet_('ERP');
   var manualSheet = getSheet_('Manual');
@@ -265,7 +269,9 @@ function recalcularStatusComDados_(erp, manual) {
     manual.forEach(function (item) { chavesManual[chaveDuplicidade_(item)] = true; });
     var statusColErp = HEADERS.indexOf('Status') + 1;
     var valoresErp = erp.map(function (item) {
-      return [chavesManual[chaveDuplicidade_(item)] ? 'Duplicado – revisar' : 'OK'];
+      var status = chavesManual[chaveDuplicidade_(item)] ? 'Duplicado – revisar' : 'OK';
+      item.Status = status;
+      return [status];
     });
     // Uma única chamada em lote em vez de milhares de setValue() individuais
     // (que é o que fazia a importação travar por vários minutos).
@@ -283,10 +289,26 @@ function recalcularStatusComDados_(erp, manual) {
       var chave = chaveDuplicidade_(item);
       var duplicado = !!chavesErp[chave] || !!vistosNoManual[chave];
       vistosNoManual[chave] = true;
-      return [duplicado ? 'Duplicado – revisar' : 'OK'];
+      var status = duplicado ? 'Duplicado – revisar' : 'OK';
+      item.Status = status;
+      return [status];
     });
     manualSheet.getRange(2, statusColManual, valoresManual.length, 1).setValues(valoresManual);
   }
+}
+
+// Monta o mesmo formato de resposta de api_carregar(), mas a partir de dados
+// já lidos em memória — evita reler ERP+Manual inteiros de novo (~3800
+// linhas do ERP) depois de uma ação de escrita que já tem tudo em mãos.
+// dataBase/usuariosConfigurados continuam baratos de buscar (não são a
+// planilha grande) então seguem sendo lidos na hora.
+function montarResultadoCarregar_(erp, manual) {
+  return {
+    erp: erp,
+    manual: manual,
+    dataBase: getDataBase_(),
+    usuariosConfigurados: listarUsuarios_().length > 0,
+  };
 }
 
 function recalcularStatus_() {
@@ -466,38 +488,38 @@ function api_adicionarManual(payload) {
   registrarLog_(nomeUsuario, 'Incluir lançamento manual',
     (novoItem['Razão Social'] || novoItem['Código Fornecedor'] || '') + ' | Nº ' + (novoItem['Nº Documento'] || '') +
     ' | Venc.: ' + (novoItem['Vencimento'] || '') + ' | R$ ' + (novoItem['R$ Valor'] || ''));
-  return api_carregar();
+  return montarResultadoCarregar_(erp, manual);
 }
 
 // Remove de uma vez todos os lançamentos manuais marcados como duplicados
 // (mesma chave de um título do ERP), evitando remover linha por linha.
 function api_removerDuplicados(payload) {
   var nomeUsuario = validarAcessoEdicao_(payload);
-  var shM = getSheet_('Manual');
-  var ultimaLinha = shM.getLastRow();
-  if (ultimaLinha < 2) return api_carregar();
+  var manual = lerAba_('Manual');
+  if (!manual.length) return montarResultadoCarregar_(lerAba_('ERP'), manual);
 
-  var statusCol = HEADERS.indexOf('Status') + 1;
-  var docCol = HEADERS.indexOf('Nº Documento') + 1;
-  var razaoCol = HEADERS.indexOf('Razão Social') + 1;
-  var dados = shM.getRange(2, 1, ultimaLinha - 1, HEADERS.length).getValues();
+  var shM = getSheet_('Manual');
   var linhasParaRemover = [];
   var descricoes = [];
-  for (var i = 0; i < dados.length; i++) {
-    if (dados[i][statusCol - 1] === 'Duplicado – revisar') {
-      linhasParaRemover.push(i + 2);
-      descricoes.push((dados[i][razaoCol - 1] || '') + ' Nº ' + (dados[i][docCol - 1] || ''));
+  var restantes = [];
+  manual.forEach(function (item, i) {
+    if (item.Status === 'Duplicado – revisar') {
+      linhasParaRemover.push(i + 2); // +2: linha 1 é cabeçalho, índice do array começa em 0
+      descricoes.push((item['Razão Social'] || '') + ' Nº ' + (item['Nº Documento'] || ''));
+    } else {
+      restantes.push(item);
     }
-  }
+  });
   // Remove de baixo para cima para não invalidar os números de linha já calculados.
   linhasParaRemover.sort(function (a, b) { return b - a; });
   linhasParaRemover.forEach(function (linha) { shM.deleteRow(linha); });
 
-  recalcularStatus_();
+  var erp = lerAba_('ERP');
+  recalcularStatusComDados_(erp, restantes);
   if (linhasParaRemover.length) {
     registrarLog_(nomeUsuario, 'Excluir duplicados', linhasParaRemover.length + ' lançamento(s): ' + descricoes.join('; '));
   }
-  var resultado = api_carregar();
+  var resultado = montarResultadoCarregar_(erp, restantes);
   resultado.quantidadeRemovida = linhasParaRemover.length;
   return resultado;
 }
@@ -511,20 +533,20 @@ function api_definirAnexo(payload) {
   var origem = payload.origem === 'Manual' ? 'Manual' : 'ERP';
   var coluna = payload.tipo === 'comprovante' ? 'Link Comprovante' : 'Link Documento';
   var colIdx = HEADERS.indexOf(coluna) + 1;
-  var idCol = HEADERS.indexOf('ID') + 1;
-  var docCol = HEADERS.indexOf('Nº Documento') + 1;
-  var razaoCol = HEADERS.indexOf('Razão Social') + 1;
 
+  var itensOrigem = lerAba_(origem);
   var sh = getSheet_(origem);
-  var ultimaLinha = sh.getLastRow();
-  if (ultimaLinha < 2) throw new Error('Lançamento não encontrado.');
-  var dados = sh.getRange(2, 1, ultimaLinha - 1, HEADERS.length).getValues();
-  for (var i = 0; i < dados.length; i++) {
-    if (dados[i][idCol - 1] === payload.id) {
+  for (var i = 0; i < itensOrigem.length; i++) {
+    if (itensOrigem[i].ID === payload.id) {
       sh.getRange(i + 2, colIdx).setValue(String(payload.url || ''));
+      itensOrigem[i][coluna] = String(payload.url || '');
       registrarLog_(nomeUsuario, payload.url ? 'Definir anexo (' + payload.tipo + ')' : 'Remover anexo (' + payload.tipo + ')',
-        (dados[i][razaoCol - 1] || '') + ' Nº ' + (dados[i][docCol - 1] || '') + (payload.url ? ': ' + payload.url : ''));
-      return api_carregar();
+        (itensOrigem[i]['Razão Social'] || '') + ' Nº ' + (itensOrigem[i]['Nº Documento'] || '') + (payload.url ? ': ' + payload.url : ''));
+      // Só a aba de origem foi lida de novo — a outra é lida uma única vez
+      // aqui, em vez de api_carregar() reler as duas do zero.
+      var erp = origem === 'ERP' ? itensOrigem : lerAba_('ERP');
+      var manual = origem === 'Manual' ? itensOrigem : lerAba_('Manual');
+      return montarResultadoCarregar_(erp, manual);
     }
   }
   throw new Error('Lançamento não encontrado (pode ter sido removido ou reimportado).');
@@ -532,22 +554,22 @@ function api_definirAnexo(payload) {
 
 function api_removerManual(payload) {
   var nomeUsuario = validarAcessoEdicao_(payload);
-  var shM = getSheet_('Manual');
-  var idCol = HEADERS.indexOf('ID') + 1;
-  var docCol = HEADERS.indexOf('Nº Documento') + 1;
-  var razaoCol = HEADERS.indexOf('Razão Social') + 1;
-  var valorCol = HEADERS.indexOf('R$ Valor') + 1;
-  var dados = shM.getRange(2, 1, Math.max(shM.getLastRow() - 1, 0), HEADERS.length).getValues();
-  for (var i = 0; i < dados.length; i++) {
-    if (dados[i][idCol - 1] === payload.id) {
-      registrarLog_(nomeUsuario, 'Remover lançamento manual',
-        (dados[i][razaoCol - 1] || '') + ' | Nº ' + (dados[i][docCol - 1] || '') + ' | R$ ' + (dados[i][valorCol - 1] || ''));
-      shM.deleteRow(i + 2);
-      break;
-    }
+  var manual = lerAba_('Manual');
+  var idxRemovido = -1;
+  for (var i = 0; i < manual.length; i++) {
+    if (manual[i].ID === payload.id) { idxRemovido = i; break; }
   }
-  recalcularStatus_();
-  return api_carregar();
+  var erp = lerAba_('ERP');
+  if (idxRemovido === -1) return montarResultadoCarregar_(erp, manual);
+
+  var removido = manual[idxRemovido];
+  registrarLog_(nomeUsuario, 'Remover lançamento manual',
+    (removido['Razão Social'] || '') + ' | Nº ' + (removido['Nº Documento'] || '') + ' | R$ ' + (removido['R$ Valor'] || ''));
+  getSheet_('Manual').deleteRow(idxRemovido + 2);
+  manual.splice(idxRemovido, 1);
+
+  recalcularStatusComDados_(erp, manual);
+  return montarResultadoCarregar_(erp, manual);
 }
 
 // doPost é o único caminho usado pela tela (fetch), tanto para leitura
