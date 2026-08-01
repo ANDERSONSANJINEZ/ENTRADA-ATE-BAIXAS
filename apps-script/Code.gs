@@ -76,6 +76,13 @@ function encontrarArquivoMaisRecenteNoDrive_() {
     orderBy: 'name desc',
     pageSize: 25,
     fields: 'files(id,name)',
+    // A pasta "17 CONTAS A PAGAR" fica dentro de uma estrutura compartilhada
+    // (Compartilhados comigo / 4 - CE 007_ADMINISTRATIVO / ...). Sem estas
+    // duas flags, Files.list silenciosamente IGNORA arquivos fora do "Meu
+    // Drive" do executor — devolve lista vazia (sem erro nenhum), fazendo
+    // parecer que nenhum arquivo bate no padrão mesmo quando ele existe.
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
   });
   var arquivos = resposta.files || [];
   for (var i = 0; i < arquivos.length; i++) {
