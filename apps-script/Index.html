@@ -114,9 +114,7 @@
   #tabela-lancamentos .anexos-col button.anexo-comp.anexo-definido-verde { background: var(--verde); color: #fff; border-color: var(--verde); }
   /* Botão Remover (coluna Ação) do mesmo tamanho dos botões de anexo, só que vermelho. */
   #tabela-lancamentos td.col-acao button { padding: 3px 6px; font-size: 11px; }
-  /* Separador visual fixo entre Anexos e Ação — como as duas colunas
-     permitem overflow:visible (pra não cortar os botões em telas
-     estreitas), sem isso o botão Remover ficava colado nos de anexo. */
+  /* Separador visual fixo entre Anexos e Ação. */
   #tabela-lancamentos td.col-acao { border-left: 1px solid var(--borda); padding-left: 10px; }
   tr.separador-grupo td { border-top: 2px solid #1e2430; }
   #conteudo-analise ul { margin: 0 0 14px; padding-left: 22px; }
@@ -380,20 +378,27 @@
       <div id="total-lancamentos" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
       <div class="tabela-scroll">
         <table id="tabela-lancamentos">
+          <!-- #tabela-lancamentos usa table-layout:fixed (ver <style>), então as
+               larguras vêm só destas % do <colgroup> — min-width em td/th das
+               linhas seguintes é ignorado nesse modo. As duas últimas colunas
+               (Anexos e Ação/Remover) foram alargadas de propósito: com a %
+               antiga a coluna Anexos media menos que os 2 botões que carrega,
+               e o excesso (overflow:visible) vazava por cima do botão Remover
+               na coluna seguinte, deixando os dois quase colados. -->
           <colgroup>
             <col style="width:3.66%"><col style="width:4.12%"><col style="width:3.66%"><col style="width:2.81%">
             <col style="width:5.53%"><col style="width:3.66%"><col style="width:5.05%"><col style="width:5.00%">
             <col style="width:5.15%"><col style="width:6.83%"><col style="width:5.53%"><col style="width:5.53%">
             <col style="width:4.36%"><col style="width:3.84%"><col style="width:5.53%"><col style="width:6.83%">
-            <col style="width:4.96%"><col style="width:4.69%"><col style="width:3.84%"><col style="width:3.96%">
-            <col style="width:5.50%">
+            <col style="width:4.96%"><col style="width:4.69%"><col style="width:3.84%"><col style="width:6.50%">
+            <col style="width:4.00%">
           </colgroup>
           <thead><tr>
             <th>Origem</th><th>Status</th><th>Aporte</th><th>Tipo</th><th>Emissão</th><th>Nº Doc.</th>
             <th>Forma Pgto.</th><th>Chave Pix</th><th>Fornecedor</th><th>Razão Social</th>
             <th>Vencimento</th><th>Venc. Real</th><th>Valor</th><th>Parcela</th><th>Baixa</th>
             <th>Histórico</th><th>Aprovação</th><th>Usuário</th><th>Remessa</th>
-            <th>Anexos</th><th></th>
+            <th class="col-anexos">Anexos</th><th class="col-acao"></th>
           </tr></thead>
           <tbody></tbody>
         </table>
