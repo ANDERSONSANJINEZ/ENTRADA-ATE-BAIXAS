@@ -130,6 +130,60 @@ outro também é reproduzida no arquivo. Essa formatação usa a biblioteca
 ExcelJS (carregada via CDN, como o Chart.js); o SheetJS (`XLSX`) continua
 sendo usado só para **ler** o `.xlsx` importado do Protheus.
 
+## Histórico de alterações (auditoria)
+
+Toda ação de escrita (importar, incluir/remover lançamento manual, excluir
+duplicados, definir anexo) fica registrada com data/hora, usuário e detalhes
+numa aba **Log**, criada automaticamente na planilha. A aba **Histórico** da
+tela mostra as últimas 500 entradas (mais recente primeiro), com busca e
+exportação em Excel — para o histórico completo, abra a aba "Log" direto na
+planilha. A aba Log é podada automaticamente (mantém as ~2.000 mais
+recentes) para não crescer sem limite.
+
+## Alerta automático por e-mail
+
+Um gatilho diário pode avisar **consorciovltce@gmail.com** quando:
+
+- aparece um título vencido novo (que ainda não tinha entrado em nenhum
+  alerta anterior) — não repete a lista de um dia pro outro, só o que é novo;
+- a base de dados está desatualizada há 2 dias ou mais (mesmo critério do
+  aviso "Base de dados" no topo da tela) — esse aviso se repete todo dia
+  enquanto continuar desatualizada, como lembrete.
+
+Sem nada de novo pra avisar, nenhum e-mail é enviado (não é um resumo diário
+de rotina).
+
+**Para ativar** (uma vez só): abra **Extensões → Apps Script** na planilha,
+no menu de funções no topo do editor selecione `configurarGatilhoDiario_` e
+clique em **Executar** — na primeira vez o Google vai pedir autorização para
+enviar e-mail e gerenciar gatilhos (é a sua própria conta agindo em seu
+nome). Isso instala um gatilho que roda todo dia às 7h (fuso da planilha).
+Para trocar o horário, edite `.atHour(7)` na função `configurarGatilhoDiario_`
+em `Code.gs` e rode a função de novo — ela sempre remove o gatilho anterior
+antes de criar um novo, então é seguro executar quantas vezes precisar.
+
+## Conciliação Bancária
+
+Na aba **Conciliação Bancária**, envie o extrato do banco (.xlsx ou .csv) —
+o app tenta reconhecer sozinho as colunas de Data, Valor e Histórico pelo
+nome do cabeçalho (aceita variações como "Data Movimento", "Valor (R$)"
+etc.). Cada título já **baixado** na planilha é cruzado com o extrato por
+valor idêntico (tolerância de 1 centavo) e data — igual (Conciliado) ou até
+5 dias de diferença (Divergência de data, comum quando a compensação
+bancária atrasa). O resultado mostra 4 situações possíveis:
+
+- **Conciliado** — bate valor e data.
+- **Divergência de data** — bate o valor, mas a data no extrato é diferente
+  da Data Baixa registrada.
+- **Sem correspondência no extrato** — o título está marcado como baixado,
+  mas nenhum lançamento do extrato bate com ele (pode ser baixa registrada
+  errada, ou pago por outra conta).
+- **Sem título correspondente** — tem um lançamento no extrato que não bate
+  com nenhum título baixado (pode ser um pagamento não lançado no sistema).
+
+Nada do extrato é salvo na planilha — o cruzamento acontece só na tela, a
+cada vez que um arquivo é enviado.
+
 ## Atualizações do código
 
 Sempre que `apps-script/Code.gs` for alterado neste repositório, repita os

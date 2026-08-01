@@ -145,8 +145,10 @@
   form.manual input, form.manual select { width: 100%; padding: 7px 8px; border: 1px solid var(--borda); border-radius: 6px; font-size: 13px; }
   form.manual .full { grid-column: 1 / -1; }
   .aviso { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
-  #dropzone { border: 2px dashed var(--borda); border-radius: 10px; padding: 40px; text-align: center; color: var(--cinza); margin-bottom: 16px; }
-  #dropzone.sobre { border-color: var(--azul); background: var(--azul-claro); }
+  #dropzone, #dropzone-extrato { border: 2px dashed var(--borda); border-radius: 10px; padding: 40px; text-align: center; color: var(--cinza); margin-bottom: 16px; cursor: pointer; }
+  #dropzone.sobre, #dropzone-extrato.sobre { border-color: var(--azul); background: var(--azul-claro); }
+  .badge-alerta { background: #fee2e2; color: var(--vermelho); }
+  .badge-atencao { background: #fef3c7; color: #92400e; }
   .toast { position: fixed; bottom: 20px; right: 20px; background: #1e2430; color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none; }
   .toast.mostrar { opacity: 1; }
   canvas { max-height: 320px; }
@@ -210,6 +212,8 @@
   <button data-aba="lancamentos">Lançamentos</button>
   <button data-aba="detalhe-aporte">Detalhe por Aporte</button>
   <button data-aba="analise">Análise</button>
+  <button data-aba="conciliacao">Conciliação Bancária</button>
+  <button data-aba="historico">Histórico</button>
   <button data-aba="importar" id="nav-importar">Importar</button>
 </nav>
 </div>
@@ -383,6 +387,73 @@
         <button class="btn secundario small" onclick="exportarXlsx('analise')">⬇ Exportar Excel</button>
       </div>
       <div id="conteudo-analise" style="font-size:14px; line-height:1.9;"></div>
+    </div>
+  </section>
+
+  <section id="aba-conciliacao" class="aba">
+    <div class="painel">
+      <h2>Conciliação Bancária</h2>
+      <p style="font-size:13px;color:var(--cinza)">
+        Envie o extrato bancário (.xlsx ou .csv) pra cruzar com os títulos já
+        baixados na planilha. O arquivo precisa ter colunas de Data, Valor e
+        Histórico/Descrição — os nomes exatos variam de banco pra banco, o
+        app tenta reconhecer automaticamente. Casamento por valor idêntico e
+        data igual (ou próxima, em até 5 dias) — tudo é calculado aqui na
+        tela, o extrato não é salvo em lugar nenhum.
+      </p>
+      <div id="dropzone-extrato">Arraste o extrato aqui ou clique para selecionar
+        <input type="file" id="arquivo-extrato" accept=".xlsx,.csv" style="display:none">
+      </div>
+      <div id="resumo-conciliacao"></div>
+      <div id="painel-resultado-conciliacao" style="display:none;">
+        <div class="cabecalho-painel">
+          <h2 style="font-size:14px;">Resultado da conciliação</h2>
+          <button class="btn secundario small" onclick="exportarConciliacao()">⬇ Exportar Excel</button>
+        </div>
+        <div id="total-conciliacao" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
+        <div class="filtros">
+          <select id="filtro-conciliacao">
+            <option value="">Situação: todas</option>
+            <option value="Conciliado">Conciliado</option>
+            <option value="Divergência de data">Divergência de data</option>
+            <option value="Sem correspondência no extrato">Sem correspondência no extrato</option>
+            <option value="Sem título correspondente">Sem título correspondente (extrato)</option>
+          </select>
+        </div>
+        <div class="tabela-scroll">
+          <table id="tabela-conciliacao">
+            <thead><tr>
+              <th>Situação</th><th>Fornecedor</th><th>Nº Doc.</th><th>Data Baixa</th>
+              <th>Valor Título</th><th>Data Extrato</th><th>Valor Extrato</th><th>Histórico Extrato</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="aba-historico" class="aba">
+    <div class="painel">
+      <div class="cabecalho-painel">
+        <h2>Histórico de alterações</h2>
+        <button class="btn secundario small" onclick="exportarXlsx('historico')">⬇ Exportar Excel</button>
+      </div>
+      <p style="font-size:13px;color:var(--cinza)">
+        Trilha de auditoria — toda importação, lançamento manual, remoção e
+        anexo cadastrado fica registrado aqui com data/hora e usuário. As
+        últimas <span id="limite-historico">500</span> ações; para o
+        histórico completo, abra a aba "Log" direto na planilha.
+      </p>
+      <input id="busca-historico" class="busca-tabela" placeholder="Buscar em usuário, ação ou detalhes…">
+      <div id="total-historico" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
+      <div class="tabela-scroll">
+        <table id="tabela-historico">
+          <colgroup><col style="width:16%"><col style="width:14%"><col style="width:20%"><col style="width:50%"></colgroup>
+          <thead><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Detalhes</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
   </section>
 
@@ -583,6 +654,10 @@ document.querySelectorAll('nav button').forEach(btn => {
     document.querySelectorAll('.aba').forEach(a => a.classList.remove('ativa'));
     btn.classList.add('ativo');
     document.getElementById('aba-' + btn.dataset.aba).classList.add('ativa');
+    // O Histórico não vem no carregamento normal (evita pesar toda visita
+    // com uma leitura que quase ninguém abre) — busca só quando a aba é
+    // clicada, e só a primeira vez (cache em ultimoLogCarregado).
+    if (btn.dataset.aba === 'historico' && !ultimoLogCarregado) carregarHistorico();
   };
 });
 
@@ -937,6 +1012,11 @@ function exportarXlsx(qual) {
     baixarXlsx('detalhe_aporte.xlsx', ['Data', 'N/Doc.', 'Descrição', 'Venc.', 'Valor'], linhas, { linhasComSeparador });
   } else if (qual === 'analise') {
     baixarXlsx('analise.xlsx', ['Indicador', 'Valor'], ultimoDadosAnalise);
+  } else if (qual === 'historico') {
+    const linhas = Array.from(document.querySelectorAll('#tabela-historico tbody tr')).map((tr) =>
+      Array.from(tr.children).map((td) => td.textContent.trim())
+    );
+    baixarXlsx('historico.xlsx', ['Data/Hora', 'Usuário', 'Ação', 'Detalhes'], linhas);
   }
 }
 
@@ -1933,6 +2013,214 @@ function renderizarAnalise() {
     ['Ticket médio geral', fmtMoeda(ticketMedio)],
   ];
 }
+
+// ---------- Histórico de alterações (Log) ----------
+let ultimoLogCarregado = null; // null = ainda não buscou; [] = buscou e está vazio
+
+async function carregarHistorico() {
+  const tbody = document.querySelector('#tabela-historico tbody');
+  tbody.innerHTML = '<tr><td colspan="4" style="color:var(--cinza)">Carregando…</td></tr>';
+  try {
+    const dados = await chamarServidor('carregarLog', { limite: 500 });
+    ultimoLogCarregado = dados.log || [];
+    renderizarHistorico();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="4" style="color:var(--vermelho)">Falha ao carregar: ${e.message}</td></tr>`;
+  }
+}
+
+function renderizarHistorico() {
+  if (!ultimoLogCarregado) return;
+  const busca = document.getElementById('busca-historico').value.trim().toLowerCase();
+  let linhas = ultimoLogCarregado;
+  if (busca) linhas = linhas.filter((l) => contemBusca([l.usuario, l.acao, l.detalhes], busca));
+
+  // Diferente das outras datas do app (só data, sem hora — por isso usam
+  // UTC pra evitar deslocamento de fuso), o timestamp do Log TEM hora de
+  // verdade — aqui usamos os getters locais mesmo, pra mostrar no fuso de
+  // quem está vendo a tela.
+  const fmtDataHora = (v) => {
+    const d = v instanceof Date ? v : new Date(v);
+    if (!v || isNaN(d)) return '';
+    const p = (n) => String(n).padStart(2, '0');
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+
+  document.querySelector('#tabela-historico tbody').innerHTML = linhas.map((l) => `<tr>
+      <td>${fmtDataHora(l.dataHora)}</td>
+      <td>${escaparHtml(l.usuario)}</td>
+      <td>${escaparHtml(l.acao)}</td>
+      <td title="${escaparHtml(l.detalhes)}">${escaparHtml(l.detalhes)}</td>
+    </tr>`).join('') || '<tr><td colspan="4" style="color:var(--cinza)">Nenhum registro encontrado.</td></tr>';
+  document.getElementById('total-historico').textContent = `${linhas.length.toLocaleString('pt-BR')} registro(s)`;
+}
+document.getElementById('busca-historico').addEventListener('input', renderizarHistorico);
+
+// ---------- Conciliação Bancária ----------
+// Casamento por valor idêntico (tolerância de 1 centavo) entre um título já
+// baixado e um lançamento do extrato — na mesma data (Conciliado) ou até 5
+// dias de diferença (Divergência de data, ex.: compensação bancária).
+// Compara sempre por valor ABSOLUTO (o formato de cada banco varia — débito
+// pode vir negativo, ou numa coluna separada — por isso não distinguimos
+// débito/crédito aqui, só valor e data).
+let ultimoResultadoConciliacao = { resultado: [], semTitulo: [] };
+
+function normalizarTexto_(s) {
+  return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
+// Tenta achar as colunas de Data/Valor/Histórico pelo nome do cabeçalho —
+// os nomes exatos variam de banco pra banco, então procura por palavras-chave
+// em vez de exigir um nome fixo.
+function detectarColunasExtrato(linhaCabecalho) {
+  const normalizado = linhaCabecalho.map(normalizarTexto_);
+  const acharIdx = (candidatos, evitar) => normalizado.findIndex((h, i) =>
+    !(evitar || []).includes(i) && candidatos.some((c) => h.includes(c)));
+  const idxData = acharIdx(['data']);
+  const idxValor = acharIdx(['valor']);
+  const idxHistorico = acharIdx(['historico', 'descricao', 'complemento', 'detalhes', 'memo'], [idxData, idxValor]);
+  return { data: idxData, valor: idxValor, historico: idxHistorico };
+}
+
+function parseDataExtrato_(v) {
+  if (v instanceof Date && !isNaN(v)) return v;
+  const s = String(v == null ? '' : v).trim();
+  let m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+  if (m) return new Date(Date.UTC(Number(m[3]), Number(m[2]) - 1, Number(m[1])));
+  m = /^(\d{2})\/(\d{2})\/(\d{2})$/.exec(s);
+  if (m) return new Date(Date.UTC(2000 + Number(m[3]), Number(m[2]) - 1, Number(m[1])));
+  m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return null;
+}
+
+// Aceita "1.234,56", "1234.56", "-150,00", "(150,00)" (negativo entre
+// parênteses) e "R$ 150,00" — sempre devolve o valor absoluto.
+function parseValorExtrato_(v) {
+  if (typeof v === 'number' && !isNaN(v)) return Math.abs(v);
+  let s = String(v == null ? '' : v).trim();
+  if (!s) return null;
+  s = s.replace(/[()]/g, '').replace(/R\$/gi, '').replace(/^-|-$/g, '').trim();
+  if (/,\d{1,2}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+  else s = s.replace(/,/g, '');
+  const n = parseFloat(s);
+  return isNaN(n) ? null : Math.abs(n);
+}
+
+async function processarExtrato(file) {
+  const resumo = document.getElementById('resumo-conciliacao');
+  resumo.innerHTML = '<div class="aviso">Lendo o extrato…</div>';
+  document.getElementById('painel-resultado-conciliacao').style.display = 'none';
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const linhas = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+    if (!linhas.length) throw new Error('Arquivo vazio.');
+    const cols = detectarColunasExtrato(linhas[0]);
+    if (cols.data < 0 || cols.valor < 0) {
+      throw new Error('Não encontrei as colunas de Data e/ou Valor no cabeçalho da 1ª linha (colunas lidas: ' + linhas[0].join(', ') + ').');
+    }
+    const itensExtrato = [];
+    for (let r = 1; r < linhas.length; r++) {
+      const linha = linhas[r];
+      if (!linha || linha.every((c) => c === '' || c == null)) continue;
+      const data = parseDataExtrato_(linha[cols.data]);
+      const valor = parseValorExtrato_(linha[cols.valor]);
+      if (!data || valor == null || valor === 0) continue;
+      itensExtrato.push({ data, valor, historico: cols.historico >= 0 ? String(linha[cols.historico] || '') : '' });
+    }
+    if (!itensExtrato.length) throw new Error('Nenhuma linha válida encontrada — confira se as colunas de Data e Valor estão preenchidas.');
+
+    ultimoResultadoConciliacao = conciliarExtrato(itensExtrato);
+    renderizarConciliacao();
+    resumo.innerHTML = `<div class="aviso">${itensExtrato.length} lançamento(s) lidos de "${file.name}". Veja o resultado abaixo.</div>`;
+    document.getElementById('painel-resultado-conciliacao').style.display = '';
+  } catch (e) {
+    resumo.innerHTML = `<div class="aviso">Falha ao processar o extrato: ${e.message}</div>`;
+  }
+}
+
+function conciliarExtrato(itensExtrato) {
+  const baixados = state.erp.concat(state.manual.filter((m) => m.Status !== 'Duplicado – revisar'))
+    .filter((i) => i['Data Baixa']);
+  const usados = new Set();
+  const resultado = baixados.map((titulo) => {
+    const dataBaixa = diaCalendario(paraData(titulo['Data Baixa']));
+    const valorTitulo = paraNumero(titulo['R$ Valor']);
+    let melhorIdx = -1, melhorDiffDias = Infinity;
+    itensExtrato.forEach((mov, idx) => {
+      if (usados.has(idx)) return;
+      if (Math.abs(mov.valor - valorTitulo) > 0.01) return;
+      const dataMov = diaCalendario(mov.data);
+      const diffDias = (dataBaixa != null && dataMov != null) ? Math.abs(dataMov - dataBaixa) / 86400000 : Infinity;
+      if (diffDias < melhorDiffDias) { melhorDiffDias = diffDias; melhorIdx = idx; }
+    });
+    if (melhorIdx >= 0 && melhorDiffDias <= 5) {
+      usados.add(melhorIdx);
+      return { titulo, mov: itensExtrato[melhorIdx], status: melhorDiffDias === 0 ? 'Conciliado' : 'Divergência de data' };
+    }
+    return { titulo, mov: null, status: 'Sem correspondência no extrato' };
+  });
+  const semTitulo = itensExtrato.filter((_, idx) => !usados.has(idx));
+  return { resultado, semTitulo };
+}
+
+function renderizarConciliacao() {
+  const filtro = document.getElementById('filtro-conciliacao').value;
+  const linhasResultado = ultimoResultadoConciliacao.resultado.map((r) => ({
+    situacao: r.status,
+    fornecedor: r.titulo['Razão Social'] || r.titulo['Código Fornecedor'] || '',
+    nDoc: r.titulo['Nº Documento'] || '',
+    dataBaixa: fmtData(r.titulo['Data Baixa']),
+    valorTitulo: fmtMoeda(r.titulo['R$ Valor']),
+    dataExtrato: r.mov ? fmtData(r.mov.data) : '',
+    valorExtrato: r.mov ? fmtMoeda(r.mov.valor) : '',
+    historicoExtrato: r.mov ? r.mov.historico : '',
+  }));
+  const linhasSemTitulo = ultimoResultadoConciliacao.semTitulo.map((mov) => ({
+    situacao: 'Sem título correspondente',
+    fornecedor: '', nDoc: '', dataBaixa: '', valorTitulo: '',
+    dataExtrato: fmtData(mov.data), valorExtrato: fmtMoeda(mov.valor), historicoExtrato: mov.historico,
+  }));
+  let todas = linhasResultado.concat(linhasSemTitulo);
+  if (filtro) todas = todas.filter((l) => l.situacao === filtro);
+
+  const badgeClasse = (s) => s === 'Conciliado' ? 'badge-ok' : s === 'Divergência de data' ? 'badge-atencao' : 'badge-alerta';
+  document.querySelector('#tabela-conciliacao tbody').innerHTML = todas.map((l) => `<tr>
+      <td><span class="badge ${badgeClasse(l.situacao)}">${l.situacao}</span></td>
+      <td>${escaparHtml(l.fornecedor)}</td><td>${l.nDoc}</td><td>${l.dataBaixa}</td><td>${l.valorTitulo}</td>
+      <td>${l.dataExtrato}</td><td>${l.valorExtrato}</td><td title="${escaparHtml(l.historicoExtrato)}">${escaparHtml(l.historicoExtrato)}</td>
+    </tr>`).join('') || '<tr><td colspan="8" style="color:var(--cinza)">Nenhum resultado para este filtro.</td></tr>';
+
+  const conciliados = linhasResultado.filter((l) => l.situacao === 'Conciliado').length;
+  const divergentes = linhasResultado.filter((l) => l.situacao === 'Divergência de data').length;
+  const semExtrato = linhasResultado.filter((l) => l.situacao === 'Sem correspondência no extrato').length;
+  document.getElementById('total-conciliacao').textContent =
+    `${conciliados} conciliado(s) · ${divergentes} com divergência de data · ${semExtrato} sem correspondência no extrato · ${linhasSemTitulo.length} lançamento(s) do extrato sem título`;
+}
+document.getElementById('filtro-conciliacao').addEventListener('input', renderizarConciliacao);
+
+function exportarConciliacao() {
+  const linhas = Array.from(document.querySelectorAll('#tabela-conciliacao tbody tr'))
+    .filter((tr) => tr.children.length === 8)
+    .map((tr) => Array.from(tr.children).map((td) => td.textContent.trim()));
+  baixarXlsx('conciliacao_bancaria.xlsx', [
+    'Situação', 'Fornecedor', 'Nº Doc.', 'Data Baixa', 'Valor Título', 'Data Extrato', 'Valor Extrato', 'Histórico Extrato',
+  ], linhas);
+}
+
+const dropzoneExtrato = document.getElementById('dropzone-extrato');
+const inputExtrato = document.getElementById('arquivo-extrato');
+dropzoneExtrato.onclick = () => inputExtrato.click();
+inputExtrato.onchange = (e) => { if (e.target.files[0]) processarExtrato(e.target.files[0]); };
+['dragover', 'dragleave', 'drop'].forEach((evt) => dropzoneExtrato.addEventListener(evt, (e) => e.preventDefault()));
+dropzoneExtrato.addEventListener('dragover', () => dropzoneExtrato.classList.add('sobre'));
+dropzoneExtrato.addEventListener('dragleave', () => dropzoneExtrato.classList.remove('sobre'));
+dropzoneExtrato.addEventListener('drop', (e) => {
+  dropzoneExtrato.classList.remove('sobre');
+  if (e.dataTransfer.files[0]) processarExtrato(e.dataTransfer.files[0]);
+});
 
 async function processarArquivo(file) {
   const buf = await file.arrayBuffer();

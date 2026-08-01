@@ -168,6 +168,53 @@ function listarUsuarios_() {
     .filter(function (u) { return u.nome && u.senha; });
 }
 
+// Aba "Log" — trilha de auditoria de toda ação de escrita (importar,
+// lançar/remover manual, excluir duplicados, anexos). Só de leitura pela
+// tela; cada linha é gravada por registrarLog_, chamado no fim de cada
+// api_* que grava algo. Não passa por getSheet_ (que é específico do
+// esquema ERP/Manual) — tem o próprio cabeçalho fixo.
+var LOG_HEADERS = ['Data/Hora', 'Usuário', 'Ação', 'Detalhes'];
+var LOG_MAX_LINHAS = 2000; // evita a aba crescer sem limite; mantém só as mais recentes
+
+function getSheetLog_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName('Log');
+  if (!sh) {
+    sh = ss.insertSheet('Log');
+    sh.appendRow(LOG_HEADERS);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function registrarLog_(usuario, acao, detalhes) {
+  var sh = getSheetLog_();
+  sh.appendRow([new Date(), usuario || '(sem restrição de senha)', acao, detalhes || '']);
+  // Poda o excesso só ocasionalmente (não a cada gravação) pra não pagar o
+  // custo de deleteRows em toda ação de escrita.
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha > LOG_MAX_LINHAS + 200) {
+    sh.deleteRows(2, ultimaLinha - LOG_MAX_LINHAS - 1);
+  }
+}
+
+// Últimas N entradas do Log, mais recente primeiro — usado pela aba
+// "Histórico" da tela. Leitura pura, sem exigir senha de edição (mesma
+// lógica de api_carregar).
+function api_carregarLog(payload) {
+  var sh = getSheetLog_();
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha < 2) return { log: [] };
+  var limite = (payload && payload.limite) || 500;
+  var primeiraLinha = Math.max(2, ultimaLinha - limite + 1);
+  var valores = sh.getRange(primeiraLinha, 1, ultimaLinha - primeiraLinha + 1, LOG_HEADERS.length).getValues();
+  var linhas = valores.map(function (linha) {
+    return { dataHora: linha[0], usuario: linha[1], acao: linha[2], detalhes: linha[3] };
+  });
+  linhas.reverse(); // mais recente primeiro
+  return { log: linhas };
+}
+
 function lerAba_(nome) {
   var sh = getSheet_(nome);
   var ultimaLinha = sh.getLastRow();
@@ -316,14 +363,17 @@ function substituirErp_(itens, dataBase) {
 // alguma linha da aba "Usuários". Enquanto essa aba estiver vazia, o app
 // continua liberado (comportamento de antes) — assim a trava só entra em
 // vigor quando o dono cadastrar o primeiro usuário.
+// Devolve o nome de quem validou (para registrar no Log) — null quando a
+// aba "Usuários" ainda está vazia (sem restrição configurada).
 function validarAcessoEdicao_(payload) {
   var usuarios = listarUsuarios_();
-  if (!usuarios.length) return;
+  if (!usuarios.length) return null;
   var senhaFornecida = String((payload && payload.senha) || '').trim();
-  var valido = usuarios.some(function (u) { return u.senha === senhaFornecida; });
-  if (!valido) {
+  var encontrado = usuarios.filter(function (u) { return u.senha === senhaFornecida; })[0];
+  if (!encontrado) {
     throw new Error('Senha de edição incorreta ou não informada.');
   }
+  return encontrado.nome;
 }
 
 // Confere a senha e devolve de quem ela é — usado só na hora de "Habilitar
@@ -348,18 +398,20 @@ function api_carregar() {
 }
 
 function api_importar(payload) {
-  validarAcessoEdicao_(payload);
+  var nomeUsuario = validarAcessoEdicao_(payload);
   substituirErp_(payload.itens, payload.dataBase);
+  registrarLog_(nomeUsuario, 'Importar (upload)', (payload.itens || []).length + ' título(s), base ' + (payload.dataBase || 'não identificada'));
   return api_carregar();
 }
 
 function api_importarDoDrive(payload) {
-  validarAcessoEdicao_(payload);
+  var nomeUsuario = validarAcessoEdicao_(payload);
   var achado = encontrarArquivoMaisRecenteNoDrive_();
   if (!achado) throw new Error('Nenhum arquivo AAAA.MM.DD.xlsx encontrado na pasta do Drive.');
   var dadosPlanilha = lerLinhasDoXlsx_(achado.file);
   var itensDrive = parseLinhasProtheus_(dadosPlanilha);
   substituirErp_(itensDrive, achado.dataBase);
+  registrarLog_(nomeUsuario, 'Importar (Drive)', itensDrive.length + ' título(s) de "' + achado.file.getName() + '"');
   var resultado = api_carregar();
   resultado.arquivoUsado = achado.file.getName();
   resultado.quantidadeImportada = itensDrive.length;
@@ -367,7 +419,7 @@ function api_importarDoDrive(payload) {
 }
 
 function api_adicionarManual(payload) {
-  validarAcessoEdicao_(payload);
+  var nomeUsuario = validarAcessoEdicao_(payload);
   // Lê ERP/Manual uma única vez e reaproveita tanto para a conferência de
   // duplicidade quanto para recalcularStatusComDados_ logo abaixo — antes
   // isso lia as duas abas inteiras 3x numa mesma chamada (~3800 linhas do
@@ -397,28 +449,40 @@ function api_adicionarManual(payload) {
   shM.appendRow(linha);
   manual.push(novoItem);
   recalcularStatusComDados_(erp, manual);
+  registrarLog_(nomeUsuario, 'Incluir lançamento manual',
+    (novoItem['Razão Social'] || novoItem['Código Fornecedor'] || '') + ' | Nº ' + (novoItem['Nº Documento'] || '') +
+    ' | Venc.: ' + (novoItem['Vencimento'] || '') + ' | R$ ' + (novoItem['R$ Valor'] || ''));
   return api_carregar();
 }
 
 // Remove de uma vez todos os lançamentos manuais marcados como duplicados
 // (mesma chave de um título do ERP), evitando remover linha por linha.
 function api_removerDuplicados(payload) {
-  validarAcessoEdicao_(payload);
+  var nomeUsuario = validarAcessoEdicao_(payload);
   var shM = getSheet_('Manual');
   var ultimaLinha = shM.getLastRow();
   if (ultimaLinha < 2) return api_carregar();
 
   var statusCol = HEADERS.indexOf('Status') + 1;
+  var docCol = HEADERS.indexOf('Nº Documento') + 1;
+  var razaoCol = HEADERS.indexOf('Razão Social') + 1;
   var dados = shM.getRange(2, 1, ultimaLinha - 1, HEADERS.length).getValues();
   var linhasParaRemover = [];
+  var descricoes = [];
   for (var i = 0; i < dados.length; i++) {
-    if (dados[i][statusCol - 1] === 'Duplicado – revisar') linhasParaRemover.push(i + 2);
+    if (dados[i][statusCol - 1] === 'Duplicado – revisar') {
+      linhasParaRemover.push(i + 2);
+      descricoes.push((dados[i][razaoCol - 1] || '') + ' Nº ' + (dados[i][docCol - 1] || ''));
+    }
   }
   // Remove de baixo para cima para não invalidar os números de linha já calculados.
   linhasParaRemover.sort(function (a, b) { return b - a; });
   linhasParaRemover.forEach(function (linha) { shM.deleteRow(linha); });
 
   recalcularStatus_();
+  if (linhasParaRemover.length) {
+    registrarLog_(nomeUsuario, 'Excluir duplicados', linhasParaRemover.length + ' lançamento(s): ' + descricoes.join('; '));
+  }
   var resultado = api_carregar();
   resultado.quantidadeRemovida = linhasParaRemover.length;
   return resultado;
@@ -429,19 +493,23 @@ function api_removerDuplicados(payload) {
 // removida (não achava os arquivos de forma confiável). payload:
 // { id, origem: 'ERP'|'Manual', tipo: 'documento'|'comprovante', url }.
 function api_definirAnexo(payload) {
-  validarAcessoEdicao_(payload);
+  var nomeUsuario = validarAcessoEdicao_(payload);
   var origem = payload.origem === 'Manual' ? 'Manual' : 'ERP';
   var coluna = payload.tipo === 'comprovante' ? 'Link Comprovante' : 'Link Documento';
   var colIdx = HEADERS.indexOf(coluna) + 1;
   var idCol = HEADERS.indexOf('ID') + 1;
+  var docCol = HEADERS.indexOf('Nº Documento') + 1;
+  var razaoCol = HEADERS.indexOf('Razão Social') + 1;
 
   var sh = getSheet_(origem);
   var ultimaLinha = sh.getLastRow();
   if (ultimaLinha < 2) throw new Error('Lançamento não encontrado.');
-  var ids = sh.getRange(2, idCol, ultimaLinha - 1, 1).getValues();
-  for (var i = 0; i < ids.length; i++) {
-    if (ids[i][0] === payload.id) {
+  var dados = sh.getRange(2, 1, ultimaLinha - 1, HEADERS.length).getValues();
+  for (var i = 0; i < dados.length; i++) {
+    if (dados[i][idCol - 1] === payload.id) {
       sh.getRange(i + 2, colIdx).setValue(String(payload.url || ''));
+      registrarLog_(nomeUsuario, payload.url ? 'Definir anexo (' + payload.tipo + ')' : 'Remover anexo (' + payload.tipo + ')',
+        (dados[i][razaoCol - 1] || '') + ' Nº ' + (dados[i][docCol - 1] || '') + (payload.url ? ': ' + payload.url : ''));
       return api_carregar();
     }
   }
@@ -449,12 +517,17 @@ function api_definirAnexo(payload) {
 }
 
 function api_removerManual(payload) {
-  validarAcessoEdicao_(payload);
+  var nomeUsuario = validarAcessoEdicao_(payload);
   var shM = getSheet_('Manual');
   var idCol = HEADERS.indexOf('ID') + 1;
+  var docCol = HEADERS.indexOf('Nº Documento') + 1;
+  var razaoCol = HEADERS.indexOf('Razão Social') + 1;
+  var valorCol = HEADERS.indexOf('R$ Valor') + 1;
   var dados = shM.getRange(2, 1, Math.max(shM.getLastRow() - 1, 0), HEADERS.length).getValues();
   for (var i = 0; i < dados.length; i++) {
     if (dados[i][idCol - 1] === payload.id) {
+      registrarLog_(nomeUsuario, 'Remover lançamento manual',
+        (dados[i][razaoCol - 1] || '') + ' | Nº ' + (dados[i][docCol - 1] || '') + ' | R$ ' + (dados[i][valorCol - 1] || ''));
       shM.deleteRow(i + 2);
       break;
     }
@@ -477,6 +550,7 @@ function doPost(e) {
     else if (acao === 'removerDuplicados') resultado = api_removerDuplicados(payload);
     else if (acao === 'definirAnexo') resultado = api_definirAnexo(payload);
     else if (acao === 'validarEdicao') resultado = api_validarEdicao(payload);
+    else if (acao === 'carregarLog') resultado = api_carregarLog(payload);
     else throw new Error('Ação desconhecida: ' + acao);
     resultado.ok = true;
     return ContentService
@@ -487,4 +561,155 @@ function doPost(e) {
       .createTextOutput(JSON.stringify({ ok: false, erro: erro.message }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// ---------- Alerta diário por e-mail ----------
+// Roda 1x/dia via gatilho de tempo (ver configurarGatilhoDiario_ no fim
+// deste arquivo) e avisa consorciovltce@gmail.com só quando há algo NOVO:
+// título(s) vencido(s) que ainda não tinham entrado em nenhum alerta
+// anterior, ou a base de dados desatualizada há alguns dias. Não manda
+// e-mail todo dia à toa — só quando muda algo que precisa de atenção.
+var EMAIL_ALERTA = 'consorciovltce@gmail.com';
+var LIMITE_DIAS_BASE_DESATUALIZADA = 2; // mesmo limite usado no aviso da tela (badge-data-base)
+
+function formatarDataServidor_(v) {
+  var iso = dataParaISO_(v);
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  return m ? (m[3] + '/' + m[2] + '/' + m[1]) : '';
+}
+
+function formatarMoedaServidor_(v) {
+  var n = Number(v || 0);
+  var negativo = n < 0;
+  n = Math.abs(n);
+  var partes = n.toFixed(2).split('.');
+  var inteiro = partes[0], comMilhar = '';
+  for (var i = 0; i < inteiro.length; i++) {
+    var posDireita = inteiro.length - i;
+    comMilhar += inteiro[i];
+    if (posDireita > 1 && posDireita % 3 === 1) comMilhar += '.';
+  }
+  return (negativo ? '-' : '') + 'R$ ' + comMilhar + ',' + partes[1];
+}
+
+// Compara datas "yyyy-MM-dd" como texto (funciona porque o formato tem
+// tamanho fixo e ordem crescente de dígitos) — evita ficar convertendo
+// pra timestamp só pra saber se uma data é anterior à outra.
+function ehVencido_(vencimento, hojeIso) {
+  var iso = dataParaISO_(vencimento);
+  return !!iso && String(iso) < hojeIso;
+}
+
+function diasEntreIso_(isoAntiga, isoNova) {
+  var pa = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(isoAntiga || ''));
+  var pn = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(isoNova || ''));
+  if (!pa || !pn) return 0;
+  var a = Date.UTC(Number(pa[1]), Number(pa[2]) - 1, Number(pa[3]));
+  var n = Date.UTC(Number(pn[1]), Number(pn[2]) - 1, Number(pn[3]));
+  return Math.round((n - a) / 86400000);
+}
+
+// Aba oculta que guarda, a cada execução, a chave (Nº Documento + Código
+// Fornecedor + Parcela — mesma chaveAnexo_ usada para preservar links entre
+// reimportações) de cada título vencido já avisado — assim o próximo
+// alerta só lista o que é NOVO, em vez de repetir a mesma lista todo dia.
+// Usa uma aba (não PropertiesService) porque o limite de 9KB por
+// propriedade estouraria fácil com centenas de títulos vencidos.
+function getSheetEstadoAlerta_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName('_EstadoAlerta');
+  if (!sh) {
+    sh = ss.insertSheet('_EstadoAlerta');
+    try { sh.hideSheet(); } catch (e) { /* segue sem esconder se não puder (ex.: única aba visível) */ }
+  }
+  return sh;
+}
+function lerChavesNotificadas_() {
+  var sh = getSheetEstadoAlerta_();
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha < 1) return {};
+  var valores = sh.getRange(1, 1, ultimaLinha, 1).getValues();
+  var set = {};
+  valores.forEach(function (l) { if (l[0]) set[l[0]] = true; });
+  return set;
+}
+function gravarChavesNotificadas_(chaves) {
+  var sh = getSheetEstadoAlerta_();
+  sh.clearContent();
+  if (chaves.length) sh.getRange(1, 1, chaves.length, 1).setValues(chaves.map(function (c) { return [c]; }));
+}
+
+function enviarAlertaDiario_() {
+  var erp = lerAba_('ERP');
+  var manual = lerAba_('Manual').filter(function (m) { return m.Status !== 'Duplicado – revisar'; });
+  var itens = erp.concat(manual);
+
+  var hojeIso = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var vencidos = itens.filter(function (i) { return !i['Data Baixa'] && ehVencido_(i['Vencimento'], hojeIso); });
+
+  var chavesAtuais = vencidos.map(chaveAnexo_);
+  var notificadasAntes = lerChavesNotificadas_();
+  var novos = vencidos.filter(function (i, idx) { return !notificadasAntes[chavesAtuais[idx]]; });
+
+  var dataBaseIso = getDataBase_();
+  var diasDefasagem = dataBaseIso ? diasEntreIso_(dataBaseIso, hojeIso) : 0;
+  var baseDesatualizada = !!dataBaseIso && diasDefasagem >= LIMITE_DIAS_BASE_DESATUALIZADA;
+
+  // Atualiza o estado sempre (mesmo sem mandar e-mail hoje), pra que um
+  // título que já venceu antes não seja tratado como "novo" de novo amanhã.
+  gravarChavesNotificadas_(chavesAtuais);
+
+  if (!novos.length && !baseDesatualizada) return; // nada novo pra avisar hoje
+
+  var linhas = [];
+  linhas.push('Resumo automático — Entrada até Baixas');
+  linhas.push(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm'));
+  linhas.push('');
+
+  if (baseDesatualizada) {
+    linhas.push('⚠ A base de dados está desatualizada há ' + diasDefasagem + ' dia(s) — importe um arquivo mais recente da pasta do Drive.');
+    linhas.push('');
+  }
+
+  if (novos.length) {
+    var valorNovos = novos.reduce(function (s, i) { return s + Number(i['R$ Valor'] || 0); }, 0);
+    linhas.push(novos.length + ' novo(s) título(s) venceram e continuam em aberto, somando ' + formatarMoedaServidor_(valorNovos) + ':');
+    novos
+      .slice()
+      .sort(function (a, b) { return Number(b['R$ Valor'] || 0) - Number(a['R$ Valor'] || 0); })
+      .slice(0, 25)
+      .forEach(function (i) {
+        linhas.push('- ' + (i['Razão Social'] || i['Código Fornecedor'] || '(sem fornecedor)') +
+          ' | Nº ' + (i['Nº Documento'] || '') + ' | Venc.: ' + formatarDataServidor_(i['Vencimento']) +
+          ' | ' + formatarMoedaServidor_(i['R$ Valor']));
+      });
+    if (novos.length > 25) linhas.push('... e mais ' + (novos.length - 25) + ' título(s) — veja a lista completa no app.');
+    linhas.push('');
+  }
+
+  var totalVencidoValor = vencidos.reduce(function (s, i) { return s + Number(i['R$ Valor'] || 0); }, 0);
+  linhas.push('Total geral em aberto e vencido no momento: ' + vencidos.length + ' título(s), ' + formatarMoedaServidor_(totalVencidoValor) + '.');
+  linhas.push('');
+  linhas.push('Acesse o app: ' + ScriptApp.getService().getUrl());
+
+  var assuntoPartes = [];
+  if (novos.length) assuntoPartes.push(novos.length + ' título(s) vencido(s) novo(s)');
+  if (baseDesatualizada) assuntoPartes.push('base desatualizada');
+  MailApp.sendEmail({
+    to: EMAIL_ALERTA,
+    subject: '[Entrada até Baixas] ' + assuntoPartes.join(' + '),
+    body: linhas.join('\n'),
+  });
+  registrarLog_('(sistema)', 'Alerta automático enviado', assuntoPartes.join(' + ') + ' — para ' + EMAIL_ALERTA);
+}
+
+// Rode esta função UMA VEZ direto no editor do Apps Script (menu de funções
+// no topo → selecione "configurarGatilhoDiario_" → Executar) para instalar
+// o gatilho diário. É seguro rodar de novo depois (ex.: pra trocar o
+// horário) — ela sempre remove o gatilho anterior antes de criar um novo.
+function configurarGatilhoDiario_() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'enviarAlertaDiario_') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('enviarAlertaDiario_').timeBased().everyDays(1).atHour(7).create();
 }
