@@ -103,8 +103,17 @@
   }
   #tabela-lancamentos th .alca-redimensionar:hover { background: rgba(31,78,120,.35); }
   .anexos-col { display: flex; gap: 4px; }
-  .anexos-col button { padding: 3px 6px; font-size: 11px; }
-  .anexos-col button.anexo-definido { background: var(--azul); color: #fff; border-color: var(--azul); }
+  /* #tabela-lancamentos no seletor não é enfeite — sem ele, ".btn.small"
+     (2 classes) tinha mais especificidade que ".anexos-col button" (1
+     classe + 1 elemento) e sempre vencia, deixando esses botões com o
+     padding/fonte errado (o "grande") mesmo com a regra abaixo escrita. */
+  #tabela-lancamentos .anexos-col button { padding: 3px 6px; font-size: 11px; }
+  #tabela-lancamentos .anexos-col button.anexo-doc { border-color: var(--azul); color: var(--azul); }
+  #tabela-lancamentos .anexos-col button.anexo-doc.anexo-definido { background: var(--azul); color: #fff; border-color: var(--azul); }
+  #tabela-lancamentos .anexos-col button.anexo-comp { border-color: var(--verde); color: var(--verde); }
+  #tabela-lancamentos .anexos-col button.anexo-comp.anexo-definido-verde { background: var(--verde); color: #fff; border-color: var(--verde); }
+  /* Botão Remover (coluna Ação) do mesmo tamanho dos botões de anexo, só que vermelho. */
+  #tabela-lancamentos td.col-acao button { padding: 3px 6px; font-size: 11px; }
   tr.separador-grupo td { border-top: 2px solid #1e2430; }
   #conteudo-analise ul { margin: 0 0 14px; padding-left: 22px; }
   #conteudo-analise h3 { font-size: 14px; color: var(--azul); margin: 18px 0 6px; }
@@ -193,13 +202,13 @@
   <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
     <div class="periodo-filtro" style="display:flex; align-items:center; gap:6px; font-size:13px;">
       <label for="periodo-inicio">De</label>
-      <input id="periodo-inicio" placeholder="dd/mm/aa" maxlength="8" inputmode="numeric" autocomplete="off" style="width:80px; padding:5px 6px; border-radius:4px; border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.12); color:#fff;">
+      <input id="periodo-inicio" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" autocomplete="off" style="width:98px; padding:5px 6px; border-radius:4px; border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.12); color:#fff;">
       <button type="button" class="btn secundario small" onclick="abrirCalendario('periodo-inicio')" title="Selecionar data inicial">📅</button>
-      <input id="periodo-inicio-nativo" type="date" style="position:absolute; opacity:0; width:0; height:0; pointer-events:none;">
+      <input id="periodo-inicio-nativo" type="date" style="position:absolute; opacity:0; width:1px; height:1px; pointer-events:none;">
       <label for="periodo-fim">Até</label>
-      <input id="periodo-fim" placeholder="dd/mm/aa" maxlength="8" inputmode="numeric" autocomplete="off" style="width:80px; padding:5px 6px; border-radius:4px; border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.12); color:#fff;">
+      <input id="periodo-fim" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" autocomplete="off" style="width:98px; padding:5px 6px; border-radius:4px; border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.12); color:#fff;">
       <button type="button" class="btn secundario small" onclick="abrirCalendario('periodo-fim')" title="Selecionar data final">📅</button>
-      <input id="periodo-fim-nativo" type="date" style="position:absolute; opacity:0; width:0; height:0; pointer-events:none;">
+      <input id="periodo-fim-nativo" type="date" style="position:absolute; opacity:0; width:1px; height:1px; pointer-events:none;">
       <button type="button" class="btn secundario small" onclick="limparFiltroPeriodo()" title="Limpar filtro de período">✕</button>
     </div>
     <button type="button" id="btn-acesso" class="btn secundario small"></button>
@@ -718,11 +727,11 @@ function periodoDoAporte(aporteStr) {
 // ---------- Filtro de período (Data Inicial / Data Final, por Vencimento) ----------
 let filtroPeriodo = { inicio: null, fim: null };
 
-// Converte "dd/mm/aa" em timestamp (dia calendário UTC), ou null se incompleto/inválido.
+// Converte "dd/mm/aaaa" em timestamp (dia calendário UTC), ou null se incompleto/inválido.
 function parseDataCurta(str) {
-  const m = /^(\d{2})\/(\d{2})\/(\d{2})$/.exec(str || '');
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(str || '');
   if (!m) return null;
-  const dia = parseInt(m[1], 10), mes = parseInt(m[2], 10), ano = 2000 + parseInt(m[3], 10);
+  const dia = parseInt(m[1], 10), mes = parseInt(m[2], 10), ano = parseInt(m[3], 10);
   const d = new Date(Date.UTC(ano, mes - 1, dia));
   if (d.getUTCFullYear() !== ano || d.getUTCMonth() !== mes - 1 || d.getUTCDate() !== dia) return null;
   return d.getTime();
@@ -758,18 +767,24 @@ function limparFiltroPeriodo() {
 
 function abrirCalendario(idBase) {
   const nativo = document.getElementById(idBase + '-nativo');
-  if (nativo.showPicker) nativo.showPicker();
-  else nativo.click();
+  try {
+    // showPicker() exige "user activation" (ok, viemos de um clique) e que o
+    // elemento esteja de fato renderizado — por isso o input escondido tem
+    // 1x1px em vez de 0x0px (0x0 faz o Chrome recusar o showPicker sem
+    // aviso nenhum na tela, só um erro silencioso no console).
+    if (nativo.showPicker) { nativo.showPicker(); return; }
+  } catch (e) { /* cai no fallback abaixo */ }
+  nativo.click();
 }
 
 function aplicarMascaraData(input) {
   input.addEventListener('input', () => {
-    const digitos = input.value.replace(/\D/g, '').slice(0, 6);
+    const digitos = input.value.replace(/\D/g, '').slice(0, 8);
     let formatado = digitos;
     if (digitos.length > 4) formatado = `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`;
     else if (digitos.length > 2) formatado = `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
     input.value = formatado;
-    if (digitos.length === 6 || digitos.length === 0) aplicarFiltroPeriodo();
+    if (digitos.length === 8 || digitos.length === 0) aplicarFiltroPeriodo();
   });
 }
 ['periodo-inicio', 'periodo-fim'].forEach(id => {
@@ -777,7 +792,7 @@ function aplicarMascaraData(input) {
   document.getElementById(id + '-nativo').addEventListener('change', (e) => {
     if (!e.target.value) return;
     const [ano, mes, dia] = e.target.value.split('-');
-    document.getElementById(id).value = `${dia}/${mes}/${ano.slice(2)}`;
+    document.getElementById(id).value = `${dia}/${mes}/${ano}`;
     aplicarFiltroPeriodo();
   });
 });
@@ -1539,7 +1554,7 @@ function renderizarLancamentos() {
     const origemBadge = i.Origem === 'ERP' ? 'badge-erp' : 'badge-manual';
     const statusBadge = i.Status === 'Duplicado – revisar' ? 'badge-dup' : 'badge-ok';
     const acao = (!MODO_LEITURA && i.Origem === 'Manual')
-      ? `<button class="btn perigo small" onclick="removerManual('${i.ID}')">Remover</button>`
+      ? `<button class="btn perigo small" title="Remover lançamento manual" onclick="removerManual('${i.ID}')">🗑️</button>`
       : '';
     const idEsc = escaparAtributo(i.ID);
     const linkDoc = i['Link Documento'] || '';
@@ -1550,9 +1565,11 @@ function renderizarLancamentos() {
     const tituloComp = MODO_LEITURA
       ? (linkComp ? 'Abrir comprovante' : 'Nenhum comprovante cadastrado')
       : (linkComp ? 'Abrir/editar link do comprovante' : 'Adicionar link do comprovante');
+    // Documento = azul, Comprovante = verde (cores diferentes pra distinguir
+    // rápido qual botão é qual) — Remover, na coluna Ação, é vermelho.
     const anexos = `<div class="anexos-col">
-        <button class="btn secundario small ${linkDoc ? 'anexo-definido' : ''}" title="${tituloDoc}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','documento','${escaparAtributo(linkDoc)}')">📄</button>
-        <button class="btn secundario small ${linkComp ? 'anexo-definido' : ''}" title="${tituloComp}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','comprovante','${escaparAtributo(linkComp)}')">🧾</button>
+        <button class="btn secundario small anexo-doc ${linkDoc ? 'anexo-definido' : ''}" title="${tituloDoc}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','documento','${escaparAtributo(linkDoc)}')">📄</button>
+        <button class="btn secundario small anexo-comp ${linkComp ? 'anexo-definido-verde' : ''}" title="${tituloComp}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','comprovante','${escaparAtributo(linkComp)}')">🧾</button>
       </div>`;
     return `<tr>
       <td><span class="badge ${origemBadge}">${i.Origem}</span></td>
