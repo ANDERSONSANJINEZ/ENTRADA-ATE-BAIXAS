@@ -150,9 +150,12 @@
   .btn:disabled { opacity: .6; cursor: wait; }
   /* Ligado em postarAcao() no instante do clique (antes de qualquer resposta
      do servidor chegar) — sem isso, o tempo de ida-e-volta ao Apps Script dá
-     a impressão de que o clique não fez nada. */
+     a impressão de que o clique não fez nada. Só visual (SEM pointer-events:
+     none) de propósito: se por qualquer motivo a resposta demorar muito ou
+     nunca chegar, a tela continua clicável (dá pra trocar de aba, tentar de
+     novo etc.) em vez de travar esperando algo que talvez não volte. */
   body.aguardando-acao { cursor: wait; }
-  body.aguardando-acao .btn, body.aguardando-acao button { opacity: .55; pointer-events: none; }
+  body.aguardando-acao .btn, body.aguardando-acao button { opacity: .55; }
   .btn.secundario { background: #fff; color: var(--azul); border: 1px solid var(--azul); }
   .btn.perigo { background: var(--vermelho); }
   .btn.small { padding: 4px 10px; font-size: 12px; }
