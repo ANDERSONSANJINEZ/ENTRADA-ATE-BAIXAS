@@ -153,14 +153,25 @@ Um gatilho diário pode avisar **consorciovltce@gmail.com** quando:
 Sem nada de novo pra avisar, nenhum e-mail é enviado (não é um resumo diário
 de rotina).
 
-**Para ativar** (uma vez só): abra **Extensões → Apps Script** na planilha,
-no menu de funções no topo do editor selecione `configurarGatilhoDiario_` e
-clique em **Executar** — na primeira vez o Google vai pedir autorização para
+**Para ativar** (uma vez só), duas formas — escolha a que preferir:
+
+- **Rodando uma função**: abra **Extensões → Apps Script** na planilha, no
+  menu de funções no topo do editor selecione `configurarGatilhoDiario` e
+  clique em **Executar**.
+- **Direto pela interface, sem rodar código**: no editor do Apps Script,
+  clique no ícone de relógio (⏰ **Gatilhos**) no menu lateral esquerdo → **+
+  Adicionar gatilho** → em "Escolher qual função executar" selecione
+  `enviarAlertaDiario` → em "Selecionar origem do evento" escolha **Baseado
+  em tempo** → **Timer diário** → escolha um horário → **Salvar**.
+
+Em ambos os casos, na primeira vez o Google vai pedir autorização para
 enviar e-mail e gerenciar gatilhos (é a sua própria conta agindo em seu
-nome). Isso instala um gatilho que roda todo dia às 7h (fuso da planilha).
-Para trocar o horário, edite `.atHour(7)` na função `configurarGatilhoDiario_`
-em `Code.gs` e rode a função de novo — ela sempre remove o gatilho anterior
-antes de criar um novo, então é seguro executar quantas vezes precisar.
+nome). Isso instala um gatilho que roda todo dia (por padrão, 7h no fuso da
+planilha, se ativado pela primeira forma). Para trocar o horário depois,
+edite `.atHour(7)` na função `configurarGatilhoDiario` em `Code.gs` e rode a
+função de novo — ela sempre remove o gatilho anterior antes de criar um
+novo, então é seguro executar quantas vezes precisar (ou simplesmente edite
+o horário direto na tela de Gatilhos, se tiver usado a segunda forma).
 
 ## Conciliação Bancária
 

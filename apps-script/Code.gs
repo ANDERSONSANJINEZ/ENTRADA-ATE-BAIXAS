@@ -564,7 +564,15 @@ function doPost(e) {
 }
 
 // ---------- Alerta diário por e-mail ----------
-// Roda 1x/dia via gatilho de tempo (ver configurarGatilhoDiario_ no fim
+// Sem "_" no final do nome (diferente da maioria das funções internas deste
+// arquivo) DE PROPÓSITO: essas duas funções (esta e configurarGatilhoDiario,
+// mais abaixo) precisam aparecer nos menus "Executar" e "Adicionar gatilho"
+// do editor do Apps Script para serem configuradas manualmente — e o Apps
+// Script esconde desses menus, por convenção, qualquer função cujo nome
+// termine em "_" (tratando como "privada"). Todas as outras funções deste
+// arquivo mantêm o "_" de propósito (nunca precisam ser chamadas na mão).
+//
+// Roda 1x/dia via gatilho de tempo (ver configurarGatilhoDiario no fim
 // deste arquivo) e avisa consorciovltce@gmail.com só quando há algo NOVO:
 // título(s) vencido(s) que ainda não tinham entrado em nenhum alerta
 // anterior, ou a base de dados desatualizada há alguns dias. Não manda
@@ -639,7 +647,7 @@ function gravarChavesNotificadas_(chaves) {
   if (chaves.length) sh.getRange(1, 1, chaves.length, 1).setValues(chaves.map(function (c) { return [c]; }));
 }
 
-function enviarAlertaDiario_() {
+function enviarAlertaDiario() {
   var erp = lerAba_('ERP');
   var manual = lerAba_('Manual').filter(function (m) { return m.Status !== 'Duplicado – revisar'; });
   var itens = erp.concat(manual);
@@ -704,12 +712,15 @@ function enviarAlertaDiario_() {
 }
 
 // Rode esta função UMA VEZ direto no editor do Apps Script (menu de funções
-// no topo → selecione "configurarGatilhoDiario_" → Executar) para instalar
+// no topo → selecione "configurarGatilhoDiario" → Executar) para instalar
 // o gatilho diário. É seguro rodar de novo depois (ex.: pra trocar o
 // horário) — ela sempre remove o gatilho anterior antes de criar um novo.
-function configurarGatilhoDiario_() {
+// (Alternativa sem rodar código nenhum: no ícone de relógio ⏰ do editor,
+// "+ Adicionar gatilho" → função "enviarAlertaDiario" → Baseado em tempo →
+// Timer diário → Salvar.)
+function configurarGatilhoDiario() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'enviarAlertaDiario_') ScriptApp.deleteTrigger(t);
+    if (t.getHandlerFunction() === 'enviarAlertaDiario') ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('enviarAlertaDiario_').timeBased().everyDays(1).atHour(7).create();
+  ScriptApp.newTrigger('enviarAlertaDiario').timeBased().everyDays(1).atHour(7).create();
 }
