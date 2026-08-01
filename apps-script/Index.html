@@ -138,6 +138,9 @@
   th.ordenavel:hover { background: #dbe7f3; }
   .seta-ordenacao { font-size: 10px; }
   .tabela-scroll { max-height: 480px; overflow: auto; border: 1px solid var(--borda); border-radius: 8px; }
+  .paginacao { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--cinza); }
+  .paginacao button { background: #fff; color: var(--azul); border: 1px solid var(--azul); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .paginacao button:disabled { opacity: .45; cursor: default; }
   .busca-tabela { margin-bottom: 10px; padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; font-size: 13px; width: 100%; max-width: 320px; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }
   .badge-erp { background: #dbeafe; color: #1e40af; }
@@ -403,6 +406,7 @@
           <tbody></tbody>
         </table>
       </div>
+      <div id="paginacao-lancamentos" class="paginacao"></div>
     </div>
   </section>
 
@@ -1090,9 +1094,16 @@ async function baixarXlsx(nomeArquivo, cabecalhos, linhas, opcoes) {
 // aplicados no momento).
 function exportarXlsx(qual) {
   if (qual === 'lancamentos') {
-    const linhas = Array.from(document.querySelectorAll('#tabela-lancamentos tbody tr')).map((tr) =>
-      Array.from(tr.children).slice(0, -2).map((td) => td.textContent.trim())
-    );
+    // Não lê mais da tabela no DOM: com a paginação (ver
+    // TAMANHO_PAGINA_LANCAMENTOS), só a página atual fica renderizada ali —
+    // ultimoItensLancamentosFiltrados guarda o conjunto completo (todas as
+    // páginas) já filtrado/ordenado, exatamente como era exportado antes.
+    const linhas = ultimoItensLancamentosFiltrados.map((i) => [
+      i.Origem, i.Status, i.Aporte || '', i.Tipo || '', fmtData(i['Data Emissão']), i['Nº Documento'] || '',
+      i['Forma Pagamento'] || '', i['Chave Pix'] || '', i['Código Fornecedor'] || '', i['Razão Social'] || '',
+      fmtData(i['Vencimento']), fmtData(i['Vencimento Real']), fmtMoeda(i['R$ Valor']), i['Parcela'] || '',
+      fmtData(i['Data Baixa']), i['Histórico'] || '', i['Aprovação Remessa'] || '', i['Usuário Inclusor'] || '', i['Remessa'] || '',
+    ]);
     baixarXlsx('lancamentos.xlsx', [
       'Origem', 'Status', 'Aporte', 'Tipo', 'Emissão', 'Nº Documento', 'Forma Pagamento', 'Chave Pix',
       'Código Fornecedor', 'Razão Social', 'Vencimento', 'Vencimento Real', 'Valor',
@@ -1628,6 +1639,36 @@ const EXTRATORES_LANCAMENTOS = [
   null, // ação (não ordenável)
 ];
 
+// Renderizar milhares de <tr> de uma vez (innerHTML com o dataset inteiro)
+// é, sozinho, a maior fatia do tempo de carregamento da tela com o volume
+// atual de títulos — o navegador precisa criar todos os nós no DOM mesmo
+// que só uma fração caiba na tela. Por isso a tabela é paginada: só os
+// itens da página atual entram no HTML gerado; o restante (totalizador,
+// exportação, contagem) continua considerando TODOS os itens filtrados.
+const TAMANHO_PAGINA_LANCAMENTOS = 300;
+let paginaLancamentos = 1;
+// Guarda o último conjunto completo (filtrado/ordenado, todas as páginas)
+// pra exportarXlsx('lancamentos') não depender de ler a tabela no DOM, que
+// agora só tem a página atual.
+let ultimoItensLancamentosFiltrados = [];
+
+function mudarPaginaLancamentos(delta) {
+  paginaLancamentos += delta;
+  renderizarLancamentos();
+}
+
+function renderizarPaginacaoLancamentos(totalItens, totalPaginas) {
+  const el = document.getElementById('paginacao-lancamentos');
+  if (totalItens === 0) { el.innerHTML = ''; return; }
+  const inicio = (paginaLancamentos - 1) * TAMANHO_PAGINA_LANCAMENTOS + 1;
+  const fim = Math.min(paginaLancamentos * TAMANHO_PAGINA_LANCAMENTOS, totalItens);
+  el.innerHTML = `
+    <button type="button" ${paginaLancamentos <= 1 ? 'disabled' : ''} onclick="mudarPaginaLancamentos(-1)">‹ Anterior</button>
+    <span>Mostrando ${inicio}–${fim} de ${totalItens}${totalPaginas > 1 ? ` (página ${paginaLancamentos} de ${totalPaginas})` : ''}</span>
+    <button type="button" ${paginaLancamentos >= totalPaginas ? 'disabled' : ''} onclick="mudarPaginaLancamentos(1)">Próxima ›</button>
+  `;
+}
+
 function renderizarLancamentos() {
   const busca = document.getElementById('busca').value.trim().toLowerCase();
   const fOrigem = document.getElementById('filtro-origem').value;
@@ -1653,8 +1694,14 @@ function renderizarLancamentos() {
 
   itens.sort((a, b) => (paraData(b['Vencimento']) || 0) - (paraData(a['Vencimento']) || 0));
   itens = aplicarOrdenacao('tabela-lancamentos', itens, EXTRATORES_LANCAMENTOS);
+  ultimoItensLancamentosFiltrados = itens;
 
-  document.querySelector('#tabela-lancamentos tbody').innerHTML = itens.map(i => {
+  const totalPaginas = Math.max(1, Math.ceil(itens.length / TAMANHO_PAGINA_LANCAMENTOS));
+  if (paginaLancamentos > totalPaginas) paginaLancamentos = totalPaginas;
+  if (paginaLancamentos < 1) paginaLancamentos = 1;
+  const itensPagina = itens.slice((paginaLancamentos - 1) * TAMANHO_PAGINA_LANCAMENTOS, paginaLancamentos * TAMANHO_PAGINA_LANCAMENTOS);
+
+  document.querySelector('#tabela-lancamentos tbody').innerHTML = itensPagina.map(i => {
     const origemBadge = i.Origem === 'ERP' ? 'badge-erp' : 'badge-manual';
     const statusBadge = i.Status === 'Duplicado – revisar' ? 'badge-dup' : 'badge-ok';
     const acao = (!MODO_LEITURA && i.Origem === 'Manual')
@@ -1700,11 +1747,17 @@ function renderizarLancamentos() {
     </tr>`;
   }).join('');
   definirTotalizador('total-lancamentos', itens);
-  tornarOrdenavel('tabela-lancamentos', EXTRATORES_LANCAMENTOS, renderizarLancamentos);
+  renderizarPaginacaoLancamentos(itens.length, totalPaginas);
+  // tornarOrdenavel só liga os listeners de clique no cabeçalho na 1ª
+  // chamada (é idempotente) — o callback passado aqui é o que fica valendo
+  // pra todo clique de ordenação dali em diante, por isso a volta pra
+  // página 1 tem que estar dentro dele (mudar a ordenação muda o que cai em
+  // cada página).
+  tornarOrdenavel('tabela-lancamentos', EXTRATORES_LANCAMENTOS, () => { paginaLancamentos = 1; renderizarLancamentos(); });
   tornarColunasRedimensionaveis('tabela-lancamentos');
 }
 ['busca', 'filtro-origem', 'filtro-status', 'filtro-aporte'].forEach(id =>
-  document.getElementById(id).addEventListener('input', renderizarLancamentos));
+  document.getElementById(id).addEventListener('input', () => { paginaLancamentos = 1; renderizarLancamentos(); }));
 
 async function removerManual(id) {
   if (!confirm('Remover este lançamento manual?')) return;
