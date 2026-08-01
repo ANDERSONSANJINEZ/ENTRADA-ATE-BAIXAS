@@ -1161,10 +1161,12 @@ function renderizarCardsRemessa() {
       <span class="rotulo">Remessas a Aprovar</span>
       <span class="card-qtde">${remessasAAprovar.size.toLocaleString('pt-BR')}</span>
     </div>`;
+  // remessasAprovadas/AAprovar vêm de Object.entries (chaves sempre viram
+  // String), mas i['Remessa'] é o valor bruto do item — pode ser número.
   document.getElementById('card-remessas-aprovadas').addEventListener('click', () =>
-    abrirDetalhe('Remessas Aprovadas — todos os títulos', erpFiltrado().filter(i => remessasAprovadas.has(i['Remessa']))));
+    abrirDetalhe('Remessas Aprovadas — todos os títulos', erpFiltrado().filter(i => remessasAprovadas.has(String(i['Remessa'])))));
   document.getElementById('card-remessas-a-aprovar').addEventListener('click', () =>
-    abrirDetalhe('Remessas a Aprovar — todos os títulos (inclui itens já aprovados dentro de remessas ainda pendentes)', erpFiltrado().filter(i => remessasAAprovar.has(i['Remessa']))));
+    abrirDetalhe('Remessas a Aprovar — todos os títulos (inclui itens já aprovados dentro de remessas ainda pendentes)', erpFiltrado().filter(i => remessasAAprovar.has(String(i['Remessa'])))));
 }
 
 // Agrupa por mês/ano do Vencimento e acumula ao longo do tempo: somatório
@@ -1295,7 +1297,9 @@ function renderizarValorPorRemessa() {
       onClick: (ev, els) => {
         if (!els.length) return;
         const remessa = linhasGrafico[els[0].index].remessa;
-        abrirDetalhe(`Remessa ${remessa} — todos os títulos`, erpFiltrado().filter((i) => i['Remessa'] === remessa));
+        // Mesmo cuidado do abrirDetalheFornecedor: Remessa pode vir como
+        // número do Excel, então converte os dois lados pra String.
+        abrirDetalhe(`Remessa ${remessa} — todos os títulos`, erpFiltrado().filter((i) => String(i['Remessa']) === remessa));
       },
     },
   });
@@ -1448,7 +1452,12 @@ function renderizarCurvaAbc(itens) {
 // Clique numa linha da Curva ABC — todos os títulos daquele fornecedor no
 // período filtrado (aberto + baixado), pra ver de onde vem a concentração.
 function abrirDetalheFornecedor(cod, nome) {
-  const itens = ultimoItensAnalise.filter((i) => (i['Código Fornecedor'] || '(sem código)') === cod);
+  // Código Fornecedor às vezes vem como número puro do Excel (sem zero à
+  // esquerda) — o agrupamento da Curva ABC usa esse valor como chave de
+  // objeto, que o JS converte pra texto sozinho, mas aqui a comparação é
+  // direta com o valor bruto do item, por isso precisa converter os dois
+  // lados pra String antes de comparar (senão nunca bate: 123 !== '123').
+  const itens = ultimoItensAnalise.filter((i) => String(i['Código Fornecedor'] || '(sem código)') === cod);
   abrirDetalhe(`${nome || cod} — todos os títulos no período`, itens);
 }
 
