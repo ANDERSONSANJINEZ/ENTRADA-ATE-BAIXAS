@@ -111,6 +111,25 @@ do ERP — a reimportação diária substitui todos os títulos, mas reconhece o
 mesmo título pela combinação Nº Documento + Código Fornecedor + Parcela e
 recoloca o link que já tinha sido salvo para ele.
 
+## Detalhamento por clique (dashboard, tabelas e Análise)
+
+Em qualquer lugar que mostre um número agregado — cards do topo, barras/linhas
+dos gráficos do Dashboard, linhas de "Resumo por Aporte" e "Curva ABC", e os
+links dentro da aba **Análise** — clicar abre uma janela com a lista dos
+títulos por trás daquele número (fornecedor, vencimento, valor, status),
+já com botão próprio de "Exportar Excel". Serve pra ir direto do gráfico/KPI
+para os documentos específicos que precisam de baixa ou revisão, sem precisar
+filtrar manualmente em "Todos os lançamentos".
+
+## Exportação em Excel
+
+Todos os botões "⬇ Exportar Excel" geram um `.xlsx` com a mesma aparência da
+tela (cabeçalho azul-claro em negrito, bordas, linha de cabeçalho fixa ao
+rolar) — em "Detalhe por Aporte" a separação visual entre um vencimento e
+outro também é reproduzida no arquivo. Essa formatação usa a biblioteca
+ExcelJS (carregada via CDN, como o Chart.js); o SheetJS (`XLSX`) continua
+sendo usado só para **ler** o `.xlsx` importado do Protheus.
+
 ## Atualizações do código
 
 Sempre que `apps-script/Code.gs` for alterado neste repositório, repita os

@@ -7,6 +7,10 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
+<!-- xlsx (SheetJS) continua só pra LER o .xlsx importado do Protheus — a
+     versão community dela não grava estilo (cor, negrito) no arquivo, então
+     as exportações formatadas usam ExcelJS (abaixo), que suporta de verdade. -->
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <style>
   :root {
     --azul: #1f4e78;
@@ -105,6 +109,8 @@
   #conteudo-analise ul { margin: 0 0 14px; padding-left: 22px; }
   #conteudo-analise h3 { font-size: 14px; color: var(--azul); margin: 18px 0 6px; }
   #conteudo-analise h3:first-child { margin-top: 0; }
+  #conteudo-analise a { color: var(--azul); font-weight: bold; text-decoration: none; cursor: pointer; }
+  #conteudo-analise a:hover { text-decoration: underline; }
   .cards-remessa-status { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
   .card-remessa-status { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
   .card-remessa-status .rotulo { font-size: 13px; color: var(--cinza); }
@@ -145,6 +151,24 @@
   .toast.mostrar { opacity: 1; }
   canvas { max-height: 320px; }
   #badge-data-base.desatualizada { background: #fbbf24; color: #1e2430; font-weight: bold; }
+  /* Detalhamento por clique — mesmo padrão em gráficos, linhas de tabela e
+     cards: cursor de mão + leve destaque no hover, avisando que dá pra
+     clicar pra ver os títulos por trás do número. O cursor da barra/linha em
+     si é controlado via Chart.js (options.onHover), não CSS. */
+  #tabela-aporte tbody tr, #tabela-abc tbody tr { cursor: pointer; }
+  #tabela-aporte tbody tr:hover, #tabela-abc tbody tr:hover { background: var(--azul-claro); }
+  .card.clicavel, .card-remessa-status.clicavel { cursor: pointer; transition: box-shadow .15s, transform .15s; }
+  .card.clicavel:hover, .card-remessa-status.clicavel:hover { box-shadow: 0 4px 10px rgba(31,78,120,.18); transform: translateY(-1px); }
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(30,36,48,.55);
+    z-index: 500; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-overlay.aberto { display: flex; }
+  .modal-caixa { background: #fff; border-radius: 10px; padding: 20px; max-width: 1100px; width: 100%; max-height: 88vh; display: flex; flex-direction: column; }
+  .modal-cabecalho { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .modal-cabecalho h2 { margin: 0; font-size: 16px; color: var(--azul); flex: 1; }
+  .modal-fechar { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--cinza); line-height: 1; padding: 2px 6px; border-radius: 6px; }
+  .modal-fechar:hover { color: var(--vermelho); background: #fee2e2; }
   @media (max-width: 960px) {
     .grid-2 { grid-template-columns: 1fr; }
     main { padding: 14px; }
@@ -383,6 +407,26 @@
   </section>
 
 </main>
+
+<div class="modal-overlay" id="modal-detalhe" onclick="if (event.target === this) fecharModalDetalhe()">
+  <div class="modal-caixa">
+    <div class="modal-cabecalho">
+      <h2 id="modal-detalhe-titulo"></h2>
+      <button class="btn secundario small" onclick="exportarModalDetalhe()">⬇ Exportar Excel</button>
+      <button class="modal-fechar" onclick="fecharModalDetalhe()" title="Fechar (Esc)">✕</button>
+    </div>
+    <div id="modal-detalhe-total" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
+    <div class="tabela-scroll" style="max-height:60vh;">
+      <table id="modal-detalhe-tabela">
+        <thead><tr>
+          <th>Origem</th><th>Status</th><th>Tipo</th><th>Nº Doc.</th><th>Fornecedor</th>
+          <th>Razão Social</th><th>Vencimento</th><th>Valor</th><th>Data Baixa</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -682,6 +726,61 @@ function definirTotalizador(elId, itens) {
   el.textContent = `${itens.length.toLocaleString('pt-BR')} título(s) · Total: ${fmtMoeda(total)}`;
 }
 
+function escaparAtributo(v) { return String(v || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+function escaparHtml(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
+
+// ---------- Modal de detalhamento (clique em gráfico/linha/card) ----------
+// Reaproveitado por todo o app: qualquer barra, ponto de linha, linha de
+// tabela ou card de KPI que representa um grupo de títulos abre este modal
+// com a lista de documentos por trás do número — facilita achar rápido o
+// que precisa ser baixado/revisado sem precisar filtrar manualmente em
+// "Todos os lançamentos".
+let ultimoItensModalDetalhe = [];
+let ultimoTituloModalDetalhe = '';
+function abrirDetalhe(titulo, itens) {
+  ultimoItensModalDetalhe = itens;
+  ultimoTituloModalDetalhe = titulo;
+  document.getElementById('modal-detalhe-titulo').textContent = titulo;
+  const linhas = itens.slice().sort((a, b) => (paraData(a['Vencimento']) || 0) - (paraData(b['Vencimento']) || 0));
+  document.querySelector('#modal-detalhe-tabela tbody').innerHTML = linhas.map((i) => {
+    const origemBadge = i.Origem === 'ERP' ? 'badge-erp' : 'badge-manual';
+    const statusTxt = i.Status === 'Duplicado – revisar' ? 'Duplicado' : (i['Data Baixa'] ? 'Baixado' : 'Em aberto');
+    const statusBadge = i.Status === 'Duplicado – revisar' ? 'badge-dup' : (i['Data Baixa'] ? 'badge-erp' : 'badge-ok');
+    return `<tr>
+      <td><span class="badge ${origemBadge}">${i.Origem || ''}</span></td>
+      <td><span class="badge ${statusBadge}">${statusTxt}</span></td>
+      <td>${i.Tipo || ''}</td>
+      <td>${i['Nº Documento'] || ''}</td>
+      <td title="${escaparHtml(i['Código Fornecedor'])}">${i['Código Fornecedor'] || ''}</td>
+      <td>${i['Razão Social'] || ''}</td>
+      <td>${fmtData(i['Vencimento'])}</td>
+      <td title="${escaparHtml(fmtMoeda(i['R$ Valor']))}">${fmtMoeda(i['R$ Valor'])}</td>
+      <td>${fmtData(i['Data Baixa'])}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="9" style="color:var(--cinza)">Nenhum título encontrado para este filtro.</td></tr>';
+  const total = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  document.getElementById('modal-detalhe-total').textContent = `${itens.length.toLocaleString('pt-BR')} título(s) · Total: ${fmtMoeda(total)}`;
+  document.getElementById('modal-detalhe').classList.add('aberto');
+}
+function fecharModalDetalhe() {
+  document.getElementById('modal-detalhe').classList.remove('aberto');
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fecharModalDetalhe(); });
+function exportarModalDetalhe() {
+  const linhas = ultimoItensModalDetalhe.slice()
+    .sort((a, b) => (paraData(a['Vencimento']) || 0) - (paraData(b['Vencimento']) || 0))
+    .map((i) => [
+      i.Origem || '', i.Status === 'Duplicado – revisar' ? 'Duplicado' : (i['Data Baixa'] ? 'Baixado' : 'Em aberto'),
+      i.Tipo || '', i['Nº Documento'] || '', i['Código Fornecedor'] || '', i['Razão Social'] || '',
+      fmtData(i['Vencimento']), fmtMoeda(i['R$ Valor']), fmtData(i['Data Baixa']),
+    ]);
+  const nomeArquivo = (ultimoTituloModalDetalhe || 'detalhamento').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  baixarXlsx(`${nomeArquivo || 'detalhamento'}.xlsx`, [
+    'Origem', 'Status', 'Tipo', 'Nº Documento', 'Código Fornecedor', 'Razão Social', 'Vencimento', 'Valor', 'Data Baixa',
+  ], linhas);
+}
+
 // Alças de redimensionamento arrastáveis nas colunas de uma tabela (estilo
 // planilha): ao arrastar, só a coluna arrastada muda de largura — as demais
 // ficam como estavam — e a tabela cresce na mesma medida, rolando
@@ -739,11 +838,57 @@ function tornarColunasRedimensionaveis(tabelaId) {
 }
 
 // ---------- Exportar Excel (.xlsx) ----------
-function baixarXlsx(nomeArquivo, cabecalhos, linhas) {
-  const planilha = XLSX.utils.aoa_to_sheet([cabecalhos].concat(linhas));
-  const livro = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(livro, planilha, 'Dados');
-  XLSX.writeFile(livro, nomeArquivo);
+// Exportação com a MESMA aparência da tela: cabeçalho azul-claro em negrito
+// (igual ao <th> do app), bordas suaves, linha de cabeçalho congelada ao
+// rolar, e uma borda mais grossa acima das linhas marcadas em
+// `opcoes.linhasComSeparador` (mesmo papel do "separador-grupo" da tela —
+// usado em Detalhe por Aporte pra marcar troca de vencimento). O SheetJS
+// (XLSX, usado só pra LER os .xlsx importados) não grava estilo na versão
+// gratuita; por isso as exportações usam a ExcelJS, que suporta de verdade.
+async function baixarXlsx(nomeArquivo, cabecalhos, linhas, opcoes) {
+  opcoes = opcoes || {};
+  const livro = new ExcelJS.Workbook();
+  const planilha = livro.addWorksheet('Dados');
+
+  const linhaCabecalho = planilha.addRow(cabecalhos);
+  linhaCabecalho.height = 22;
+  linhaCabecalho.eachCell((celula) => {
+    celula.font = { bold: true, color: { argb: 'FF1F4E78' } };
+    celula.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAF1F8' } };
+    celula.border = { bottom: { style: 'thin', color: { argb: 'FFB9C6D6' } } };
+    celula.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  });
+
+  linhas.forEach((linha, idx) => {
+    const linhaPlanilha = planilha.addRow(linha);
+    const temSeparador = opcoes.linhasComSeparador && opcoes.linhasComSeparador.has(idx);
+    linhaPlanilha.eachCell((celula) => {
+      celula.border = {
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        top: temSeparador ? { style: 'medium', color: { argb: 'FF1E2430' } } : undefined,
+      };
+      celula.alignment = { vertical: 'middle' };
+    });
+  });
+
+  // Largura de cada coluna pelo maior conteúdo (cabeçalho ou dado), com um
+  // teto pra "Histórico"/"Descrição" não dominar a planilha inteira.
+  cabecalhos.forEach((cab, i) => {
+    const maiorConteudo = linhas.reduce((max, l) => Math.max(max, String(l[i] == null ? '' : l[i]).length), String(cab).length);
+    planilha.getColumn(i + 1).width = Math.min(Math.max(maiorConteudo + 2, 10), 45);
+  });
+  planilha.views = [{ state: 'frozen', ySplit: 1 }];
+
+  const buffer = await livro.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nomeArquivo;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
   toast('Exportado: ' + nomeArquivo);
 }
 
@@ -773,14 +918,23 @@ function exportarXlsx(qual) {
     const linhas = ultimoDadosRemessa.map((l) => [l.remessa, l.qtde, fmtMoeda(l.valor)]);
     baixarXlsx('valor_por_remessa.xlsx', ['Remessa', 'Qtde', 'Valor'], linhas);
   } else if (qual === 'detalheAporte') {
-    const linhas = ultimoDetalheAporte.map((i) => [
-      fmtData(i['Data Emissão']),
-      `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(),
-      [i['Razão Social'], i['Histórico']].filter(Boolean).join(' - ') + (i['Parcela'] ? ` - PARC.: ${i['Parcela']}` : ''),
-      fmtData(i['Vencimento']),
-      fmtMoeda(i['R$ Valor']),
-    ]);
-    baixarXlsx('detalhe_aporte.xlsx', ['Data', 'N/Doc.', 'Descrição', 'Venc.', 'Valor'], linhas);
+    // Mesma marcação de grupo (troca de Vencimento) usada na tela via
+    // tr.separador-grupo — replicada aqui como borda superior mais grossa.
+    let vencAnterior = null;
+    const linhasComSeparador = new Set();
+    const linhas = ultimoDetalheAporte.map((i, idx) => {
+      const vencAtual = fmtData(i['Vencimento']);
+      if (vencAnterior !== null && vencAnterior !== vencAtual) linhasComSeparador.add(idx);
+      vencAnterior = vencAtual;
+      return [
+        fmtData(i['Data Emissão']),
+        `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(),
+        [i['Razão Social'], i['Histórico']].filter(Boolean).join(' - ') + (i['Parcela'] ? ` - PARC.: ${i['Parcela']}` : ''),
+        vencAtual,
+        fmtMoeda(i['R$ Valor']),
+      ];
+    });
+    baixarXlsx('detalhe_aporte.xlsx', ['Data', 'N/Doc.', 'Descrição', 'Venc.', 'Valor'], linhas, { linhasComSeparador });
   } else if (qual === 'analise') {
     baixarXlsx('analise.xlsx', ['Indicador', 'Valor'], ultimoDadosAnalise);
   }
@@ -864,15 +1018,15 @@ function renderizarDashboard() {
   const duplicadosValor = duplicadosItens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
 
   const cards = [
-    { rotulo: 'Total de títulos', qtde: totalQtde.toLocaleString('pt-BR') },
-    { rotulo: 'Valor total', valor: fmtMoeda(totalValor) },
-    { rotulo: 'Em aberto (sem baixa)', qtde: abertoQtde.toLocaleString('pt-BR'), valor: fmtMoeda(abertoValor) },
-    { rotulo: 'Vencido e em aberto', qtde: vencidoQtde.toLocaleString('pt-BR'), valor: fmtMoeda(vencidoValor), classe: vencidoQtde ? 'alerta' : '' },
-    { rotulo: 'Aguardando aprovação (ERP)', qtde: aguardando.length.toLocaleString('pt-BR'), valor: fmtMoeda(aguardandoValor), classe: aguardando.length ? 'atencao' : '' },
-    { rotulo: 'Lançados manualmente (não conferidos)', qtde: manuaisPendentes.length.toLocaleString('pt-BR'), valor: fmtMoeda(manuaisPendentesValor) },
-    { rotulo: 'Duplicados a revisar', qtde: duplicados.toLocaleString('pt-BR'), valor: fmtMoeda(duplicadosValor), classe: duplicados ? 'alerta' : '' },
+    { rotulo: 'Total de títulos', qtde: totalQtde.toLocaleString('pt-BR'), itens },
+    { rotulo: 'Valor total', valor: fmtMoeda(totalValor), itens },
+    { rotulo: 'Em aberto (sem baixa)', qtde: abertoQtde.toLocaleString('pt-BR'), valor: fmtMoeda(abertoValor), itens: abertos },
+    { rotulo: 'Vencido e em aberto', qtde: vencidoQtde.toLocaleString('pt-BR'), valor: fmtMoeda(vencidoValor), classe: vencidoQtde ? 'alerta' : '', itens: vencidos },
+    { rotulo: 'Aguardando aprovação (ERP)', qtde: aguardando.length.toLocaleString('pt-BR'), valor: fmtMoeda(aguardandoValor), classe: aguardando.length ? 'atencao' : '', itens: aguardando },
+    { rotulo: 'Lançados manualmente (não conferidos)', qtde: manuaisPendentes.length.toLocaleString('pt-BR'), valor: fmtMoeda(manuaisPendentesValor), itens: manuaisPendentes },
+    { rotulo: 'Duplicados a revisar', qtde: duplicados.toLocaleString('pt-BR'), valor: fmtMoeda(duplicadosValor), classe: duplicados ? 'alerta' : '', itens: duplicadosItens },
   ];
-  document.getElementById('cards-kpi').innerHTML = cards.map(c => {
+  document.getElementById('cards-kpi').innerHTML = cards.map((c, idx) => {
     const linhas = [];
     if (c.qtde !== undefined) {
       // Quando há quantidade, ela é o número em destaque e o R$ vem menor, embaixo.
@@ -883,8 +1037,14 @@ function renderizarDashboard() {
       // dos demais cards, para manter a tipografia padronizada entre todos.
       linhas.push(`<div class="card-qtde">${c.valor}</div>`);
     }
-    return `<div class="card ${c.classe || ''}"><div class="rotulo">${c.rotulo}</div><div class="card-valores">${linhas.join('')}</div></div>`;
+    return `<div class="card ${c.classe || ''} clicavel" data-card-idx="${idx}"><div class="rotulo">${c.rotulo}</div><div class="card-valores">${linhas.join('')}</div></div>`;
   }).join('');
+  // Delegação por índice em vez de serializar os itens no HTML (evita
+  // estourar o atributo onclick com listas grandes) — clicar no card abre o
+  // detalhamento com exatamente os títulos que compõem aquele número.
+  document.querySelectorAll('#cards-kpi .card').forEach((el) => {
+    el.addEventListener('click', () => abrirDetalhe(cards[Number(el.dataset.cardIdx)].rotulo, cards[Number(el.dataset.cardIdx)].itens));
+  });
 
   ultimoAbertos = abertos;
   ultimoItensAnalise = itens;
@@ -909,30 +1069,35 @@ function renderizarCardsRemessa() {
     grupos[rem].total += 1;
     if (i['Aprovação Remessa'] === 'Aprovado') grupos[rem].aprovados += 1;
   });
-  let aprovadas = 0, aAprovar = 0;
-  Object.values(grupos).forEach(g => { if (g.aprovados === g.total) aprovadas += 1; else aAprovar += 1; });
+  const remessasAprovadas = new Set(), remessasAAprovar = new Set();
+  Object.entries(grupos).forEach(([rem, g]) => { (g.aprovados === g.total ? remessasAprovadas : remessasAAprovar).add(rem); });
 
   document.getElementById('cards-remessa').innerHTML = `
-    <div class="card-remessa-status aprovadas">
+    <div class="card-remessa-status aprovadas clicavel" id="card-remessas-aprovadas">
       <span class="rotulo">Remessas Aprovadas</span>
-      <span class="card-qtde">${aprovadas.toLocaleString('pt-BR')}</span>
+      <span class="card-qtde">${remessasAprovadas.size.toLocaleString('pt-BR')}</span>
     </div>
-    <div class="card-remessa-status a-aprovar">
+    <div class="card-remessa-status a-aprovar clicavel" id="card-remessas-a-aprovar">
       <span class="rotulo">Remessas a Aprovar</span>
-      <span class="card-qtde">${aAprovar.toLocaleString('pt-BR')}</span>
+      <span class="card-qtde">${remessasAAprovar.size.toLocaleString('pt-BR')}</span>
     </div>`;
+  document.getElementById('card-remessas-aprovadas').addEventListener('click', () =>
+    abrirDetalhe('Remessas Aprovadas — todos os títulos', erpFiltrado().filter(i => remessasAprovadas.has(i['Remessa']))));
+  document.getElementById('card-remessas-a-aprovar').addEventListener('click', () =>
+    abrirDetalhe('Remessas a Aprovar — todos os títulos (inclui itens já aprovados dentro de remessas ainda pendentes)', erpFiltrado().filter(i => remessasAAprovar.has(i['Remessa']))));
 }
 
 // Agrupa por mês/ano do Vencimento e acumula ao longo do tempo: somatório
 // total de documentos vs. quantos já foram baixados (linhas crescentes).
 function renderizarStatusPagamento(itens) {
-  const buckets = {}; // 'yyyy-mm' -> { baixado, total }
+  const buckets = {}; // 'yyyy-mm' -> { baixado, total, itens }
   itens.forEach(i => {
     const v = paraData(i['Vencimento']);
     if (!v) return;
     const chave = `${v.getUTCFullYear()}-${String(v.getUTCMonth() + 1).padStart(2, '0')}`;
-    if (!buckets[chave]) buckets[chave] = { baixado: 0, total: 0 };
+    if (!buckets[chave]) buckets[chave] = { baixado: 0, total: 0, itens: [] };
     buckets[chave].total += 1;
+    buckets[chave].itens.push(i);
     if (i['Data Baixa']) buckets[chave].baixado += 1;
   });
   const chaves = Object.keys(buckets).sort();
@@ -974,6 +1139,12 @@ function renderizarStatusPagamento(itens) {
       scales: {
         y: { beginAtZero: true, title: { display: true, text: 'Qtde acumulada' } },
         x: { title: { display: true, text: 'Mês/Ano (vencimento)' } },
+      },
+      onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      onClick: (ev, els) => {
+        if (!els.length) return;
+        const chave = chaves[els[0].index];
+        abrirDetalhe(`Situação das baixas — ${labels[els[0].index]}`, buckets[chave].itens);
       },
     },
   });
@@ -1040,6 +1211,12 @@ function renderizarValorPorRemessa() {
         y: { beginAtZero: true, title: { display: true, text: 'Valor (R$)' } },
         x: { title: { display: true, text: 'Remessa' }, ticks: { autoSkip: true, maxRotation: 0 } },
       },
+      onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      onClick: (ev, els) => {
+        if (!els.length) return;
+        const remessa = linhasGrafico[els[0].index].remessa;
+        abrirDetalhe(`Remessa ${remessa} — todos os títulos`, erpFiltrado().filter((i) => i['Remessa'] === remessa));
+      },
     },
   });
 }
@@ -1064,10 +1241,20 @@ function renderizarResumoAporte(abertos) {
   linhas = aplicarOrdenacao('tabela-aporte', linhas, EXTRATORES_APORTE);
 
   document.querySelector('#tabela-aporte tbody').innerHTML = linhas.map(l =>
-    `<tr><td>${l.aporte}</td><td>${l.periodo}</td><td>${l.qtde}</td><td>${fmtMoeda(l.valor)}</td></tr>`
+    `<tr onclick="abrirDetalheAporte('${l.aporte}')" title="Clique para ver os títulos deste aporte">
+      <td>${l.aporte}</td><td>${l.periodo}</td><td>${l.qtde}</td><td>${fmtMoeda(l.valor)}</td>
+    </tr>`
   ).join('') || '<tr><td colspan="4" style="color:var(--cinza)">Nenhum título em aberto com aporte identificado.</td></tr>';
   definirTotalizador('total-aporte', abertos);
   tornarOrdenavel('tabela-aporte', EXTRATORES_APORTE, () => renderizarResumoAporte(ultimoAbertos));
+}
+
+// Clique em qualquer linha de Resumo por Aporte (ou na barra equivalente,
+// se houver) — mostra os títulos em aberto daquele aporte específico,
+// facilitando achar rápido o que precisa ser baixado.
+function abrirDetalheAporte(aporte) {
+  const itens = ultimoAbertos.filter((i) => calcularAporte(i['Vencimento']) === aporte);
+  abrirDetalhe(`Aporte ${aporte} — títulos em aberto (${periodoDoAporte(aporte)})`, itens);
 }
 
 function renderizarAging(abertos, hoje) {
@@ -1088,24 +1275,37 @@ function renderizarAging(abertos, hoje) {
     type: 'bar',
     data: { labels: faixas.map(f => f.nome), datasets: [{ label: 'Valor em aberto (R$)', data: valores,
       backgroundColor: ['#1f4e78', '#e08e0b', '#e08e0b', '#c0392b', '#c0392b'] }] },
-    options: { plugins: { legend: { display: false }, datalabels: { display: false } }, scales: { y: { beginAtZero: true } } },
+    options: {
+      plugins: { legend: { display: false }, datalabels: { display: false } },
+      scales: { y: { beginAtZero: true } },
+      onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      onClick: (ev, els) => {
+        if (!els.length) return;
+        const faixa = faixas[els[0].index];
+        const selecionados = abertos.filter((i) => { const v = paraData(i['Vencimento']); return v && faixa.teste(diaCalendario(v)); });
+        abrirDetalhe(`Títulos em aberto — ${faixa.nome}`, selecionados);
+      },
+    },
   });
 }
 
 function renderizarFluxoCaixa(abertos, hoje) {
-  const vencido = abertos.filter(i => { const v = paraData(i['Vencimento']); return v && diaCalendario(v) < hoje; })
-    .reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const vencidoItens = abertos.filter(i => { const v = paraData(i['Vencimento']); return v && diaCalendario(v) < hoje; });
+  const vencido = vencidoItens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   const futuros = abertos.filter(i => { const v = paraData(i['Vencimento']); return v && diaCalendario(v) >= hoje; });
 
-  const buckets = {};
+  const buckets = {}; // 'yyyy-mm' -> { valor, itens }
   futuros.forEach(i => {
     const v = paraData(i['Vencimento']);
     const chave = `${v.getUTCFullYear()}-${String(v.getUTCMonth() + 1).padStart(2, '0')}`;
-    buckets[chave] = (buckets[chave] || 0) + paraNumero(i['R$ Valor']);
+    if (!buckets[chave]) buckets[chave] = { valor: 0, itens: [] };
+    buckets[chave].valor += paraNumero(i['R$ Valor']);
+    buckets[chave].itens.push(i);
   });
   const chavesOrdenadas = Object.keys(buckets).sort();
   const labels = ['Vencido', ...chavesOrdenadas.map(c => { const [a, m] = c.split('-'); return `${m}/${a}`; })];
-  const valoresMes = [vencido, ...chavesOrdenadas.map(c => buckets[c])];
+  const valoresMes = [vencido, ...chavesOrdenadas.map(c => buckets[c].valor)];
+  const itensPorBucket = [vencidoItens, ...chavesOrdenadas.map(c => buckets[c].itens)];
   let acumulado = 0;
   const saldo = valoresMes.map(v => acumulado += v);
 
@@ -1118,7 +1318,16 @@ function renderizarFluxoCaixa(abertos, hoje) {
         { type: 'line', label: 'Saldo acumulado (R$)', data: saldo, borderColor: '#c0392b', backgroundColor: '#c0392b', yAxisID: 'y', tension: 0.35 },
       ],
     },
-    options: { plugins: { datalabels: { display: false } }, scales: { y: { beginAtZero: true } } },
+    options: {
+      plugins: { datalabels: { display: false } },
+      scales: { y: { beginAtZero: true } },
+      onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      onClick: (ev, els) => {
+        if (!els.length) return;
+        const idx = els[0].index;
+        abrirDetalhe(`Fluxo de caixa — ${labels[idx]}`, itensPorBucket[idx]);
+      },
+    },
   });
 }
 
@@ -1147,11 +1356,20 @@ function renderizarCurvaAbc(itens) {
   linhas = aplicarOrdenacao('tabela-abc', linhas, EXTRATORES_ABC);
 
   document.querySelector('#tabela-abc tbody').innerHTML = linhas.map(l =>
-    `<tr><td>${l.cod}</td><td>${l.nome}</td><td>${l.qtde}</td><td>${fmtMoeda(l.valor)}</td>
-      <td>${(l.pct * 100).toFixed(1)}%</td><td>${(l.acum * 100).toFixed(1)}%</td><td>${l.classe}</td></tr>`
+    `<tr onclick="abrirDetalheFornecedor('${escaparAtributo(l.cod)}','${escaparAtributo(l.nome)}')" title="Clique para ver os títulos deste fornecedor">
+      <td>${l.cod}</td><td>${l.nome}</td><td>${l.qtde}</td><td>${fmtMoeda(l.valor)}</td>
+      <td>${(l.pct * 100).toFixed(1)}%</td><td>${(l.acum * 100).toFixed(1)}%</td><td>${l.classe}</td>
+    </tr>`
   ).join('');
   definirTotalizador('total-abc', itens);
   tornarOrdenavel('tabela-abc', EXTRATORES_ABC, () => renderizarCurvaAbc(ultimoItensAnalise));
+}
+
+// Clique numa linha da Curva ABC — todos os títulos daquele fornecedor no
+// período filtrado (aberto + baixado), pra ver de onde vem a concentração.
+function abrirDetalheFornecedor(cod, nome) {
+  const itens = ultimoItensAnalise.filter((i) => (i['Código Fornecedor'] || '(sem código)') === cod);
+  abrirDetalhe(`${nome || cod} — todos os títulos no período`, itens);
 }
 
 document.getElementById('busca-dashboard').addEventListener('input', () => {
@@ -1234,8 +1452,6 @@ function renderizarLancamentos() {
     const acao = (!MODO_LEITURA && i.Origem === 'Manual')
       ? `<button class="btn perigo small" onclick="removerManual('${i.ID}')">Remover</button>`
       : '';
-    const escaparAtributo = (v) => String(v || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    const escaparHtml = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
     const idEsc = escaparAtributo(i.ID);
     const linkDoc = i['Link Documento'] || '';
     const linkComp = i['Link Comprovante'] || '';
@@ -1565,6 +1781,62 @@ function renderizarAnalise() {
   let remessasAprovadas = 0, remessasAAprovar = 0;
   Object.values(remessasGrupos).forEach((g) => { if (g.aprovados === g.total) remessasAprovadas++; else remessasAAprovar++; });
 
+  // Forma de pagamento: pra que a diretoria veja se dá pra negociar melhor
+  // com o banco (ex.: concentrar em TED reduz custo de boleto).
+  const porFormaPagamento = {};
+  itens.forEach((i) => {
+    const fp = i['Forma Pagamento'] || '(não informado)';
+    if (!porFormaPagamento[fp]) porFormaPagamento[fp] = { qtde: 0, valor: 0 };
+    porFormaPagamento[fp].qtde += 1;
+    porFormaPagamento[fp].valor += paraNumero(i['R$ Valor']);
+  });
+  const formasOrdenadas = Object.entries(porFormaPagamento).sort((a, b) => b[1].valor - a[1].valor);
+
+  // Maiores títulos em aberto — prioridade óbvia pra quem vai decidir o que
+  // baixar primeiro com caixa limitado.
+  const maioresAbertos = abertos.slice()
+    .sort((a, b) => paraNumero(b['R$ Valor']) - paraNumero(a['R$ Valor']))
+    .slice(0, 10);
+
+  // Fornecedores com maior atraso médio (só entre os vencidos, mínimo 2
+  // títulos pra não destacar um atraso isolado sem padrão) — aponta quem
+  // costuma ficar parado no fluxo, não só quem tem mais volume.
+  const atrasoPorFornecedor = {};
+  vencidos.forEach((i) => {
+    const cod = i['Código Fornecedor'] || '(sem código)';
+    if (!atrasoPorFornecedor[cod]) atrasoPorFornecedor[cod] = { nome: i['Razão Social'] || cod, somaDias: 0, qtde: 0, valor: 0 };
+    atrasoPorFornecedor[cod].somaDias += diasAtraso(paraData(i['Vencimento']));
+    atrasoPorFornecedor[cod].qtde += 1;
+    atrasoPorFornecedor[cod].valor += paraNumero(i['R$ Valor']);
+  });
+  const fornecedoresAtraso = Object.entries(atrasoPorFornecedor)
+    .filter(([, f]) => f.qtde >= 2)
+    .map(([cod, f]) => ({ cod, nome: f.nome, mediaDias: f.somaDias / f.qtde, qtde: f.qtde, valor: f.valor }))
+    .sort((a, b) => b.mediaDias - a.mediaDias)
+    .slice(0, 5);
+
+  // Origem ERP x Manual: quanto do valor total depende de lançamento manual
+  // (sem conferência automática do ERP) — visibilidade de risco operacional.
+  const totalErpQtde = erpFiltrado().length;
+  const valorErp = erpFiltrado().reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const manuaisValidos = manualFiltrado().filter((m) => m.Status !== 'Duplicado – revisar');
+  const totalManualQtde = manuaisValidos.length;
+  const valorManual = manuaisValidos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const valorErpManual = valorErp + valorManual;
+  const pctManualValor = valorErpManual ? (valorManual / valorErpManual * 100) : 0;
+
+  // Título mais antigo em aberto — o caso mais crítico isolado, fácil de
+  // perder de vista numa lista de centenas de títulos.
+  let maisAntigo = null;
+  vencidos.forEach((i) => {
+    const d = diasAtraso(paraData(i['Vencimento']));
+    if (!maisAntigo || d > maisAntigo.dias) maisAntigo = { item: i, dias: d };
+  });
+
+  // Ticket médio geral e por tipo de documento.
+  const ticketMedio = itens.length ? totalValor / itens.length : 0;
+  const ticketPorTipo = tiposOrdenados.map(([t, q]) => [t, porTipo[t] ? (itens.filter((i) => i.Tipo === t).reduce((s, i) => s + paraNumero(i['R$ Valor']), 0) / q) : 0]);
+
   document.getElementById('conteudo-analise').innerHTML = `
     <h3>Números que saltam aos olhos</h3>
     <ul>
@@ -1597,6 +1869,43 @@ function renderizarAnalise() {
     <ul>
       <li><strong>${remessasAprovadas.toLocaleString('pt-BR')}</strong> remessas totalmente aprovadas e <strong>${remessasAAprovar.toLocaleString('pt-BR')}</strong> ainda com pendência de aprovação.</li>
     </ul>
+    <h3>Formas de pagamento</h3>
+    <ul>
+      ${formasOrdenadas.map(([fp, d]) => `<li>${fp}: ${d.qtde.toLocaleString('pt-BR')} título(s) — ${fmtMoeda(d.valor)} (${(totalValor ? d.valor / totalValor * 100 : 0).toFixed(1)}%)</li>`).join('') || '<li>—</li>'}
+    </ul>
+    <h3>Maiores títulos em aberto (top 10) — prioridade de baixa</h3>
+    <ul>
+      ${maioresAbertos.map((i) => `<li>
+        <a href="javascript:void(0)" onclick="abrirDetalheFornecedor('${escaparAtributo(i['Código Fornecedor'])}','${escaparAtributo(i['Razão Social'])}')">
+          ${i['Razão Social'] || i['Código Fornecedor'] || '(sem fornecedor)'}
+        </a> — ${fmtMoeda(i['R$ Valor'])}, vencimento ${fmtData(i['Vencimento'])}${(() => { const v = paraData(i['Vencimento']); return v && diaCalendario(v) < hoje ? ` (${diasAtraso(v)} dias vencido)` : ''; })()}
+      </li>`).join('') || '<li>Nenhum título em aberto.</li>'}
+    </ul>
+    <h3>Fornecedores com maior atraso médio (mín. 2 títulos vencidos)</h3>
+    <ul>
+      ${fornecedoresAtraso.map((f) => `<li>
+        <a href="javascript:void(0)" onclick="abrirDetalheFornecedor('${escaparAtributo(f.cod)}','${escaparAtributo(f.nome)}')">${f.nome}</a>
+        — atraso médio de <strong>${f.mediaDias.toFixed(0)} dias</strong> (${f.qtde} título(s), ${fmtMoeda(f.valor)})
+      </li>`).join('') || '<li>Nenhum fornecedor com 2+ títulos vencidos no período.</li>'}
+    </ul>
+    <h3>Lançamentos manuais x ERP</h3>
+    <ul>
+      <li>ERP: <strong>${totalErpQtde.toLocaleString('pt-BR')}</strong> título(s) — ${fmtMoeda(valorErp)}.</li>
+      <li>Manual (não duplicado): <strong>${totalManualQtde.toLocaleString('pt-BR')}</strong> título(s) — ${fmtMoeda(valorManual)}
+        (<strong>${pctManualValor.toFixed(1)}%</strong> do valor combinado depende de lançamento manual, sem conferência automática do ERP).</li>
+    </ul>
+    <h3>Título mais antigo em aberto</h3>
+    <ul>
+      <li>${maisAntigo
+        ? `<a href="javascript:void(0)" onclick="abrirDetalheFornecedor('${escaparAtributo(maisAntigo.item['Código Fornecedor'])}','${escaparAtributo(maisAntigo.item['Razão Social'])}')">${maisAntigo.item['Razão Social'] || maisAntigo.item['Código Fornecedor'] || '(sem fornecedor)'}</a>
+           — venceu há <strong>${maisAntigo.dias} dias</strong> (${fmtData(maisAntigo.item['Vencimento'])}), ${fmtMoeda(maisAntigo.item['R$ Valor'])}.`
+        : 'Nenhum título vencido em aberto — nada crítico no momento.'}</li>
+    </ul>
+    <h3>Ticket médio</h3>
+    <ul>
+      <li>Valor médio por título no período: <strong>${fmtMoeda(ticketMedio)}</strong>.</li>
+      <li>Por tipo de documento: ${ticketPorTipo.map(([t, v]) => `${t} ${fmtMoeda(v)}`).join(', ') || '—'}.</li>
+    </ul>
   `;
 
   ultimoDadosAnalise = [
@@ -1612,6 +1921,16 @@ function renderizarAnalise() {
     ['Prazo médio de baixa (dias)', dpoMedio != null ? dpoMedio.toFixed(0) : ''],
     ['Remessas aprovadas', remessasAprovadas],
     ['Remessas a aprovar', remessasAAprovar],
+    ...formasOrdenadas.map(([fp, d]) => [`Forma de pagamento — ${fp}`, `${d.qtde} título(s), ${fmtMoeda(d.valor)}`]),
+    ['ERP — qtde', totalErpQtde],
+    ['ERP — valor', fmtMoeda(valorErp)],
+    ['Manual (não duplicado) — qtde', totalManualQtde],
+    ['Manual (não duplicado) — valor', fmtMoeda(valorManual)],
+    ['% do valor que depende de lançamento manual', pctManualValor.toFixed(1)],
+    ['Título mais antigo em aberto — dias vencido', maisAntigo ? maisAntigo.dias : ''],
+    ['Título mais antigo em aberto — fornecedor', maisAntigo ? (maisAntigo.item['Razão Social'] || maisAntigo.item['Código Fornecedor'] || '') : ''],
+    ['Título mais antigo em aberto — valor', maisAntigo ? fmtMoeda(maisAntigo.item['R$ Valor']) : ''],
+    ['Ticket médio geral', fmtMoeda(ticketMedio)],
   ];
 }
 
