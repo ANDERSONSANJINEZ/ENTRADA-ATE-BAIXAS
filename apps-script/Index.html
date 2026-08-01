@@ -148,14 +148,6 @@
   .filtros input, .filtros select { padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; font-size: 13px; }
   .btn { background: var(--azul); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
   .btn:disabled { opacity: .6; cursor: wait; }
-  /* Ligado em postarAcao() no instante do clique (antes de qualquer resposta
-     do servidor chegar) — sem isso, o tempo de ida-e-volta ao Apps Script dá
-     a impressão de que o clique não fez nada. Só visual (SEM pointer-events:
-     none) de propósito: se por qualquer motivo a resposta demorar muito ou
-     nunca chegar, a tela continua clicável (dá pra trocar de aba, tentar de
-     novo etc.) em vez de travar esperando algo que talvez não volte. */
-  body.aguardando-acao { cursor: wait; }
-  body.aguardando-acao .btn, body.aguardando-acao button { opacity: .55; }
   .btn.secundario { background: #fff; color: var(--azul); border: 1px solid var(--azul); }
   .btn.perigo { background: var(--vermelho); }
   .btn.small { padding: 4px 10px; font-size: 12px; }
@@ -680,13 +672,6 @@ async function carregarTudo() {
 
 async function postarAcao(action, extra) {
   const minhaRequisicao = ++requisicaoAtual;
-  // Feedback imediato no instante do clique — sem isso, o intervalo entre
-  // clicar e a resposta do Apps Script (o backend, não o navegador) chegar
-  // dá a impressão de tela travada, principalmente com a planilha do ERP
-  // grande (milhares de linhas). document.body.classList aqui é síncrono,
-  // roda antes mesmo do primeiro "await" abaixo.
-  document.body.classList.add('aguardando-acao');
-  toast('Processando…', 15000);
   try {
     const dados = await chamarServidor(action, extra);
     if (minhaRequisicao === requisicaoAtual) {
@@ -704,8 +689,6 @@ async function postarAcao(action, extra) {
       toast('Erro: ' + e.message);
     }
     throw e;
-  } finally {
-    document.body.classList.remove('aguardando-acao');
   }
 }
 
