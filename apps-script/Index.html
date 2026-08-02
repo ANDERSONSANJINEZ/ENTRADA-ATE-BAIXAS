@@ -177,7 +177,7 @@
      proporcionais em vez de iguais — Tipo é um <select> curto e não precisa
      do mesmo espaço das outras, então cede metade pra Razão Social (nome de
      empresa costuma ser comprido). */
-  .linha-tipo-razao { display: grid; grid-template-columns: 0.5fr 1fr 1fr 1.5fr; gap: 10px; }
+  .linha-tipo-razao { display: grid; grid-template-columns: 0.5fr 1fr 0.5fr 2fr; gap: 10px; }
   .aviso { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
   #dropzone, #dropzone-extrato { border: 2px dashed var(--borda); border-radius: 10px; padding: 40px; text-align: center; color: var(--cinza); margin-bottom: 16px; cursor: pointer; }
   #dropzone.sobre, #dropzone-extrato.sobre { border-color: var(--azul); background: var(--azul-claro); }
@@ -232,6 +232,13 @@
   .modal-cabecalho h2 { margin: 0; font-size: 16px; color: var(--azul); flex: 1; }
   .modal-fechar { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--cinza); line-height: 1; padding: 2px 6px; border-radius: 6px; }
   .modal-fechar:hover { color: var(--vermelho); background: #fee2e2; }
+  .campo-detalhe { margin-bottom: 14px; }
+  .campo-detalhe .rotulo-campo { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--cinza); margin-bottom: 3px; }
+  .campo-detalhe .valor-campo { font-size: 15px; color: #1e2430; word-break: break-word; }
+  .campo-detalhe .valor-campo a { color: var(--azul); }
+  .campo-detalhe input, .campo-detalhe select { width: 100%; padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; font-size: 14px; }
+  #tabela-lancamentos tbody tr { cursor: pointer; }
+  #tabela-lancamentos tbody tr:hover td:not(.col-anexos):not(.col-acao) { background: var(--azul-claro); }
   @media (max-width: 960px) {
     .grid-2 { grid-template-columns: 1fr; }
     main { padding: 14px; }
@@ -607,6 +614,23 @@
   </div>
 </div>
 
+<!-- Detalhamento de UMA linha da tabela de Lançamentos, na ordem exata das
+     colunas da planilha (ver CAMPOS_DETALHE_LINHA) — pensado pra achar erro
+     de importação/digitação comparando com o Google Sheets. Lançamento
+     Manual pode ser editado ali mesmo; ERP fica só leitura (ver aviso no
+     próprio modal, motivo em renderizarModalLinha). -->
+<div class="modal-overlay" id="modal-linha" onclick="if (event.target === this) fecharModalLinha()">
+  <div class="modal-caixa" style="max-width:520px;">
+    <div class="modal-cabecalho">
+      <h2 id="modal-linha-titulo"></h2>
+      <button class="modal-fechar" onclick="fecharModalLinha()" title="Fechar (Esc)">✕</button>
+    </div>
+    <div id="modal-linha-aviso" class="aviso" style="display:none;"></div>
+    <div id="modal-linha-corpo" style="overflow-y:auto; max-height:60vh; padding-right:4px;"></div>
+    <div id="modal-linha-rodape" style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -700,6 +724,136 @@ function resolverConfirmacao(valor) {
 }
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('modal-confirmar').classList.contains('aberto')) resolverConfirmacao(false);
+});
+
+// ---------- Detalhamento de uma linha (Lançamentos), na ordem da planilha ----------
+// Ordem EXATA das colunas do Google Sheets (ver HEADERS em Code.gs) — de
+// propósito diferente da ordem da tabela "Todos os lançamentos" na tela
+// (essa foi arrumada pra leitura rápida); aqui o objetivo é espelhar a
+// planilha de verdade, pra comparar e achar erro de importação/digitação.
+const CAMPOS_DETALHE_LINHA = [
+  { campo: 'Tipo', rotulo: 'Tipo', tipo: 'select', opcoes: ['NF', 'NFS', 'NFAG', 'ND', 'NF3E', 'DACTE', 'BOL', 'FAT', 'FOL', 'FGTS', 'DARF', 'DAM'] },
+  { campo: 'Data Emissão', rotulo: 'Data Emissão', tipo: 'data' },
+  { campo: 'Nº Documento', rotulo: 'Nº Documento' },
+  { campo: 'Vencimento Real', rotulo: 'Vencimento Real', tipo: 'data' },
+  { campo: 'Forma Pagamento', rotulo: 'Forma Pagamento', tipo: 'select', opcoes: ['Boleto', 'Pix', 'TED'] },
+  { campo: 'Código Fornecedor', rotulo: 'Código Fornecedor' },
+  { campo: 'Parcela', rotulo: 'Parcela' },
+  { campo: 'Data Baixa', rotulo: 'Data Baixa', tipo: 'data' },
+  { campo: 'Vencimento', rotulo: 'Vencimento', tipo: 'data' },
+  { campo: 'R$ Valor', rotulo: 'R$ Valor', tipo: 'valor' },
+  { campo: 'Usuário Inclusor', rotulo: 'Usuário Inclusor' },
+  { campo: 'Razão Social', rotulo: 'Razão Social' },
+  { campo: 'Aprovação Remessa', rotulo: 'Aprovação Remessa' },
+  { campo: 'Remessa', rotulo: 'Remessa' },
+  { campo: 'Histórico', rotulo: 'Histórico' },
+  { campo: 'Origem', rotulo: 'Origem', somenteLeitura: true },
+  { campo: 'Status', rotulo: 'Status', somenteLeitura: true },
+  { campo: 'Link Documento', rotulo: 'Link Documento', tipo: 'link' },
+  { campo: 'Link Comprovante', rotulo: 'Link Comprovante', tipo: 'link' },
+  { campo: 'Chave Pix', rotulo: 'Chave Pix' },
+];
+let linhaDetalheAtual = null; // { item, editando }
+
+// Clique numa linha da tabela abre o detalhamento; clique num botão dentro
+// da linha (anexo, remover) não deve também abrir o modal por cima —
+// verifica se o alvo do clique é (ou está dentro de) um <button>.
+function abrirDetalheLinha(event, id, origem) {
+  if (event.target.closest('button')) return;
+  const lista = origem === 'Manual' ? state.manual : state.erp;
+  const item = lista.find((i) => i.ID === id);
+  if (!item) return;
+  linhaDetalheAtual = { item, editando: false };
+  renderizarModalLinha();
+  document.getElementById('modal-linha').classList.add('aberto');
+}
+
+function renderizarModalLinha() {
+  const { item, editando } = linhaDetalheAtual;
+  const ehManual = item.Origem === 'Manual';
+  document.getElementById('modal-linha-titulo').textContent =
+    `${item['Razão Social'] || item['Código Fornecedor'] || 'Lançamento'} — Nº ${item['Nº Documento'] || '(sem número)'}`;
+
+  const aviso = document.getElementById('modal-linha-aviso');
+  if (!ehManual) {
+    aviso.style.display = 'block';
+    aviso.textContent = 'Este título veio do ERP Protheus — os dados abaixo são só pra conferência. Uma edição aqui não pegaria: a importação diária substitui a aba ERP inteira, então qualquer alteração local seria perdida sem aviso na próxima vez. Pra corrigir de verdade, ajuste no Protheus (ou lance manualmente uma correção, se for o caso).';
+  } else {
+    aviso.style.display = 'none';
+  }
+
+  const corpo = document.getElementById('modal-linha-corpo');
+  corpo.innerHTML = CAMPOS_DETALHE_LINHA.map((c) => {
+    const valorBruto = item[c.campo];
+    const podeEditar = editando && ehManual && !MODO_LEITURA && !c.somenteLeitura;
+    let valorHtml;
+    if (podeEditar) {
+      if (c.tipo === 'data') {
+        const t = paraData(valorBruto);
+        const isoStr = t != null ? new Date(t).toISOString().slice(0, 10) : '';
+        valorHtml = `<input type="date" data-campo="${c.campo}" value="${isoStr}">`;
+      } else if (c.tipo === 'valor') {
+        valorHtml = `<input type="number" step="0.01" data-campo="${c.campo}" value="${paraNumero(valorBruto)}">`;
+      } else if (c.tipo === 'select') {
+        valorHtml = `<select data-campo="${c.campo}">${c.opcoes.map((o) => `<option value="${o}" ${valorBruto === o ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+      } else {
+        valorHtml = `<input type="text" data-campo="${c.campo}" value="${escaparAtributo(valorBruto || '')}">`;
+      }
+    } else if (c.tipo === 'data') {
+      valorHtml = fmtData(valorBruto) || '—';
+    } else if (c.tipo === 'valor') {
+      valorHtml = fmtMoeda(valorBruto);
+    } else if (c.tipo === 'link') {
+      valorHtml = valorBruto ? `<a href="${escaparAtributo(valorBruto)}" target="_blank" rel="noopener">${escaparHtml(valorBruto)}</a>` : '—';
+    } else {
+      valorHtml = escaparHtml(valorBruto) || '—';
+    }
+    return `<div class="campo-detalhe">
+      <div class="rotulo-campo">${c.rotulo}</div>
+      <div class="valor-campo">${valorHtml}</div>
+    </div>`;
+  }).join('');
+
+  const rodape = document.getElementById('modal-linha-rodape');
+  if (!ehManual || MODO_LEITURA) {
+    rodape.innerHTML = '';
+  } else if (editando) {
+    rodape.innerHTML = `
+      <button class="btn secundario" onclick="cancelarEdicaoLinha()">Cancelar</button>
+      <button class="btn" onclick="salvarEdicaoLinha()">Salvar alterações</button>`;
+  } else {
+    rodape.innerHTML = `<button class="btn" onclick="iniciarEdicaoLinha()">✎ Editar este lançamento</button>`;
+  }
+}
+
+function iniciarEdicaoLinha() {
+  linhaDetalheAtual.editando = true;
+  renderizarModalLinha();
+}
+function cancelarEdicaoLinha() {
+  linhaDetalheAtual.editando = false;
+  renderizarModalLinha();
+}
+
+async function salvarEdicaoLinha() {
+  const corpo = document.getElementById('modal-linha-corpo');
+  const item = {};
+  corpo.querySelectorAll('[data-campo]').forEach((el) => { item[el.dataset.campo] = el.value; });
+  try {
+    await postarAcao('editarManual', { id: linhaDetalheAtual.item.ID, item });
+    toast('Lançamento atualizado.');
+    fecharModalLinha();
+  } catch (e) {
+    // erro já mostrado via toast dentro de postarAcao
+  }
+}
+
+function fecharModalLinha() {
+  document.getElementById('modal-linha').classList.remove('aberto');
+  linhaDetalheAtual = null;
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('modal-linha').classList.contains('aberto')) fecharModalLinha();
 });
 
 // Ponte com o backend: a tela é servida pelo mesmo Apps Script do backend,
@@ -1927,7 +2081,7 @@ function renderizarLancamentos() {
         <button class="btn secundario small anexo-doc ${linkDoc ? 'anexo-definido' : ''}" title="${tituloDoc}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','documento','${escaparAtributo(linkDoc)}')">📄</button>
         <button class="btn secundario small anexo-comp ${linkComp ? 'anexo-definido-verde' : ''}" title="${tituloComp}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','comprovante','${escaparAtributo(linkComp)}')">🧾</button>
       </div>`;
-    return `<tr>
+    return `<tr onclick="abrirDetalheLinha(event, '${idEsc}', '${i.Origem}')" title="Clique para ver o lançamento por completo">
       <td><span class="badge ${origemBadge}">${i.Origem}</span></td>
       <td title="${escaparHtml(i.Status)}"><span class="badge ${statusBadge}">${i.Status}</span></td>
       <td>${i.Aporte || ''}</td>
@@ -2134,7 +2288,11 @@ let ultimoDetalheAporte = [];
 
 function popularSelectAporteDetalhe() {
   const sel = document.getElementById('select-aporte-detalhe');
-  const disponiveis = Array.from(new Set(ultimoAbertos.map((i) => calcularAporte(i['Vencimento'])).filter(Boolean))).sort();
+  // ultimoItensAnalise = TODOS os títulos do período (aberto + já baixado) —
+  // antes usava só os em aberto, e por isso aportes 100% pagos (sem nenhum
+  // título aberto) simplesmente sumiam da lista, dando a impressão de
+  // números "faltando" no meio da sequência.
+  const disponiveis = Array.from(new Set(ultimoItensAnalise.map((i) => calcularAporte(i['Vencimento'])).filter(Boolean))).sort();
   const atual = sel.value;
   sel.innerHTML = '<option value="">Selecione um aporte…</option>' +
     disponiveis.map((a) => `<option value="${a}">Aporte ${a} — ${periodoDoAporte(a)}</option>`).join('');
@@ -2151,7 +2309,7 @@ function renderizarDetalheAporte() {
     ultimoDetalheAporte = [];
     return;
   }
-  let itens = ultimoAbertos.filter((i) => calcularAporte(i['Vencimento']) === aporte);
+  let itens = ultimoItensAnalise.filter((i) => calcularAporte(i['Vencimento']) === aporte);
   itens.sort((a, b) => (paraData(a['Vencimento']) || 0) - (paraData(b['Vencimento']) || 0));
   ultimoDetalheAporte = itens;
 
@@ -2166,7 +2324,7 @@ function renderizarDetalheAporte() {
     if (i['Parcela']) descricao += ` - PARC.: ${i['Parcela']}`;
     return `<tr${separador}><td>${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td>${vencAtual}</td><td>${fmtMoeda(i['R$ Valor'])}</td></tr>`;
   });
-  tbody.innerHTML = linhas.join('') || '<tr><td colspan="5" style="color:var(--cinza)">Nenhum título em aberto para este aporte.</td></tr>';
+  tbody.innerHTML = linhas.join('') || '<tr><td colspan="5" style="color:var(--cinza)">Nenhum título encontrado para este aporte.</td></tr>';
   definirTotalizador('total-detalhe-aporte', itens);
 }
 document.getElementById('select-aporte-detalhe').addEventListener('change', renderizarDetalheAporte);

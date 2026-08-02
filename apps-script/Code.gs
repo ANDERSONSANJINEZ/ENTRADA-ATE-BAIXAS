@@ -530,6 +530,43 @@ function api_definirAnexo(payload) {
   throw new Error('Lançamento não encontrado (pode ter sido removido ou reimportado).');
 }
 
+// Campos que o modal de detalhamento pode alterar num lançamento MANUAL —
+// tudo, exceto ID/Origem/Status (Status é sempre recalculado depois, nunca
+// escrito direto pelo cliente). Só existe pra Manual: um título de ERP é
+// sobrescrito por inteiro na próxima importação diária (substituirErp_),
+// então uma edição feita aqui nele seria perdida sem aviso nenhum — por
+// isso a tela nem oferece "Editar" pra linhas de Origem ERP.
+var CAMPOS_EDITAVEIS_MANUAL = HEADERS.filter(function (h) {
+  return h !== 'ID' && h !== 'Origem' && h !== 'Status';
+});
+
+function api_editarManual(payload) {
+  var nomeUsuario = validarAcessoEdicao_(payload);
+  var shM = getSheet_('Manual');
+  var idCol = HEADERS.indexOf('ID') + 1;
+  var ultimaLinha = shM.getLastRow();
+  var dados = shM.getRange(2, 1, Math.max(ultimaLinha - 1, 0), HEADERS.length).getValues();
+  for (var i = 0; i < dados.length; i++) {
+    if (dados[i][idCol - 1] === payload.id) {
+      var linhaAtual = dados[i];
+      var item = payload.item || {};
+      var linhaNova = HEADERS.map(function (h, idx) {
+        if (CAMPOS_EDITAVEIS_MANUAL.indexOf(h) === -1) return linhaAtual[idx];
+        var novoValor = item[h];
+        return novoValor != null ? novoValor : linhaAtual[idx];
+      });
+      shM.getRange(i + 2, 1, 1, HEADERS.length).setValues([linhaNova]);
+      var razaoCol = HEADERS.indexOf('Razão Social');
+      var docCol = HEADERS.indexOf('Nº Documento');
+      registrarLog_(nomeUsuario, 'Editar lançamento manual',
+        (linhaNova[razaoCol] || '') + ' | Nº ' + (linhaNova[docCol] || ''));
+      recalcularStatus_();
+      return api_carregar();
+    }
+  }
+  throw new Error('Lançamento não encontrado (pode ter sido removido ou reimportado).');
+}
+
 function api_removerManual(payload) {
   var nomeUsuario = validarAcessoEdicao_(payload);
   var shM = getSheet_('Manual');
@@ -560,6 +597,7 @@ function doPost(e) {
     if (acao === 'importar') resultado = api_importar(payload);
     else if (acao === 'importarDoDrive') resultado = api_importarDoDrive(payload);
     else if (acao === 'adicionarManual') resultado = api_adicionarManual(payload);
+    else if (acao === 'editarManual') resultado = api_editarManual(payload);
     else if (acao === 'removerManual') resultado = api_removerManual(payload);
     else if (acao === 'removerDuplicados') resultado = api_removerDuplicados(payload);
     else if (acao === 'definirAnexo') resultado = api_definirAnexo(payload);
