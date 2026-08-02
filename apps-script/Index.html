@@ -52,6 +52,13 @@
     background: #fff;
     padding: 0 24px;
     border-bottom: 1px solid var(--borda);
+    /* Em telas estreitas as abas não cabem todas de uma vez — sem isso elas
+       quebravam em várias linhas (ex.: "Detalhe por Aporte" virando 3
+       linhas) ou saíam cortadas da tela sem nenhum jeito de alcançar. Com
+       overflow-x + white-space:nowrap no botão, a barra vira rolável na
+       horizontal (arrasta com o dedo), com cada aba numa linha só. */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   nav button {
     border: none;
@@ -61,6 +68,8 @@
     cursor: pointer;
     color: var(--cinza);
     border-bottom: 3px solid transparent;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   nav button.ativo { color: var(--azul); border-bottom-color: var(--azul); font-weight: bold; }
   main { padding: 24px; max-width: 1600px; margin: 0 auto; width: 100%; }
@@ -81,7 +90,13 @@
   /* Histórico: texto bem mais longo que as outras colunas — quebra normal
      com largura máxima em vez de "nowrap", pra não esticar a linha inteira
      nem parecer com fonte diferente das demais colunas. */
-  #tabela-lancamentos { table-layout: fixed; }
+  /* min-width evita que as 21 colunas fiquem ilegíveis (uma letra por linha)
+     em telas estreitas — sem isso, table-layout:fixed + width:100% espreme
+     tudo pra caber na tela do celular, já que min-width sempre vence width
+     quando o container é menor. Com o min-width, a tabela passa a ficar
+     maior que a tela nesse caso e .tabela-scroll (que já tem overflow:auto)
+     vira scroll horizontal — o padrão normal pra tabela larga no celular. */
+  #tabela-lancamentos { table-layout: fixed; min-width: 1100px; }
   #tabela-lancamentos th {
     /* Quebra só entre palavras (no espaço), nunca no meio de uma palavra —
        colunas são largas o bastante pra cada palavra caber inteira numa
@@ -317,6 +332,16 @@
         </table>
       </div>
     </div>
+    <div class="painel">
+      <div class="cabecalho-painel">
+        <h2>Valores pagos aos 15 maiores fornecedores (Curva ABC) ao longo do período</h2>
+        <button class="btn secundario small" onclick="exportarXlsx('pagosAbc')">⬇ Exportar Excel</button>
+      </div>
+      <div id="pagos-abc-vazio" style="font-size:13px; color:var(--cinza); display:none;">Nenhum título baixado (pago) no período pra estes fornecedores.</div>
+      <div id="pagos-abc-chart-wrap" style="height:380px; width:100%;">
+        <canvas id="chart-pagos-abc"></canvas>
+      </div>
+    </div>
   </section>
 
   <section id="aba-lancamentos" class="aba">
@@ -548,6 +573,25 @@
   </div>
 </div>
 
+<!-- Modal de confirmação própria, no lugar do confirm() nativo do navegador:
+     dentro do iframe "sandboxed" que o Google Apps Script (HtmlService) usa
+     pra servir a página, diálogos nativos do navegador (confirm/prompt/
+     showPicker) já se mostraram pouco confiáveis por aqui — foi o mesmo
+     motivo que levou ao calendário próprio. Um modal em HTML/CSS/JS não
+     depende de nenhuma API do navegador. -->
+<div class="modal-overlay" id="modal-confirmar" onclick="if (event.target === this) resolverConfirmacao(false)">
+  <div class="modal-caixa" style="max-width:420px;">
+    <div class="modal-cabecalho">
+      <h2 id="modal-confirmar-titulo">Confirmar ação</h2>
+    </div>
+    <div id="modal-confirmar-mensagem" style="margin-bottom:18px;"></div>
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn secundario" onclick="resolverConfirmacao(false)">Cancelar</button>
+      <button class="btn perigo" onclick="resolverConfirmacao(true)">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -622,6 +666,26 @@ function toast(msg, duracaoMs) {
   t.classList.add('mostrar');
   setTimeout(() => t.classList.remove('mostrar'), duracaoMs || 3000);
 }
+
+// Substitui window.confirm() nativo: mostra o modal e devolve uma Promise
+// que resolve true/false conforme o botão clicado (ou false ao clicar fora
+// / apertar Esc). resolverConfirmacaoAtual fica guardado no módulo porque o
+// clique nos botões do modal (HTML estático) chama resolverConfirmacao()
+// de fora desta função.
+let resolverConfirmacaoAtual = null;
+function confirmarAcao(mensagem, titulo) {
+  document.getElementById('modal-confirmar-titulo').textContent = titulo || 'Confirmar ação';
+  document.getElementById('modal-confirmar-mensagem').textContent = mensagem;
+  document.getElementById('modal-confirmar').classList.add('aberto');
+  return new Promise((resolve) => { resolverConfirmacaoAtual = resolve; });
+}
+function resolverConfirmacao(valor) {
+  document.getElementById('modal-confirmar').classList.remove('aberto');
+  if (resolverConfirmacaoAtual) { resolverConfirmacaoAtual(valor); resolverConfirmacaoAtual = null; }
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('modal-confirmar').classList.contains('aberto')) resolverConfirmacao(false);
+});
 
 // Ponte com o backend: a tela é servida pelo mesmo Apps Script do backend,
 // então chamamos as funções do servidor direto via google.script.run — sem
@@ -789,8 +853,34 @@ function dentroDoPeriodo(item) {
 
 // Acessores filtrados pelo período selecionado — usar no lugar de state.erp/state.manual
 // em qualquer lugar que exiba/agregue lançamentos, para que o filtro seja global ao app.
-function erpFiltrado() { return state.erp.filter(dentroDoPeriodo); }
-function manualFiltrado() { return state.manual.filter(dentroDoPeriodo); }
+// Cada renderizarTudo() chama isso várias vezes (dashboard, lançamentos,
+// análise, cards de remessa...), e cada chamada refazia o filter() +
+// paraData() do zero em cima de todas as linhas do ERP — com milhares de
+// títulos, essas repetições sozinhas custavam uma fatia real do tempo de
+// carregamento. O cache guarda o resultado enquanto a referência do array
+// (state.erp/state.manual só troca de referência quando dados novos chegam,
+// nunca é mutado no lugar) e o filtro de período não mudarem; combinado com
+// erpFiltrado()/manualFiltrado() nunca serem mutados em memória por quem
+// chama (só .filter()/.concat()/.map(), que sempre devolvem array novo),
+// é seguro compartilhar o mesmo array cacheado entre todos os chamadores.
+let _cacheErpFiltrado = { ref: null, ini: undefined, fim: undefined, valor: null };
+let _cacheManualFiltrado = { ref: null, ini: undefined, fim: undefined, valor: null };
+function erpFiltrado() {
+  const c = _cacheErpFiltrado;
+  if (c.ref !== state.erp || c.ini !== filtroPeriodo.inicio || c.fim !== filtroPeriodo.fim) {
+    c.ref = state.erp; c.ini = filtroPeriodo.inicio; c.fim = filtroPeriodo.fim;
+    c.valor = state.erp.filter(dentroDoPeriodo);
+  }
+  return c.valor;
+}
+function manualFiltrado() {
+  const c = _cacheManualFiltrado;
+  if (c.ref !== state.manual || c.ini !== filtroPeriodo.inicio || c.fim !== filtroPeriodo.fim) {
+    c.ref = state.manual; c.ini = filtroPeriodo.inicio; c.fim = filtroPeriodo.fim;
+    c.valor = state.manual.filter(dentroDoPeriodo);
+  }
+  return c.valor;
+}
 
 function aplicarFiltroPeriodo() {
   filtroPeriodo.inicio = parseDataCurta(document.getElementById('periodo-inicio').value);
@@ -1122,6 +1212,9 @@ function exportarXlsx(qual) {
   } else if (qual === 'remessa') {
     const linhas = ultimoDadosRemessa.map((l) => [l.remessa, l.qtde, fmtMoeda(l.valor)]);
     baixarXlsx('valor_por_remessa.xlsx', ['Remessa', 'Qtde', 'Valor'], linhas);
+  } else if (qual === 'pagosAbc') {
+    const linhas = ultimoDadosPagosAbc.map(([nome, mes, valor]) => [nome, mes, fmtMoeda(valor)]);
+    baixarXlsx('pagos_top15_abc.xlsx', ['Fornecedor', 'Mês', 'Valor Pago'], linhas);
   } else if (qual === 'detalheAporte') {
     // Mesma marcação de grupo (troca de Vencimento) usada na tela via
     // tr.separador-grupo — replicada aqui como borda superior mais grossa.
@@ -1203,7 +1296,7 @@ function atualizarSetasOrdenacao(tabelaId) {
 }
 
 // ---------- Dashboard ----------
-let chartAging, chartFluxo, chartStatusPagamento;
+let chartAging, chartFluxo, chartStatusPagamento, chartPagosAbc;
 let ultimoAbertos = [];
 let ultimoItensAnalise = [];
 
@@ -1266,6 +1359,7 @@ function renderizarDashboard() {
   renderizarValorPorRemessa();
   renderizarResumoAporte(abertos);
   renderizarCurvaAbc(itens);
+  renderizarPagosAbcTop15(itens);
 }
 
 // Status de aprovação por remessa (não por documento): uma remessa conta
@@ -1579,6 +1673,95 @@ function renderizarCurvaAbc(itens) {
   tornarOrdenavel('tabela-abc', EXTRATORES_ABC, () => renderizarCurvaAbc(ultimoItensAnalise));
 }
 
+// Paleta com 15 cores distintas (uma por fornecedor) — bem mais do que as
+// combinações azul/verde/laranja/vermelho já usadas nos outros gráficos,
+// que não dão pra diferenciar 15 séries lado a lado.
+const PALETA_15 = [
+  '#1f4e78', '#1e7e34', '#c0392b', '#e08e0b', '#5b21b6',
+  '#0e7490', '#be185d', '#4d7c0f', '#b45309', '#334155',
+  '#7c3aed', '#0369a1', '#a16207', '#15803d', '#9f1239',
+];
+let ultimoDadosPagosAbc = []; // export: [fornecedor, mês, valor]
+
+// Valores efetivamente PAGOS (com Data Baixa) aos 15 fornecedores de maior
+// valor no período (mesmo critério de ranking da Curva ABC — mais o
+// filtro de "pago", já que a Curva ABC em si soma aberto + baixado).
+// Agrupado por mês da baixa: é o "ao longo do período" — quando o dinheiro
+// de fato saiu, não a data de vencimento do título.
+function renderizarPagosAbcTop15(itens) {
+  const grupos = {};
+  itens.forEach(i => {
+    const cod = String(i['Código Fornecedor'] || '(sem código)');
+    if (!grupos[cod]) grupos[cod] = { nome: i['Razão Social'] || '', valor: 0 };
+    grupos[cod].valor += paraNumero(i['R$ Valor']);
+  });
+  const top15 = Object.entries(grupos).sort((a, b) => b[1].valor - a[1].valor).slice(0, 15);
+  const codigosTop15 = new Set(top15.map(([cod]) => cod));
+  const nomePorCodigo = {};
+  top15.forEach(([cod, g]) => { nomePorCodigo[cod] = g.nome || cod; });
+
+  const pagos = itens.filter(i => i['Data Baixa'] && codigosTop15.has(String(i['Código Fornecedor'] || '(sem código)')));
+
+  const vazio = document.getElementById('pagos-abc-vazio');
+  const wrap = document.getElementById('pagos-abc-chart-wrap');
+  if (chartPagosAbc) { chartPagosAbc.destroy(); chartPagosAbc = null; }
+
+  if (!pagos.length) {
+    vazio.style.display = 'block';
+    wrap.style.display = 'none';
+    ultimoDadosPagosAbc = [];
+    return;
+  }
+  vazio.style.display = 'none';
+  wrap.style.display = '';
+
+  const buckets = {}; // 'yyyy-mm' -> { [cod]: { valor, itens } }
+  pagos.forEach(i => {
+    const d = paraData(i['Data Baixa']);
+    if (!d) return;
+    const chave = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    const cod = String(i['Código Fornecedor'] || '(sem código)');
+    if (!buckets[chave]) buckets[chave] = {};
+    if (!buckets[chave][cod]) buckets[chave][cod] = { valor: 0, itens: [] };
+    buckets[chave][cod].valor += paraNumero(i['R$ Valor']);
+    buckets[chave][cod].itens.push(i);
+  });
+  const chavesMes = Object.keys(buckets).sort();
+  const labels = chavesMes.map(c => { const [a, m] = c.split('-'); return `${m}/${a}`; });
+  const codigosOrdenados = top15.map(([cod]) => cod); // mantém a ordem de ranking na legenda
+
+  const exportRows = [];
+  const datasets = codigosOrdenados.map((cod, idx) => {
+    const dados = chavesMes.map(chave => (buckets[chave][cod] ? buckets[chave][cod].valor : 0));
+    dados.forEach((valor, i) => { if (valor) exportRows.push([nomePorCodigo[cod], labels[i], valor]); });
+    return { label: nomePorCodigo[cod], data: dados, backgroundColor: PALETA_15[idx % PALETA_15.length], stack: 'pagos' };
+  });
+  ultimoDadosPagosAbc = exportRows;
+
+  chartPagosAbc = new Chart(document.getElementById('chart-pagos-abc'), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        datalabels: { display: false },
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+      },
+      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+      onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      onClick: (ev, els) => {
+        if (!els.length) return;
+        const { datasetIndex, index } = els[0];
+        const cod = codigosOrdenados[datasetIndex];
+        const chave = chavesMes[index];
+        const itensClicados = (buckets[chave] && buckets[chave][cod]) ? buckets[chave][cod].itens : [];
+        abrirDetalhe(`${nomePorCodigo[cod]} — pago em ${labels[index]}`, itensClicados);
+      },
+    },
+  });
+}
+
 // Clique numa linha da Curva ABC — todos os títulos daquele fornecedor no
 // período filtrado (aberto + baixado), pra ver de onde vem a concentração.
 function abrirDetalheFornecedor(cod, nome) {
@@ -1760,7 +1943,7 @@ function renderizarLancamentos() {
   document.getElementById(id).addEventListener('input', () => { paginaLancamentos = 1; renderizarLancamentos(); }));
 
 async function removerManual(id) {
-  if (!confirm('Remover este lançamento manual?')) return;
+  if (!(await confirmarAcao('Remover este lançamento manual?', 'Remover lançamento'))) return;
   await postarAcao('removerManual', { id });
   toast('Lançamento removido.');
 }
@@ -1768,7 +1951,7 @@ async function removerManual(id) {
 async function removerDuplicados() {
   const qtde = state.manual.filter((m) => m.Status === 'Duplicado – revisar').length;
   if (!qtde) { toast('Não há lançamentos manuais duplicados para remover.'); return; }
-  if (!confirm(`Remover ${qtde} lançamento(s) manual(is) marcado(s) como "Duplicado – revisar"?`)) return;
+  if (!(await confirmarAcao(`Remover ${qtde} lançamento(s) manual(is) marcado(s) como "Duplicado – revisar"?`, 'Excluir duplicados'))) return;
   const dados = await postarAcao('removerDuplicados', {});
   toast(`${dados.quantidadeRemovida ?? qtde} lançamento(s) duplicado(s) removido(s).`);
 }
