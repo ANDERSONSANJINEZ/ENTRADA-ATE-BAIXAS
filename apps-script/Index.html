@@ -308,15 +308,12 @@
     </div>
     <div class="painel">
       <div class="cabecalho-painel">
-        <h2>Resumo por Aporte — títulos em aberto</h2>
-        <button class="btn secundario small" onclick="exportarXlsx('aporte')">⬇ Exportar Excel</button>
+        <h2>Valores pagos aos 15 maiores fornecedores (Curva ABC) ao longo do período</h2>
+        <button class="btn secundario small" onclick="exportarXlsx('pagosAbc')">⬇ Exportar Excel</button>
       </div>
-      <div id="total-aporte" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
-      <div class="tabela-scroll">
-        <table id="tabela-aporte">
-          <thead><tr><th>Aporte</th><th>Período</th><th>Qtde</th><th>Valor</th></tr></thead>
-          <tbody></tbody>
-        </table>
+      <div id="pagos-abc-vazio" style="font-size:13px; color:var(--cinza); display:none;">Nenhum título baixado (pago) no período pra estes fornecedores.</div>
+      <div id="pagos-abc-chart-wrap" style="height:380px; width:100%;">
+        <canvas id="chart-pagos-abc"></canvas>
       </div>
     </div>
     <div class="painel">
@@ -334,12 +331,15 @@
     </div>
     <div class="painel">
       <div class="cabecalho-painel">
-        <h2>Valores pagos aos 15 maiores fornecedores (Curva ABC) ao longo do período</h2>
-        <button class="btn secundario small" onclick="exportarXlsx('pagosAbc')">⬇ Exportar Excel</button>
+        <h2>Resumo por Aporte — títulos em aberto</h2>
+        <button class="btn secundario small" onclick="exportarXlsx('aporte')">⬇ Exportar Excel</button>
       </div>
-      <div id="pagos-abc-vazio" style="font-size:13px; color:var(--cinza); display:none;">Nenhum título baixado (pago) no período pra estes fornecedores.</div>
-      <div id="pagos-abc-chart-wrap" style="height:380px; width:100%;">
-        <canvas id="chart-pagos-abc"></canvas>
+      <div id="total-aporte" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
+      <div class="tabela-scroll">
+        <table id="tabela-aporte">
+          <thead><tr><th>Aporte</th><th>Período</th><th>Qtde</th><th>Valor</th></tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
   </section>
@@ -360,7 +360,7 @@
           </select>
         </div>
         <div><label>Data Emissão</label><input type="date" name="Data Emissão" required></div>
-        <div><label>Nº Documento</label><input type="text" name="Nº Documento"></div>
+        <div><label>Chave Pix do Fornecedor</label><input type="text" name="Chave Pix" placeholder="CPF/CNPJ, e-mail, telefone ou aleatória"></div>
         <div>
           <label>Forma Pagamento</label>
           <select name="Forma Pagamento">
@@ -368,9 +368,9 @@
             <option value="TED">TED</option>
           </select>
         </div>
-        <div><label>Chave Pix do Fornecedor</label><input type="text" name="Chave Pix" placeholder="CPF/CNPJ, e-mail, telefone ou aleatória"></div>
         <div><label>Código Fornecedor</label><input type="text" name="Código Fornecedor" required></div>
-        <div class="full"><label>Razão Social</label><input type="text" name="Razão Social" required></div>
+        <div><label>Razão Social</label><input type="text" name="Razão Social" required></div>
+        <div><label>Nº Documento</label><input type="text" name="Nº Documento"></div>
         <div><label>Vencimento</label><input type="date" name="Vencimento" required></div>
         <div><label>R$ Valor</label><input type="number" step="0.01" name="R$ Valor" required></div>
         <div><label>Usuário Inclusor</label><input type="text" name="Usuário Inclusor"></div>
