@@ -1734,12 +1734,19 @@ function renderizarPagosAbcTop15(itens) {
   const datasets = codigosOrdenados.map((cod, idx) => {
     const dados = chavesMes.map(chave => (buckets[chave][cod] ? buckets[chave][cod].valor : 0));
     dados.forEach((valor, i) => { if (valor) exportRows.push([nomePorCodigo[cod], labels[i], valor]); });
-    return { label: nomePorCodigo[cod], data: dados, backgroundColor: PALETA_15[idx % PALETA_15.length], stack: 'pagos' };
+    const cor = PALETA_15[idx % PALETA_15.length];
+    return {
+      label: nomePorCodigo[cod], data: dados, borderColor: cor, backgroundColor: cor,
+      tension: 0.25, pointRadius: 3, pointHoverRadius: 5,
+      // hitRadius maior que o ponto visível — sem isso, acertar o ponto
+      // exato de uma entre 15 linhas próximas fica difícil de clicar.
+      pointHitRadius: 8,
+    };
   });
   ultimoDadosPagosAbc = exportRows;
 
   chartPagosAbc = new Chart(document.getElementById('chart-pagos-abc'), {
-    type: 'bar',
+    type: 'line',
     data: { labels, datasets },
     options: {
       responsive: true,
@@ -1748,7 +1755,7 @@ function renderizarPagosAbcTop15(itens) {
         datalabels: { display: false },
         legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
       },
-      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+      scales: { y: { beginAtZero: true } },
       onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
       onClick: (ev, els) => {
         if (!els.length) return;
