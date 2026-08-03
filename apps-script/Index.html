@@ -152,6 +152,19 @@
   th.ordenavel { cursor: pointer; user-select: none; }
   th.ordenavel:hover { background: #dbe7f3; }
   .seta-ordenacao { font-size: 10px; }
+  /* Linha de filtros por coluna do modal-detalhe (genérico, usado por
+     cards/gráficos/linhas de tabela) — NÃO fixa junto com o cabeçalho
+     (que já é sticky por causa da regra "th { position: sticky }" geral):
+     só o rótulo da coluna precisa ficar sempre visível ao rolar; os
+     filtros em si são ajustados uma vez no topo, então podem rolar junto
+     com o corpo da tabela sem prejuízo. */
+  .linha-filtros-modal-detalhe th { position: static; top: auto; background: #fff; padding: 4px 6px; }
+  .linha-filtros-modal-detalhe select, .linha-filtros-modal-detalhe input {
+    width: 100%; box-sizing: border-box; padding: 4px 5px; font-size: 12px; font-weight: normal;
+    border: 1px solid var(--borda); border-radius: 4px; color: #1e2430;
+  }
+  #modal-detalhe-tabela tbody tr { cursor: pointer; }
+  #modal-detalhe-tabela tbody tr:hover { background: var(--azul-claro); }
   .tabela-scroll { max-height: 480px; overflow: auto; border: 1px solid var(--borda); border-radius: 8px; }
   .paginacao { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--cinza); }
   .paginacao button { background: #fff; color: var(--azul); border: 1px solid var(--azul); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
@@ -611,10 +624,23 @@
     </div>
     <div class="tabela-scroll" style="max-height:60vh;">
       <table id="modal-detalhe-tabela">
-        <thead><tr>
-          <th>Origem</th><th>Status</th><th>Tipo</th><th>Nº Doc.</th><th>Fornecedor</th>
-          <th>Razão Social</th><th>Vencimento</th><th>Valor</th><th>Data Baixa</th>
-        </tr></thead>
+        <thead>
+          <tr>
+            <th>Origem</th><th>Status</th><th>Tipo</th><th>Nº Doc.</th><th>Fornecedor</th>
+            <th>Razão Social</th><th>Vencimento</th><th>Valor</th><th>Data Baixa</th>
+          </tr>
+          <tr class="linha-filtros-modal-detalhe">
+            <th><select id="mdf-origem" onchange="aplicarFiltrosModalDetalhe()"><option value="">Todas</option><option value="ERP">ERP</option><option value="Manual">Manual</option></select></th>
+            <th><select id="mdf-status" onchange="aplicarFiltrosModalDetalhe()"><option value="">Todos</option><option value="Em aberto">Em aberto</option><option value="Baixado">Baixado</option><option value="Duplicado">Duplicado</option></select></th>
+            <th><input id="mdf-tipo" type="text" placeholder="Filtrar…" oninput="aplicarFiltrosModalDetalhe()"></th>
+            <th><input id="mdf-ndoc" type="text" placeholder="Filtrar…" oninput="aplicarFiltrosModalDetalhe()"></th>
+            <th><input id="mdf-fornecedor" type="text" placeholder="Filtrar…" oninput="aplicarFiltrosModalDetalhe()"></th>
+            <th><input id="mdf-razao" type="text" placeholder="Filtrar…" oninput="aplicarFiltrosModalDetalhe()"></th>
+            <th><input id="mdf-vencimento" type="text" placeholder="Filtrar…" oninput="aplicarFiltrosModalDetalhe()"></th>
+            <th><input id="mdf-valor" type="text" placeholder="Filtrar…" oninput="aplicarFiltrosModalDetalhe()"></th>
+            <th><input id="mdf-databaixa" type="text" placeholder="Filtrar…" oninput="aplicarFiltrosModalDetalhe()"></th>
+          </tr>
+        </thead>
         <tbody></tbody>
       </table>
     </div>
@@ -1232,6 +1258,45 @@ let ultimoTituloModalDetalhe = '';
 // de visualização, não algo específico do conjunto de títulos que estava
 // sendo mostrado, então não faz sentido resetar toda vez que o modal abre.
 let ordemModalDetalhe = 'vencimento-asc';
+// Filtros por coluna, ao contrário da ordem, são resetados a cada abertura
+// (ver abrirDetalhe) — são específicos do conjunto de títulos que está
+// sendo mostrado agora, não uma preferência geral de visualização.
+let filtrosModalDetalhe = { origem: '', status: '', tipo: '', nDoc: '', fornecedor: '', razaoSocial: '', vencimento: '', valor: '', dataBaixa: '' };
+
+function calcularStatusExibicaoModalDetalhe(i) {
+  return i.Status === 'Duplicado – revisar' ? 'Duplicado' : (i['Data Baixa'] ? 'Baixado' : 'Em aberto');
+}
+
+function filtrarItensModalDetalhe(itens, f) {
+  const norm = (v) => String(v == null ? '' : v).toLowerCase();
+  return itens.filter((i) => {
+    if (f.origem && i.Origem !== f.origem) return false;
+    if (f.status && calcularStatusExibicaoModalDetalhe(i) !== f.status) return false;
+    if (f.tipo && !norm(i.Tipo).includes(norm(f.tipo))) return false;
+    if (f.nDoc && !norm(i['Nº Documento']).includes(norm(f.nDoc))) return false;
+    if (f.fornecedor && !norm(i['Código Fornecedor']).includes(norm(f.fornecedor))) return false;
+    if (f.razaoSocial && !norm(i['Razão Social']).includes(norm(f.razaoSocial))) return false;
+    if (f.vencimento && !norm(fmtData(i['Vencimento'])).includes(norm(f.vencimento))) return false;
+    if (f.valor && !norm(fmtMoeda(i['R$ Valor'])).includes(norm(f.valor))) return false;
+    if (f.dataBaixa && !norm(fmtData(i['Data Baixa'])).includes(norm(f.dataBaixa))) return false;
+    return true;
+  });
+}
+
+function aplicarFiltrosModalDetalhe() {
+  filtrosModalDetalhe = {
+    origem: document.getElementById('mdf-origem').value,
+    status: document.getElementById('mdf-status').value,
+    tipo: document.getElementById('mdf-tipo').value,
+    nDoc: document.getElementById('mdf-ndoc').value,
+    fornecedor: document.getElementById('mdf-fornecedor').value,
+    razaoSocial: document.getElementById('mdf-razao').value,
+    vencimento: document.getElementById('mdf-vencimento').value,
+    valor: document.getElementById('mdf-valor').value,
+    dataBaixa: document.getElementById('mdf-databaixa').value,
+  };
+  renderizarModalDetalhe();
+}
 
 function ordenarItensModalDetalhe(itens, ordem) {
   const copia = itens.slice();
@@ -1247,9 +1312,25 @@ function mudarOrdemModalDetalhe(ordem) {
   renderizarModalDetalhe();
 }
 
+// Clicar numa linha do modal abre o anexo (documento e/ou comprovante) já
+// cadastrado pra aquele título — abre os dois se ambos existirem, já que
+// a linha não tem botões separados por tipo de anexo (ao contrário da
+// coluna "Anexos" de "Todos os lançamentos").
+function abrirAnexoLinhaModalDetalhe(linkDocumento, linkComprovante) {
+  if (!linkDocumento && !linkComprovante) {
+    toast('Nenhum anexo (documento ou comprovante) cadastrado para este título.');
+    return;
+  }
+  if (linkDocumento) window.open(linkDocumento, '_blank');
+  if (linkComprovante) window.open(linkComprovante, '_blank');
+}
+
 function abrirDetalhe(titulo, itens) {
   ultimoItensModalDetalhe = itens;
   ultimoTituloModalDetalhe = titulo;
+  filtrosModalDetalhe = { origem: '', status: '', tipo: '', nDoc: '', fornecedor: '', razaoSocial: '', vencimento: '', valor: '', dataBaixa: '' };
+  ['mdf-origem', 'mdf-status', 'mdf-tipo', 'mdf-ndoc', 'mdf-fornecedor', 'mdf-razao', 'mdf-vencimento', 'mdf-valor', 'mdf-databaixa']
+    .forEach((id) => { document.getElementById(id).value = ''; });
   document.getElementById('modal-detalhe-titulo').textContent = titulo;
   document.getElementById('modal-detalhe-ordenar').value = ordemModalDetalhe;
   renderizarModalDetalhe();
@@ -1257,13 +1338,18 @@ function abrirDetalhe(titulo, itens) {
 }
 
 function renderizarModalDetalhe() {
-  const itens = ultimoItensModalDetalhe;
-  const linhas = ordenarItensModalDetalhe(itens, ordemModalDetalhe);
+  const filtrados = filtrarItensModalDetalhe(ultimoItensModalDetalhe, filtrosModalDetalhe);
+  const linhas = ordenarItensModalDetalhe(filtrados, ordemModalDetalhe);
   document.querySelector('#modal-detalhe-tabela tbody').innerHTML = linhas.map((i) => {
     const origemBadge = i.Origem === 'ERP' ? 'badge-erp' : 'badge-manual';
-    const statusTxt = i.Status === 'Duplicado – revisar' ? 'Duplicado' : (i['Data Baixa'] ? 'Baixado' : 'Em aberto');
+    const statusTxt = calcularStatusExibicaoModalDetalhe(i);
     const statusBadge = i.Status === 'Duplicado – revisar' ? 'badge-dup' : (i['Data Baixa'] ? 'badge-erp' : 'badge-ok');
-    return `<tr>
+    const linkDoc = i['Link Documento'] || '';
+    const linkComp = i['Link Comprovante'] || '';
+    const tituloLinha = (linkDoc || linkComp)
+      ? `Clique para abrir o anexo (${[linkDoc ? 'documento' : '', linkComp ? 'comprovante' : ''].filter(Boolean).join(' e ')})`
+      : 'Nenhum anexo cadastrado para este título';
+    return `<tr onclick="abrirAnexoLinhaModalDetalhe('${escaparAtributo(linkDoc)}','${escaparAtributo(linkComp)}')" title="${escaparHtml(tituloLinha)}">
       <td><span class="badge ${origemBadge}">${i.Origem || ''}</span></td>
       <td><span class="badge ${statusBadge}">${statusTxt}</span></td>
       <td>${i.Tipo || ''}</td>
@@ -1275,19 +1361,21 @@ function renderizarModalDetalhe() {
       <td>${fmtData(i['Data Baixa'])}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="9" style="color:var(--cinza)">Nenhum título encontrado para este filtro.</td></tr>';
-  const total = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
-  document.getElementById('modal-detalhe-total').textContent = `${itens.length.toLocaleString('pt-BR')} título(s) · Total: ${fmtMoeda(total)}`;
+  const total = filtrados.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  document.getElementById('modal-detalhe-total').textContent = `${filtrados.length.toLocaleString('pt-BR')} título(s) · Total: ${fmtMoeda(total)}`;
 }
 function fecharModalDetalhe() {
   document.getElementById('modal-detalhe').classList.remove('aberto');
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fecharModalDetalhe(); });
 function exportarModalDetalhe() {
-  // Exporta na mesma ordem escolhida na tela — sem isso o Excel viria numa
-  // ordem diferente do que a pessoa acabou de ver e organizar.
-  const linhas = ordenarItensModalDetalhe(ultimoItensModalDetalhe, ordemModalDetalhe)
+  // Exporta com os mesmos filtro e ordem escolhidos na tela — sem isso o
+  // Excel viria com títulos e numa ordem diferentes do que a pessoa
+  // acabou de ver e organizar.
+  const filtrados = filtrarItensModalDetalhe(ultimoItensModalDetalhe, filtrosModalDetalhe);
+  const linhas = ordenarItensModalDetalhe(filtrados, ordemModalDetalhe)
     .map((i) => [
-      i.Origem || '', i.Status === 'Duplicado – revisar' ? 'Duplicado' : (i['Data Baixa'] ? 'Baixado' : 'Em aberto'),
+      i.Origem || '', calcularStatusExibicaoModalDetalhe(i),
       i.Tipo || '', i['Nº Documento'] || '', i['Código Fornecedor'] || '', i['Razão Social'] || '',
       fmtData(i['Vencimento']), fmtMoeda(i['R$ Valor']), fmtData(i['Data Baixa']),
     ]);
