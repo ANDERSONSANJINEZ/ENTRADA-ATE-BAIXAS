@@ -162,6 +162,13 @@
   .badge-manual { background: #ede9fe; color: #5b21b6; }
   .badge-ok { background: #dcfce7; color: var(--verde); }
   .badge-dup { background: #fee2e2; color: var(--vermelho); }
+  /* Coluna Valor do Detalhe por Aporte no estilo contábil: "R$" grudado à
+     esquerda da célula e o número grudado à direita — flex/space-between
+     empurra os dois pras pontas, então os dígitos ficam alinhados entre
+     linhas independente do tamanho do valor (diferente do texto "R$ x,xx"
+     corrido, que desalinha os dígitos quando os valores têm tamanhos
+     diferentes). */
+  #tabela-detalhe-aporte td.col-valor { display: flex; justify-content: space-between; align-items: center; }
   .filtros { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
   .filtros input, .filtros select { padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; font-size: 13px; }
   .btn { background: var(--azul); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
@@ -970,6 +977,13 @@ function paraData(v) {
   return null;
 }
 function fmtMoeda(v) { return 'R$ ' + paraNumero(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+// "R$" grudado na esquerda da célula e o número grudado na direita (estilo
+// planilha/contábil) — em vez do texto "R$ 1.234,56" corrido, que deixa os
+// dígitos desalinhados entre linhas com valores de tamanhos diferentes.
+function htmlMoedaAlinhada(v) {
+  const numero = paraNumero(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `<span class="rs">R$</span><span class="valor-num">${numero}</span>`;
+}
 // Todas as datas do app são "somente data" (sem hora). Formatamos sempre a
 // partir dos componentes UTC do Date — nunca com toLocaleDateString/getters
 // locais — porque essas datas nascem de strings "yyyy-MM-dd" interpretadas
@@ -2462,7 +2476,7 @@ function renderizarDetalheAporte() {
     const partes = [i['Razão Social'], i['Histórico']].filter(Boolean);
     let descricao = partes.join(' - ');
     if (i['Parcela']) descricao += ` - PARC.: ${i['Parcela']}`;
-    return `<tr${separador}><td>${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td>${vencAtual}</td><td>${fmtMoeda(i['R$ Valor'])}</td></tr>`;
+    return `<tr${separador}><td>${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td>${vencAtual}</td><td class="col-valor">${htmlMoedaAlinhada(i['R$ Valor'])}</td></tr>`;
   });
   tbody.innerHTML = linhas.join('') || '<tr><td colspan="5" style="color:var(--cinza)">Nenhum título encontrado para este aporte.</td></tr>';
   definirTotalizador('total-detalhe-aporte', itens);
