@@ -266,7 +266,14 @@ function api_salvarConciliacao(payload) {
 // lido sob demanda a cada api_carregar() porque a aba Conciliação Bancária
 // pode crescer bastante e isso é só um resumo, calculado uma vez aqui.
 function resumoConciliacaoBancaria_() {
-  var sh = getSheetConciliacao_();
+  // getSheetByName (nunca getSheetConciliacao_/insertSheet) DE PROPÓSITO —
+  // isto roda em todo api_carregar(), ou seja, em toda visita à tela; criar
+  // a aba nova aqui faria até quem só está LENDO a tela disparar uma
+  // mudança estrutural na planilha (mais lenta que uma leitura) sem nunca
+  // ter processado extrato nenhum. A aba só é criada de fato quando
+  // alguém salva uma conciliação de verdade (api_salvarConciliacao).
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Conciliação Bancária');
+  if (!sh) return { totalLinhas: 0, porSituacao: {}, qtdeImportacoes: 0, ultimaImportacao: null };
   var ultimaLinha = sh.getLastRow();
   if (ultimaLinha < 2) return { totalLinhas: 0, porSituacao: {}, qtdeImportacoes: 0, ultimaImportacao: null };
   var valores = sh.getRange(2, 1, ultimaLinha - 1, CONCILIACAO_HEADERS.length).getValues();
@@ -487,8 +494,20 @@ function api_carregar() {
     manual: lerAba_('Manual'),
     dataBase: getDataBase_(),
     usuariosConfigurados: listarUsuarios_().length > 0,
-    resumoConciliacao: resumoConciliacaoBancaria_(),
+    // Nunca deixa o resumo de conciliação (recurso novo, secundário) travar
+    // ou quebrar o carregamento principal (ERP/Manual) se algo der errado
+    // aqui — sem isso, um erro nessa parte tornaria a tela inteira incapaz
+    // de carregar título nenhum.
+    resumoConciliacao: tentarResumoConciliacaoBancaria_(),
   };
+}
+
+function tentarResumoConciliacaoBancaria_() {
+  try {
+    return resumoConciliacaoBancaria_();
+  } catch (erro) {
+    return { totalLinhas: 0, porSituacao: {}, qtdeImportacoes: 0, ultimaImportacao: null, erro: erro.message };
+  }
 }
 
 function api_importar(payload) {
