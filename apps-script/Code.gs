@@ -212,6 +212,85 @@ function registrarLog_(usuario, acao, detalhes) {
   }
 }
 
+// Aba "Conciliação Bancária" — histórico persistido de cada extrato já
+// processado na tela (aba Conciliação Bancária), pra a aba Análise poder
+// enxergar dados de banco de QUALQUER sessão passada, não só o último
+// extrato ainda na memória de quem está com a tela aberta agora (o extrato
+// em si nunca é salvo, só o resultado do cruzamento linha a linha). Cresce
+// por acréscimo a cada processamento — igual ao Log — sem deduplicar
+// reimportações do mesmo arquivo; é um histórico de auditoria, não um
+// espelho do extrato mais recente.
+var CONCILIACAO_HEADERS = [
+  'Data Importação', 'Usuário', 'Situação', 'Data Movimento Extrato',
+  'Valor Extrato', 'Histórico Extrato', 'Nº Documento Título',
+  'Fornecedor Título', 'Data Baixa Título', 'Valor Título'
+];
+var CONCILIACAO_MAX_LINHAS = 20000;
+
+function getSheetConciliacao_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName('Conciliação Bancária');
+  if (!sh) {
+    sh = ss.insertSheet('Conciliação Bancária');
+    sh.appendRow(CONCILIACAO_HEADERS);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function api_salvarConciliacao(payload) {
+  var nomeUsuario = validarAcessoEdicao_(payload);
+  var linhas = (payload && payload.linhas) || [];
+  if (!linhas.length) throw new Error('Nenhuma linha de conciliação para salvar.');
+  var agora = new Date();
+  var sh = getSheetConciliacao_();
+  var valores = linhas.map(function (l) {
+    return [
+      agora, nomeUsuario || '(sem restrição de senha)', l.situacao || '',
+      l.dataExtrato || '', l.valorExtrato === '' ? '' : Number(l.valorExtrato || 0),
+      l.historicoExtrato || '', l.nDoc || '', l.fornecedor || '',
+      l.dataBaixaTitulo || '', l.valorTitulo === '' ? '' : Number(l.valorTitulo || 0),
+    ];
+  });
+  sh.getRange(sh.getLastRow() + 1, 1, valores.length, CONCILIACAO_HEADERS.length).setValues(valores);
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha > CONCILIACAO_MAX_LINHAS + 200) {
+    sh.deleteRows(2, ultimaLinha - CONCILIACAO_MAX_LINHAS - 1);
+  }
+  registrarLog_(nomeUsuario, 'Salvar conciliação bancária', valores.length + ' lançamento(s) do extrato processados');
+  return { resumoConciliacao: resumoConciliacaoBancaria_() };
+}
+
+// Agregado por situação (qtde + valor) pra a aba Análise mostrar sem
+// precisar mandar pro cliente as dezenas de milhares de linhas cruas —
+// lido sob demanda a cada api_carregar() porque a aba Conciliação Bancária
+// pode crescer bastante e isso é só um resumo, calculado uma vez aqui.
+function resumoConciliacaoBancaria_() {
+  var sh = getSheetConciliacao_();
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha < 2) return { totalLinhas: 0, porSituacao: {}, qtdeImportacoes: 0, ultimaImportacao: null };
+  var valores = sh.getRange(2, 1, ultimaLinha - 1, CONCILIACAO_HEADERS.length).getValues();
+  var porSituacao = {};
+  var timestampsImportacao = {};
+  var ultimaImportacao = null;
+  valores.forEach(function (linha) {
+    var dataImportacao = linha[0], situacao = linha[2], valorExtrato = linha[4], valorTitulo = linha[9];
+    var valor = Number(valorExtrato || valorTitulo || 0);
+    if (!porSituacao[situacao]) porSituacao[situacao] = { qtde: 0, valor: 0 };
+    porSituacao[situacao].qtde += 1;
+    porSituacao[situacao].valor += valor;
+    var chaveImportacao = dataImportacao instanceof Date ? dataImportacao.getTime() : String(dataImportacao);
+    timestampsImportacao[chaveImportacao] = true;
+    if (dataImportacao instanceof Date && (!ultimaImportacao || dataImportacao > ultimaImportacao)) ultimaImportacao = dataImportacao;
+  });
+  return {
+    totalLinhas: valores.length,
+    porSituacao: porSituacao,
+    qtdeImportacoes: Object.keys(timestampsImportacao).length,
+    ultimaImportacao: ultimaImportacao,
+  };
+}
+
 // Últimas N entradas do Log, mais recente primeiro — usado pela aba
 // "Histórico" da tela. Leitura pura, sem exigir senha de edição (mesma
 // lógica de api_carregar).
@@ -408,6 +487,7 @@ function api_carregar() {
     manual: lerAba_('Manual'),
     dataBase: getDataBase_(),
     usuariosConfigurados: listarUsuarios_().length > 0,
+    resumoConciliacao: resumoConciliacaoBancaria_(),
   };
 }
 
@@ -603,6 +683,7 @@ function doPost(e) {
     else if (acao === 'definirAnexo') resultado = api_definirAnexo(payload);
     else if (acao === 'validarEdicao') resultado = api_validarEdicao(payload);
     else if (acao === 'carregarLog') resultado = api_carregarLog(payload);
+    else if (acao === 'salvarConciliacao') resultado = api_salvarConciliacao(payload);
     else throw new Error('Ação desconhecida: ' + acao);
     resultado.ok = true;
     return ContentService

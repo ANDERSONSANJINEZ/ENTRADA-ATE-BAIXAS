@@ -698,7 +698,7 @@ const SRC = { tipo:'B', dt_emissao:'C', no_titulo:'D', form_pagto:'E', fornecedo
   nome_fornece:'G', vencimento:'H', vencto_real:'I', vlr_titulo:'J', parcela:'K',
   dt_baixa:'L', historico:'M', aprovacao:'S', usuario:'AJ', remessa:'AW' };
 
-let state = { erp: [], manual: [], dataBase: null };
+let state = { erp: [], manual: [], dataBase: null, resumoConciliacao: null };
 
 // Nome do arquivo padrão da pasta do Drive: AAAA.MM.DD.xlsx (ex.: 2026.07.30.xlsx)
 function extrairDataBaseDoNome(nomeArquivo) {
@@ -925,6 +925,7 @@ async function carregarTudo() {
     state.erp = dados.erp || [];
     state.manual = dados.manual || [];
     state.dataBase = dados.dataBase || null;
+    state.resumoConciliacao = dados.resumoConciliacao || null;
     usuariosConfiguradosNoServidor = !!dados.usuariosConfigurados;
     atualizarUiModoLeitura();
     renderizarTudo();
@@ -2617,6 +2618,22 @@ function renderizarAnalise() {
   const ticketMedio = itens.length ? totalValor / itens.length : 0;
   const ticketPorTipo = tiposOrdenados.map(([t, q]) => [t, porTipo[t] ? (itens.filter((i) => i.Tipo === t).reduce((s, i) => s + paraNumero(i['R$ Valor']), 0) / q) : 0]);
 
+  // Resumo persistido da Conciliação Bancária (ver resumoConciliacaoBancaria_
+  // no Code.gs) — histórico de TODOS os extratos já processados por
+  // qualquer sessão, não só o mais recente ainda na memória de quem está
+  // com a aba Conciliação Bancária aberta agora. null/totalLinhas 0 = ainda
+  // nenhum extrato processado desde que este recurso existe.
+  const conc = state.resumoConciliacao;
+  const porSituacaoConc = (conc && conc.porSituacao) || {};
+  const qtdeConc = (s) => (porSituacaoConc[s] ? porSituacaoConc[s].qtde : 0);
+  const valorConc = (s) => (porSituacaoConc[s] ? porSituacaoConc[s].valor : 0);
+  const fmtDataHoraImportacao = (v) => {
+    const d = v instanceof Date ? v : new Date(v);
+    if (!v || isNaN(d)) return '';
+    const p = (n) => String(n).padStart(2, '0');
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+
   document.getElementById('conteudo-analise').innerHTML = `
     <h3>Números que saltam aos olhos</h3>
     <ul>
@@ -2627,6 +2644,18 @@ function renderizarAnalise() {
       <li>Tipos: ${tiposOrdenados.map(([t, q]) => `${q} ${t}`).join(', ') || '—'}.</li>
       <li>Maiores fornecedores por nº de títulos: ${fornecedoresOrdenados.map(([cod, q]) => `${nomesFornecedor[cod]} (${q})`).join(', ') || '—'}.</li>
       <li>Usuários lançadores: ${usuariosOrdenados.map(([u, q]) => `${u} (${q.toLocaleString('pt-BR')})`).join(', ') || '—'}.</li>
+    </ul>
+    <h3>Conciliação bancária (extratos processados)</h3>
+    <ul>
+      ${!conc || !conc.totalLinhas
+        ? '<li>Nenhum extrato bancário conciliado ainda — processe um na aba "Conciliação Bancária" pra esta seção passar a mostrar dados.</li>'
+        : `
+          <li><strong>${conc.qtdeImportacoes.toLocaleString('pt-BR')}</strong> extrato(s) processado(s) até agora — o mais recente em <strong>${fmtDataHoraImportacao(conc.ultimaImportacao)}</strong>.</li>
+          <li>Conciliado: <strong>${qtdeConc('Conciliado').toLocaleString('pt-BR')}</strong> lançamento(s) — ${fmtMoeda(valorConc('Conciliado'))} batendo em valor e data com título baixado.</li>
+          <li>Divergência de data: <strong>${qtdeConc('Divergência de data').toLocaleString('pt-BR')}</strong> — ${fmtMoeda(valorConc('Divergência de data'))} batendo em valor, mas com até 5 dias de diferença entre baixa e movimento bancário.</li>
+          <li>Sem correspondência no extrato: <strong>${qtdeConc('Sem correspondência no extrato').toLocaleString('pt-BR')}</strong> título(s) baixado(s) — ${fmtMoeda(valorConc('Sem correspondência no extrato'))} sem nenhum lançamento bancário equivalente encontrado até agora (vale conferir se saiu do banco de fato).</li>
+          <li>Sem título correspondente: <strong>${qtdeConc('Sem título correspondente').toLocaleString('pt-BR')}</strong> lançamento(s) do extrato — ${fmtMoeda(valorConc('Sem título correspondente'))} sem nenhum título batendo (pagamento feito mas não registrado no sistema? vale conferir).</li>
+        `}
     </ul>
     <h3>Aging dos títulos vencidos em aberto</h3>
     <ul>
@@ -2697,6 +2726,11 @@ function renderizarAnalise() {
     ['Vencido em aberto — valor', fmtMoeda(vencidoValor)],
     ['Aguardando aprovação — qtde', aguardando.length],
     ['Aguardando aprovação — valor', fmtMoeda(aguardandoValor)],
+    ['Conciliação bancária — extratos processados', conc ? conc.qtdeImportacoes : 0],
+    ['Conciliação bancária — Conciliado', `${qtdeConc('Conciliado')} lançamento(s), ${fmtMoeda(valorConc('Conciliado'))}`],
+    ['Conciliação bancária — Divergência de data', `${qtdeConc('Divergência de data')} lançamento(s), ${fmtMoeda(valorConc('Divergência de data'))}`],
+    ['Conciliação bancária — Sem correspondência no extrato', `${qtdeConc('Sem correspondência no extrato')} título(s), ${fmtMoeda(valorConc('Sem correspondência no extrato'))}`],
+    ['Conciliação bancária — Sem título correspondente', `${qtdeConc('Sem título correspondente')} lançamento(s), ${fmtMoeda(valorConc('Sem título correspondente'))}`],
     ['Concentração top 3 fornecedores (%)', pctTop3.toFixed(1)],
     ['Prazo médio de baixa (dias)', dpoMedio != null ? dpoMedio.toFixed(0) : ''],
     ['Remessas aprovadas', remessasAprovadas],
@@ -2834,8 +2868,23 @@ async function processarExtrato(file) {
 
     ultimoResultadoConciliacao = conciliarExtrato(itensExtrato);
     renderizarConciliacao();
-    resumo.innerHTML = `<div class="aviso">${itensExtrato.length} lançamento(s) lidos de "${file.name}". Veja o resultado abaixo.</div>`;
     document.getElementById('painel-resultado-conciliacao').style.display = '';
+
+    // Salva o resultado no histórico da planilha (aba "Conciliação
+    // Bancária") pra a aba Análise enxergar isso de QUALQUER sessão, não só
+    // enquanto esta tela está aberta — o extrato em si continua não sendo
+    // salvo, só o resultado do cruzamento linha a linha. Exige modo de
+    // edição (mesma regra de toda escrita no app); em modo leitura, o
+    // resultado continua aparecendo normalmente na tela, só não entra pro
+    // histórico.
+    let avisoSalvar = '';
+    try {
+      await salvarConciliacaoNaPlanilha();
+      avisoSalvar = ' Resultado salvo no histórico (a aba Análise já reflete isso).';
+    } catch (e) {
+      avisoSalvar = ` (Não deu pra salvar no histórico da planilha: ${e.message} — o resultado abaixo continua válido só nesta tela.)`;
+    }
+    resumo.innerHTML = `<div class="aviso">${itensExtrato.length} lançamento(s) lidos de "${file.name}". Veja o resultado abaixo.${avisoSalvar}</div>`;
   } catch (e) {
     resumo.innerHTML = `<div class="aviso">Falha ao processar o extrato: ${e.message}</div>`;
   }
@@ -2864,6 +2913,35 @@ function conciliarExtrato(itensExtrato) {
   });
   const semTitulo = itensExtrato.filter((_, idx) => !usados.has(idx));
   return { resultado, semTitulo };
+}
+
+// Persiste o resultado de ultimoResultadoConciliacao na aba "Conciliação
+// Bancária" da planilha (ver getSheetConciliacao_/api_salvarConciliacao no
+// Code.gs) — é o que permite a aba Análise enxergar extratos já
+// processados em sessões passadas, não só o mais recente ainda na tela.
+async function salvarConciliacaoNaPlanilha() {
+  const linhasResultado = ultimoResultadoConciliacao.resultado.map((r) => ({
+    situacao: r.status,
+    fornecedor: r.titulo['Razão Social'] || r.titulo['Código Fornecedor'] || '',
+    nDoc: r.titulo['Nº Documento'] || '',
+    dataBaixaTitulo: fmtData(r.titulo['Data Baixa']),
+    valorTitulo: paraNumero(r.titulo['R$ Valor']),
+    dataExtrato: r.mov ? fmtData(r.mov.data) : '',
+    valorExtrato: r.mov ? r.mov.valor : '',
+    historicoExtrato: r.mov ? r.mov.historico : '',
+  }));
+  const linhasSemTitulo = ultimoResultadoConciliacao.semTitulo.map((mov) => ({
+    situacao: 'Sem título correspondente',
+    fornecedor: '', nDoc: '', dataBaixaTitulo: '', valorTitulo: '',
+    dataExtrato: fmtData(mov.data), valorExtrato: mov.valor, historicoExtrato: mov.historico,
+  }));
+  const dados = await chamarServidor('salvarConciliacao', { linhas: linhasResultado.concat(linhasSemTitulo) });
+  state.resumoConciliacao = dados.resumoConciliacao || state.resumoConciliacao;
+  // Sempre re-renderiza (não só quando a aba Análise já está visível) —
+  // trocar de aba não re-renderiza nada sozinho (só alterna a classe
+  // "ativa"), então sem isso a Análise ficaria com o resumo antigo até a
+  // próxima ação que recarregue tudo.
+  renderizarAnalise();
 }
 
 function renderizarConciliacao() {
