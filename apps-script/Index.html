@@ -137,14 +137,19 @@
   #conteudo-analise h3:first-child { margin-top: 0; }
   #conteudo-analise a { color: var(--azul); font-weight: bold; text-decoration: none; cursor: pointer; }
   #conteudo-analise a:hover { text-decoration: underline; }
-  .cards-remessa-status { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
-  .card-remessa-status { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
-  .card-remessa-status .rotulo { font-size: 13px; color: var(--cinza); }
-  .card-remessa-status .card-qtde { font-size: 22px; font-weight: bold; }
-  .card-remessa-status.aprovadas { border-left: 6px solid var(--verde); }
-  .card-remessa-status.aprovadas .card-qtde { color: var(--verde); }
-  .card-remessa-status.a-aprovar { border-left: 6px solid var(--laranja); }
-  .card-remessa-status.a-aprovar .card-qtde { color: var(--laranja); }
+  .cards-remessa-status { margin-bottom: 24px; }
+  /* Um card só, 3 linhas: título "Remessas" e as duas linhas clicáveis
+     (Aprovadas/A Aprovar) embaixo — eram 2 cards lado a lado antes. */
+  .card-remessa-status { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px 20px; }
+  .card-remessa-titulo { font-size: 14px; font-weight: bold; color: var(--azul); margin-bottom: 8px; }
+  .card-remessa-linha { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 6px; border-left: 4px solid transparent; }
+  .card-remessa-linha + .card-remessa-linha { margin-top: 4px; }
+  .card-remessa-linha .rotulo { font-size: 13px; color: var(--cinza); }
+  .card-remessa-linha .card-qtde { font-size: 20px; font-weight: bold; }
+  .card-remessa-linha.aprovadas { border-left-color: var(--verde); }
+  .card-remessa-linha.aprovadas .card-qtde { color: var(--verde); }
+  .card-remessa-linha.a-aprovar { border-left-color: var(--laranja); }
+  .card-remessa-linha.a-aprovar .card-qtde { color: var(--laranja); }
   .grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--borda); white-space: nowrap; }
@@ -220,8 +225,10 @@
      si é controlado via Chart.js (options.onHover), não CSS. */
   #tabela-aporte tbody tr, #tabela-abc tbody tr { cursor: pointer; }
   #tabela-aporte tbody tr:hover, #tabela-abc tbody tr:hover { background: var(--azul-claro); }
-  .card.clicavel, .card-remessa-status.clicavel { cursor: pointer; transition: box-shadow .15s, transform .15s; }
-  .card.clicavel:hover, .card-remessa-status.clicavel:hover { box-shadow: 0 4px 10px rgba(31,78,120,.18); transform: translateY(-1px); }
+  .card.clicavel { cursor: pointer; transition: box-shadow .15s, transform .15s; }
+  .card.clicavel:hover { box-shadow: 0 4px 10px rgba(31,78,120,.18); transform: translateY(-1px); }
+  .card-remessa-linha.clicavel { cursor: pointer; transition: background .15s; }
+  .card-remessa-linha.clicavel:hover { background: var(--azul-claro); }
   .modal-overlay {
     display: none; position: fixed; inset: 0; background: rgba(30,36,48,.55);
     z-index: 500; align-items: center; justify-content: center; padding: 20px;
@@ -322,7 +329,8 @@
     </div>
     <div class="painel">
       <div class="cabecalho-painel">
-        <h2>Valores pagos aos 15 maiores fornecedores (Curva ABC) ao longo do período</h2>
+        <h2>Curva ABC dos fornecedores</h2>
+        <button class="btn secundario small" onclick="restaurarSelecaoPadraoAbc()" title="Volta a mostrar os 15 fornecedores de maior valor no período">↺ Padrão (15 maiores)</button>
         <button class="btn secundario small" onclick="exportarXlsx('pagosAbc')">⬇ Exportar Excel</button>
       </div>
       <div id="pagos-abc-vazio" style="font-size:13px; color:var(--cinza); display:none;">Nenhum título baixado (pago) no período pra estes fornecedores.</div>
@@ -338,9 +346,18 @@
       <div id="total-abc" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
       <div class="tabela-scroll">
         <table id="tabela-abc">
-          <thead><tr><th>Fornecedor</th><th>Razão Social</th><th>Qtde</th><th>Valor Total</th><th>% do Total</th><th>% Acum.</th><th>Classe</th></tr></thead>
+          <thead><tr><th title="Marque pra aparecer no gráfico &quot;Curva ABC dos fornecedores&quot;">Gráfico</th><th>Fornecedor</th><th>Razão Social</th><th>Qtde</th><th>Valor Total</th><th>% do Total</th><th>% Acum.</th><th>Classe</th></tr></thead>
           <tbody></tbody>
         </table>
+      </div>
+    </div>
+    <div class="painel">
+      <div class="cabecalho-painel">
+        <h2>Resumo por Aporte — Qtd Doc x Doc aberto</h2>
+        <button class="btn secundario small" onclick="exportarXlsx('aporte')">⬇ Exportar Excel</button>
+      </div>
+      <div id="aporte-chart-wrap" style="height:320px; width:100%;">
+        <canvas id="chart-aporte"></canvas>
       </div>
     </div>
     <div class="painel">
@@ -351,7 +368,7 @@
       <div id="total-aporte" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
       <div class="tabela-scroll">
         <table id="tabela-aporte">
-          <thead><tr><th>Aporte</th><th>Período</th><th>Qtde</th><th>Valor</th></tr></thead>
+          <thead><tr><th>Aporte</th><th>Período</th><th>Qtd Doc</th><th>Doc aberto</th><th>Valor</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -440,14 +457,14 @@
             <col style="width:5.53%"><col style="width:3.66%"><col style="width:5.05%"><col style="width:5.00%">
             <col style="width:5.15%"><col style="width:6.83%"><col style="width:5.53%"><col style="width:5.53%">
             <col style="width:4.36%"><col style="width:3.84%"><col style="width:5.53%"><col style="width:6.83%">
-            <col style="width:4.96%"><col style="width:4.69%"><col style="width:3.84%"><col style="width:6.50%">
+            <col style="width:4.69%"><col style="width:3.84%"><col style="width:6.50%">
             <col style="width:4.00%">
           </colgroup>
           <thead><tr>
             <th>Origem</th><th>Status</th><th>Aporte</th><th>Tipo</th><th>Emissão</th><th>Nº Doc.</th>
             <th>Forma Pgto.</th><th>Chave Pix</th><th>Fornecedor</th><th>Razão Social</th>
             <th>Vencimento</th><th>Venc. Real</th><th>Valor</th><th>Parcela</th><th>Baixa</th>
-            <th>Histórico</th><th>Aprovação</th><th>Usuário</th><th>Remessa</th>
+            <th>Histórico</th><th>Usuário</th><th>Remessa</th>
             <th class="col-anexos">Anexos</th><th class="col-acao"></th>
           </tr></thead>
           <tbody></tbody>
@@ -582,7 +599,15 @@
       <button class="btn secundario small" onclick="exportarModalDetalhe()">⬇ Exportar Excel</button>
       <button class="modal-fechar" onclick="fecharModalDetalhe()" title="Fechar (Esc)">✕</button>
     </div>
-    <div id="modal-detalhe-total" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+      <div id="modal-detalhe-total" style="font-size:13px; color:var(--cinza);"></div>
+      <select id="modal-detalhe-ordenar" onchange="mudarOrdemModalDetalhe(this.value)" style="padding:5px 8px; border:1px solid var(--borda); border-radius:6px; font-size:13px;">
+        <option value="vencimento-asc">Vencimento — mais antigo primeiro</option>
+        <option value="vencimento-desc">Vencimento — mais recente primeiro</option>
+        <option value="valor-desc">Valor — maior primeiro</option>
+        <option value="valor-asc">Valor — menor primeiro</option>
+      </select>
+    </div>
     <div class="tabela-scroll" style="max-height:60vh;">
       <table id="modal-detalhe-tabela">
         <thead><tr>
@@ -777,7 +802,7 @@ function renderizarModalLinha() {
   const aviso = document.getElementById('modal-linha-aviso');
   if (!ehManual) {
     aviso.style.display = 'block';
-    aviso.textContent = 'Este título veio do ERP Protheus — os dados abaixo são só pra conferência. Uma edição aqui não pegaria: a importação diária substitui a aba ERP inteira, então qualquer alteração local seria perdida sem aviso na próxima vez. Pra corrigir de verdade, ajuste no Protheus (ou lance manualmente uma correção, se for o caso).';
+    aviso.textContent = 'Este título veio do ERP Protheus — os dados abaixo são só pra conferência.';
   } else {
     aviso.style.display = 'none';
   }
@@ -1194,11 +1219,37 @@ function escaparHtml(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;
 // "Todos os lançamentos".
 let ultimoItensModalDetalhe = [];
 let ultimoTituloModalDetalhe = '';
+// Fica de uma abertura do modal pra outra de propósito — é uma preferência
+// de visualização, não algo específico do conjunto de títulos que estava
+// sendo mostrado, então não faz sentido resetar toda vez que o modal abre.
+let ordemModalDetalhe = 'vencimento-asc';
+
+function ordenarItensModalDetalhe(itens, ordem) {
+  const copia = itens.slice();
+  if (ordem === 'valor-desc') copia.sort((a, b) => paraNumero(b['R$ Valor']) - paraNumero(a['R$ Valor']));
+  else if (ordem === 'valor-asc') copia.sort((a, b) => paraNumero(a['R$ Valor']) - paraNumero(b['R$ Valor']));
+  else if (ordem === 'vencimento-desc') copia.sort((a, b) => (paraData(b['Vencimento']) || 0) - (paraData(a['Vencimento']) || 0));
+  else copia.sort((a, b) => (paraData(a['Vencimento']) || 0) - (paraData(b['Vencimento']) || 0)); // vencimento-asc (padrão)
+  return copia;
+}
+
+function mudarOrdemModalDetalhe(ordem) {
+  ordemModalDetalhe = ordem;
+  renderizarModalDetalhe();
+}
+
 function abrirDetalhe(titulo, itens) {
   ultimoItensModalDetalhe = itens;
   ultimoTituloModalDetalhe = titulo;
   document.getElementById('modal-detalhe-titulo').textContent = titulo;
-  const linhas = itens.slice().sort((a, b) => (paraData(a['Vencimento']) || 0) - (paraData(b['Vencimento']) || 0));
+  document.getElementById('modal-detalhe-ordenar').value = ordemModalDetalhe;
+  renderizarModalDetalhe();
+  document.getElementById('modal-detalhe').classList.add('aberto');
+}
+
+function renderizarModalDetalhe() {
+  const itens = ultimoItensModalDetalhe;
+  const linhas = ordenarItensModalDetalhe(itens, ordemModalDetalhe);
   document.querySelector('#modal-detalhe-tabela tbody').innerHTML = linhas.map((i) => {
     const origemBadge = i.Origem === 'ERP' ? 'badge-erp' : 'badge-manual';
     const statusTxt = i.Status === 'Duplicado – revisar' ? 'Duplicado' : (i['Data Baixa'] ? 'Baixado' : 'Em aberto');
@@ -1217,15 +1268,15 @@ function abrirDetalhe(titulo, itens) {
   }).join('') || '<tr><td colspan="9" style="color:var(--cinza)">Nenhum título encontrado para este filtro.</td></tr>';
   const total = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   document.getElementById('modal-detalhe-total').textContent = `${itens.length.toLocaleString('pt-BR')} título(s) · Total: ${fmtMoeda(total)}`;
-  document.getElementById('modal-detalhe').classList.add('aberto');
 }
 function fecharModalDetalhe() {
   document.getElementById('modal-detalhe').classList.remove('aberto');
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fecharModalDetalhe(); });
 function exportarModalDetalhe() {
-  const linhas = ultimoItensModalDetalhe.slice()
-    .sort((a, b) => (paraData(a['Vencimento']) || 0) - (paraData(b['Vencimento']) || 0))
+  // Exporta na mesma ordem escolhida na tela — sem isso o Excel viria numa
+  // ordem diferente do que a pessoa acabou de ver e organizar.
+  const linhas = ordenarItensModalDetalhe(ultimoItensModalDetalhe, ordemModalDetalhe)
     .map((i) => [
       i.Origem || '', i.Status === 'Duplicado – revisar' ? 'Duplicado' : (i['Data Baixa'] ? 'Baixado' : 'Em aberto'),
       i.Tipo || '', i['Nº Documento'] || '', i['Código Fornecedor'] || '', i['Razão Social'] || '',
@@ -1361,21 +1412,21 @@ function exportarXlsx(qual) {
       i.Origem, i.Status, i.Aporte || '', i.Tipo || '', fmtData(i['Data Emissão']), i['Nº Documento'] || '',
       i['Forma Pagamento'] || '', i['Chave Pix'] || '', i['Código Fornecedor'] || '', i['Razão Social'] || '',
       fmtData(i['Vencimento']), fmtData(i['Vencimento Real']), fmtMoeda(i['R$ Valor']), i['Parcela'] || '',
-      fmtData(i['Data Baixa']), i['Histórico'] || '', i['Aprovação Remessa'] || '', i['Usuário Inclusor'] || '', i['Remessa'] || '',
+      fmtData(i['Data Baixa']), i['Histórico'] || '', i['Usuário Inclusor'] || '', i['Remessa'] || '',
     ]);
     baixarXlsx('lancamentos.xlsx', [
       'Origem', 'Status', 'Aporte', 'Tipo', 'Emissão', 'Nº Documento', 'Forma Pagamento', 'Chave Pix',
       'Código Fornecedor', 'Razão Social', 'Vencimento', 'Vencimento Real', 'Valor',
-      'Parcela', 'Data Baixa', 'Histórico', 'Aprovação Remessa', 'Usuário Inclusor', 'Remessa',
+      'Parcela', 'Data Baixa', 'Histórico', 'Usuário Inclusor', 'Remessa',
     ], linhas);
   } else if (qual === 'aporte') {
     const linhas = Array.from(document.querySelectorAll('#tabela-aporte tbody tr')).map((tr) =>
       Array.from(tr.children).map((td) => td.textContent.trim())
     );
-    baixarXlsx('resumo_aporte.xlsx', ['Aporte', 'Período', 'Qtde', 'Valor'], linhas);
+    baixarXlsx('resumo_aporte.xlsx', ['Aporte', 'Período', 'Qtd Doc', 'Doc aberto', 'Valor'], linhas);
   } else if (qual === 'abc') {
     const linhas = Array.from(document.querySelectorAll('#tabela-abc tbody tr')).map((tr) =>
-      Array.from(tr.children).map((td) => td.textContent.trim())
+      Array.from(tr.querySelectorAll('td:not(.col-check-abc)')).map((td) => td.textContent.trim())
     );
     baixarXlsx('curva_abc.xlsx', ['Fornecedor', 'Razão Social', 'Qtde', 'Valor Total', '% do Total', '% Acum.', 'Classe'], linhas);
   } else if (qual === 'remessa') {
@@ -1465,7 +1516,7 @@ function atualizarSetasOrdenacao(tabelaId) {
 }
 
 // ---------- Dashboard ----------
-let chartAging, chartFluxo, chartStatusPagamento, chartPagosAbc;
+let chartAging, chartFluxo, chartStatusPagamento, chartPagosAbc, chartAporte;
 let ultimoAbertos = [];
 let ultimoItensAnalise = [];
 
@@ -1546,13 +1597,16 @@ function renderizarCardsRemessa() {
   Object.entries(grupos).forEach(([rem, g]) => { (g.aprovados === g.total ? remessasAprovadas : remessasAAprovar).add(rem); });
 
   document.getElementById('cards-remessa').innerHTML = `
-    <div class="card-remessa-status aprovadas clicavel" id="card-remessas-aprovadas">
-      <span class="rotulo">Remessas Aprovadas</span>
-      <span class="card-qtde">${remessasAprovadas.size.toLocaleString('pt-BR')}</span>
-    </div>
-    <div class="card-remessa-status a-aprovar clicavel" id="card-remessas-a-aprovar">
-      <span class="rotulo">Remessas a Aprovar</span>
-      <span class="card-qtde">${remessasAAprovar.size.toLocaleString('pt-BR')}</span>
+    <div class="card-remessa-status">
+      <div class="card-remessa-titulo">Remessas</div>
+      <div class="card-remessa-linha aprovadas clicavel" id="card-remessas-aprovadas">
+        <span class="rotulo">Aprovadas</span>
+        <span class="card-qtde">${remessasAprovadas.size.toLocaleString('pt-BR')}</span>
+      </div>
+      <div class="card-remessa-linha a-aprovar clicavel" id="card-remessas-a-aprovar">
+        <span class="rotulo">A Aprovar</span>
+        <span class="card-qtde">${remessasAAprovar.size.toLocaleString('pt-BR')}</span>
+      </div>
     </div>`;
   // remessasAprovadas/AAprovar vêm de Object.entries (chaves sempre viram
   // String), mas i['Remessa'] é o valor bruto do item — pode ser número.
@@ -1698,32 +1752,89 @@ function renderizarValorPorRemessa() {
   });
 }
 
-const EXTRATORES_APORTE = [r => r.aporte, r => r.periodo, r => r.qtde, r => r.valor];
+const EXTRATORES_APORTE = [r => r.aporte, r => r.periodo, r => r.qtdDoc, r => r.qtdeAberto, r => r.valor];
 function renderizarResumoAporte(abertos) {
   ultimoAbertos = abertos;
-  const grupos = {};
+  const gruposAbertos = {};
   abertos.forEach(i => {
     const aporte = calcularAporte(i['Vencimento']);
     if (!aporte) return;
-    if (!grupos[aporte]) grupos[aporte] = { qtde: 0, valor: 0 };
-    grupos[aporte].qtde += 1;
-    grupos[aporte].valor += paraNumero(i['R$ Valor']);
+    if (!gruposAbertos[aporte]) gruposAbertos[aporte] = { qtde: 0, valor: 0 };
+    gruposAbertos[aporte].qtde += 1;
+    gruposAbertos[aporte].valor += paraNumero(i['R$ Valor']);
   });
-  let linhas = Object.keys(grupos).sort().map(aporte => ({
-    aporte, periodo: periodoDoAporte(aporte), qtde: grupos[aporte].qtde, valor: grupos[aporte].valor,
+  // Qtd Doc conta TODOS os documentos do aporte (aberto + baixado), não só
+  // os em aberto — daí usar ultimoItensAnalise em vez de "abertos". É o que
+  // garante também aparecerem aportes já 100% pagos (0 em aberto, mas com
+  // documentos), em vez de sumirem da lista.
+  const gruposTodos = {};
+  ultimoItensAnalise.forEach(i => {
+    const aporte = calcularAporte(i['Vencimento']);
+    if (!aporte) return;
+    gruposTodos[aporte] = (gruposTodos[aporte] || 0) + 1;
+  });
+  const todosAportes = new Set([...Object.keys(gruposAbertos), ...Object.keys(gruposTodos)]);
+  let linhas = Array.from(todosAportes).sort().map(aporte => ({
+    aporte, periodo: periodoDoAporte(aporte),
+    qtdDoc: gruposTodos[aporte] || 0,
+    qtdeAberto: gruposAbertos[aporte] ? gruposAbertos[aporte].qtde : 0,
+    valor: gruposAbertos[aporte] ? gruposAbertos[aporte].valor : 0,
   }));
 
   const busca = (document.getElementById('busca-dashboard').value || '').trim().toLowerCase();
-  if (busca) linhas = linhas.filter(l => contemBusca([l.aporte, l.periodo, l.qtde, fmtMoeda(l.valor)], busca));
+  if (busca) linhas = linhas.filter(l => contemBusca([l.aporte, l.periodo, l.qtdDoc, l.qtdeAberto, fmtMoeda(l.valor)], busca));
   linhas = aplicarOrdenacao('tabela-aporte', linhas, EXTRATORES_APORTE);
 
   document.querySelector('#tabela-aporte tbody').innerHTML = linhas.map(l =>
-    `<tr onclick="abrirDetalheAporte('${l.aporte}')" title="Clique para ver os títulos deste aporte">
-      <td>${l.aporte}</td><td>${l.periodo}</td><td>${l.qtde}</td><td>${fmtMoeda(l.valor)}</td>
+    `<tr onclick="abrirDetalheAporte('${l.aporte}')" title="Clique para ver os títulos em aberto deste aporte">
+      <td>${l.aporte}</td><td>${l.periodo}</td><td>${l.qtdDoc}</td><td>${l.qtdeAberto}</td><td>${fmtMoeda(l.valor)}</td>
     </tr>`
-  ).join('') || '<tr><td colspan="4" style="color:var(--cinza)">Nenhum título em aberto com aporte identificado.</td></tr>';
+  ).join('') || '<tr><td colspan="5" style="color:var(--cinza)">Nenhum título com aporte identificado.</td></tr>';
   definirTotalizador('total-aporte', abertos);
   tornarOrdenavel('tabela-aporte', EXTRATORES_APORTE, () => renderizarResumoAporte(ultimoAbertos));
+  renderizarGraficoAporte(linhas);
+}
+
+// Gráfico de barras agrupadas (Qtd Doc x Doc aberto) por aporte, na ordem
+// natural dos aportes (não a ordenação/filtro atual da tabela) — senão o
+// eixo X ficaria fora de ordem quando o usuário clica pra ordenar por
+// outra coluna. Sempre com todos os aportes, igual à tabela.
+function renderizarGraficoAporte(linhasOrdenadasPorAporte) {
+  const linhas = linhasOrdenadasPorAporte.slice().sort((a, b) => a.aporte.localeCompare(b.aporte, undefined, { numeric: true }));
+  if (chartAporte) chartAporte.destroy();
+  chartAporte = new Chart(document.getElementById('chart-aporte'), {
+    type: 'bar',
+    data: {
+      labels: linhas.map(l => l.aporte),
+      datasets: [
+        { label: 'Qtd Doc', data: linhas.map(l => l.qtdDoc), backgroundColor: '#1f4e78' },
+        { label: 'Doc aberto', data: linhas.map(l => l.qtdeAberto), backgroundColor: '#e08e0b' },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        datalabels: { display: false },
+        legend: { position: 'bottom' },
+        tooltip: {
+          callbacks: {
+            afterBody: (ctx) => `Período: ${linhas[ctx[0].dataIndex].periodo}`,
+          },
+        },
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Qtde de documentos' } },
+        x: { title: { display: true, text: 'Aporte' } },
+      },
+      onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      onClick: (ev, els) => {
+        if (!els.length) return;
+        const aporte = linhas[els[0].index].aporte;
+        abrirDetalheAporte(aporte);
+      },
+    },
+  });
 }
 
 // Clique em qualquer linha de Resumo por Aporte (ou na barra equivalente,
@@ -1808,24 +1919,55 @@ function renderizarFluxoCaixa(abertos, hoje) {
   });
 }
 
-const EXTRATORES_ABC = [l => l.cod, l => l.nome, l => l.qtde, l => l.valor, l => l.pct, l => l.acum, l => l.classe];
-function renderizarCurvaAbc(itens) {
-  ultimoItensAnalise = itens;
-  const totalGeral = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+const EXTRATORES_ABC = [undefined, l => l.cod, l => l.nome, l => l.qtde, l => l.valor, l => l.pct, l => l.acum, l => l.classe];
+
+// Quais fornecedores aparecem no gráfico "Curva ABC dos fornecedores":
+// null = automático (os 15 de maior valor no período, comportamento
+// original); Set = escolha manual feita marcando/desmarcando linhas na
+// tabela Curva ABC. Persiste entre re-renderizações (filtro, busca,
+// ordenação da tabela) até o usuário clicar em "Padrão (15 maiores)".
+let selecaoAbcGrafico = null;
+
+// Ranking por valor (maior pra menor) — mesmo critério usado tanto pra
+// decidir os "15 maiores" padrão quanto pra popular a Curva ABC.
+function calcularRankingAbc(itens) {
   const grupos = {};
   itens.forEach(i => {
-    const cod = i['Código Fornecedor'] || '(sem código)';
+    const cod = String(i['Código Fornecedor'] || '(sem código)');
     if (!grupos[cod]) grupos[cod] = { nome: i['Razão Social'] || '', qtde: 0, valor: 0 };
     grupos[cod].qtde += 1;
     grupos[cod].valor += paraNumero(i['R$ Valor']);
   });
-  const ordenadoBase = Object.entries(grupos).sort((a, b) => b[1].valor - a[1].valor);
+  return Object.entries(grupos).sort((a, b) => b[1].valor - a[1].valor);
+}
+
+function toggleSelecaoAbcGrafico(cod) {
+  if (selecaoAbcGrafico === null) {
+    const codigosPadrao = calcularRankingAbc(ultimoItensAnalise).slice(0, 15).map(([c]) => c);
+    selecaoAbcGrafico = new Set(codigosPadrao);
+  }
+  if (selecaoAbcGrafico.has(cod)) selecaoAbcGrafico.delete(cod); else selecaoAbcGrafico.add(cod);
+  renderizarCurvaAbc(ultimoItensAnalise);
+  renderizarPagosAbcTop15(ultimoItensAnalise);
+}
+function restaurarSelecaoPadraoAbc() {
+  selecaoAbcGrafico = null;
+  renderizarCurvaAbc(ultimoItensAnalise);
+  renderizarPagosAbcTop15(ultimoItensAnalise);
+}
+
+function renderizarCurvaAbc(itens) {
+  ultimoItensAnalise = itens;
+  const totalGeral = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const ordenadoBase = calcularRankingAbc(itens);
+  const codigosPadrao = ordenadoBase.slice(0, 15).map(([cod]) => cod);
+  const selecaoAtual = selecaoAbcGrafico === null ? new Set(codigosPadrao) : selecaoAbcGrafico;
   let acumulado = 0;
   let linhas = ordenadoBase.map(([cod, g]) => {
     const pct = totalGeral ? g.valor / totalGeral : 0;
     acumulado += pct;
     const classe = acumulado <= 0.8 ? 'A' : acumulado <= 0.95 ? 'B' : 'C';
-    return { cod, nome: g.nome, qtde: g.qtde, valor: g.valor, pct, acum: acumulado, classe };
+    return { cod, nome: g.nome, qtde: g.qtde, valor: g.valor, pct, acum: acumulado, classe, noGrafico: selecaoAtual.has(String(cod)) };
   });
 
   const busca = (document.getElementById('busca-dashboard').value || '').trim().toLowerCase();
@@ -1834,6 +1976,7 @@ function renderizarCurvaAbc(itens) {
 
   document.querySelector('#tabela-abc tbody').innerHTML = linhas.map(l =>
     `<tr onclick="abrirDetalheFornecedor('${escaparAtributo(l.cod)}','${escaparAtributo(l.nome)}')" title="Clique para ver os títulos deste fornecedor">
+      <td class="col-check-abc" onclick="event.stopPropagation()"><input type="checkbox" ${l.noGrafico ? 'checked' : ''} onchange="toggleSelecaoAbcGrafico('${escaparAtributo(l.cod)}')" title="Mostrar este fornecedor no gráfico 'Curva ABC dos fornecedores'"></td>
       <td>${l.cod}</td><td>${l.nome}</td><td>${l.qtde}</td><td>${fmtMoeda(l.valor)}</td>
       <td>${(l.pct * 100).toFixed(1)}%</td><td>${(l.acum * 100).toFixed(1)}%</td><td>${l.classe}</td>
     </tr>`
@@ -1852,24 +1995,22 @@ const PALETA_15 = [
 ];
 let ultimoDadosPagosAbc = []; // export: [fornecedor, mês, valor]
 
-// Valores efetivamente PAGOS (com Data Baixa) aos 15 fornecedores de maior
-// valor no período (mesmo critério de ranking da Curva ABC — mais o
-// filtro de "pago", já que a Curva ABC em si soma aberto + baixado).
-// Agrupado por mês da baixa: é o "ao longo do período" — quando o dinheiro
-// de fato saiu, não a data de vencimento do título.
+// Valores efetivamente PAGOS (com Data Baixa) aos fornecedores selecionados
+// na tabela Curva ABC (padrão: os 15 de maior valor no período — mesmo
+// critério de ranking da Curva ABC — mais o filtro de "pago", já que a
+// Curva ABC em si soma aberto + baixado). Agrupado por mês da baixa: é o
+// "ao longo do período" — quando o dinheiro de fato saiu, não a data de
+// vencimento do título.
 function renderizarPagosAbcTop15(itens) {
-  const grupos = {};
-  itens.forEach(i => {
-    const cod = String(i['Código Fornecedor'] || '(sem código)');
-    if (!grupos[cod]) grupos[cod] = { nome: i['Razão Social'] || '', valor: 0 };
-    grupos[cod].valor += paraNumero(i['R$ Valor']);
-  });
-  const top15 = Object.entries(grupos).sort((a, b) => b[1].valor - a[1].valor).slice(0, 15);
-  const codigosTop15 = new Set(top15.map(([cod]) => cod));
+  const ranking = calcularRankingAbc(itens);
+  const selecionados = selecaoAbcGrafico === null
+    ? ranking.slice(0, 15)
+    : ranking.filter(([cod]) => selecaoAbcGrafico.has(cod));
+  const codigosSelecionados = new Set(selecionados.map(([cod]) => cod));
   const nomePorCodigo = {};
-  top15.forEach(([cod, g]) => { nomePorCodigo[cod] = g.nome || cod; });
+  selecionados.forEach(([cod, g]) => { nomePorCodigo[cod] = g.nome || cod; });
 
-  const pagos = itens.filter(i => i['Data Baixa'] && codigosTop15.has(String(i['Código Fornecedor'] || '(sem código)')));
+  const pagos = itens.filter(i => i['Data Baixa'] && codigosSelecionados.has(String(i['Código Fornecedor'] || '(sem código)')));
 
   const vazio = document.getElementById('pagos-abc-vazio');
   const wrap = document.getElementById('pagos-abc-chart-wrap');
@@ -1897,7 +2038,7 @@ function renderizarPagosAbcTop15(itens) {
   });
   const chavesMes = Object.keys(buckets).sort();
   const labels = chavesMes.map(c => { const [a, m] = c.split('-'); return `${m}/${a}`; });
-  const codigosOrdenados = top15.map(([cod]) => cod); // mantém a ordem de ranking na legenda
+  const codigosOrdenados = selecionados.map(([cod]) => cod); // mantém a ordem de ranking na legenda
 
   const exportRows = [];
   const datasets = codigosOrdenados.map((cod, idx) => {
@@ -1991,7 +2132,6 @@ const EXTRATORES_LANCAMENTOS = [
   i => i['Parcela'],
   i => paraData(i['Data Baixa']),
   i => i['Histórico'],
-  i => i['Aprovação Remessa'],
   i => i['Usuário Inclusor'],
   i => i['Remessa'],
   null, // Anexos (não ordenável)
@@ -2098,7 +2238,6 @@ function renderizarLancamentos() {
       <td>${i['Parcela'] || ''}</td>
       <td>${fmtData(i['Data Baixa'])}</td>
       <td class="col-historico">${i['Histórico'] || ''}</td>
-      <td title="${escaparHtml(i['Aprovação Remessa'])}">${i['Aprovação Remessa'] || ''}</td>
       <td title="${escaparHtml(i['Usuário Inclusor'])}">${i['Usuário Inclusor'] || ''}</td>
       <td>${i['Remessa'] || ''}</td>
       <td class="col-anexos">${anexos}</td>
