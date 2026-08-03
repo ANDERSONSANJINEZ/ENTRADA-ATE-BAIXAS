@@ -76,10 +76,6 @@
   .aba { display: none; }
   .aba.ativa { display: block; }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
-  /* #cards-remessa tem só 1 card — sem isso ele esticaria pra ocupar a
-     linha inteira (auto-fit some com as colunas vazias e dá tudo pra quem
-     sobrou), ficando bem maior que os cards padrão ao lado. */
-  #cards-remessa { grid-template-columns: minmax(180px, 260px); }
   .card { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px 16px; text-align: center; display: flex; flex-direction: column; }
   .card .rotulo { font-size: 12px; color: var(--cinza); margin-bottom: 6px; }
   .card .card-valores { margin-top: auto; }
@@ -299,7 +295,6 @@
   <section id="aba-dashboard" class="aba ativa">
     <input id="busca-dashboard" class="busca-tabela" placeholder="Buscar em Remessa, Aporte e Curva ABC…" style="max-width:420px; margin-bottom:16px;">
     <div class="cards" id="cards-kpi"></div>
-    <div class="cards" id="cards-remessa"></div>
     <div class="grid-2">
       <div class="painel">
         <h2>Títulos em aberto por faixa de vencimento</h2>
@@ -1595,7 +1590,12 @@ function renderizarCardsRemessa() {
   const remessasAprovadas = new Set(), remessasAAprovar = new Set();
   Object.entries(grupos).forEach(([rem, g]) => { (g.aprovados === g.total ? remessasAprovadas : remessasAAprovar).add(rem); });
 
-  document.getElementById('cards-remessa').innerHTML = `
+  // insertAdjacentHTML (em vez de innerHTML) porque este card entra na
+  // MESMA grade dos cards de KPI (#cards-kpi) — pra ficar na mesma linha
+  // dos outros em vez de virar uma segunda fileira separada. Seguro contra
+  // duplicar em re-renders porque o innerHTML de #cards-kpi é reatribuído
+  // (limpo) logo acima, antes desta função ser chamada.
+  document.getElementById('cards-kpi').insertAdjacentHTML('beforeend', `
     <div class="card">
       <div class="rotulo">Remessas</div>
       <div class="card-valores">
@@ -1608,7 +1608,7 @@ function renderizarCardsRemessa() {
           <div class="card-qtde">${remessasAAprovar.size.toLocaleString('pt-BR')}</div>
         </div>
       </div>
-    </div>`;
+    </div>`);
   // remessasAprovadas/AAprovar vêm de Object.entries (chaves sempre viram
   // String), mas i['Remessa'] é o valor bruto do item — pode ser número.
   document.getElementById('card-remessas-aprovadas').addEventListener('click', () =>
