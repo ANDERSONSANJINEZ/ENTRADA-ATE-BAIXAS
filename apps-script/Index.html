@@ -1543,6 +1543,12 @@ function renderizarDashboard() {
   const vencidoValor = vencidos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   const aguardando = erpFiltrado().filter(i => i['Aprovação Remessa'] === 'Aguardando' || !i['Aprovação Remessa']);
   const aguardandoValor = aguardando.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  // Remessa é um atributo só do ERP (Manual não passa pelo fluxo de
+  // remessa/aprovação do Protheus) — títulos do ERP sem Remessa preenchida
+  // hoje ficam invisíveis nos cards/gráficos de Remessa (todos filtram por
+  // "if (!rem) return"), então sem este card ninguém percebia que existiam.
+  const semRemessa = erpFiltrado().filter(i => !i['Remessa']);
+  const semRemessaValor = semRemessa.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   const manuaisPendentes = manualFiltrado().filter(m => m.Status !== 'Duplicado – revisar');
   const manuaisPendentesValor = manuaisPendentes.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   const duplicadosItens = manualFiltrado().filter(m => m.Status === 'Duplicado – revisar');
@@ -1555,6 +1561,7 @@ function renderizarDashboard() {
     { rotulo: 'Em aberto (sem baixa)', qtde: abertoQtde.toLocaleString('pt-BR'), valor: fmtMoeda(abertoValor), itens: abertos },
     { rotulo: 'Vencido e em aberto', qtde: vencidoQtde.toLocaleString('pt-BR'), valor: fmtMoeda(vencidoValor), classe: vencidoQtde ? 'alerta' : '', itens: vencidos },
     { rotulo: 'Aguardando aprovação (ERP)', qtde: aguardando.length.toLocaleString('pt-BR'), valor: fmtMoeda(aguardandoValor), classe: aguardando.length ? 'atencao' : '', itens: aguardando },
+    { rotulo: 'ERP sem Remessa identificada', qtde: semRemessa.length.toLocaleString('pt-BR'), valor: fmtMoeda(semRemessaValor), classe: semRemessa.length ? 'atencao' : '', itens: semRemessa },
     { rotulo: 'Lançados manualmente (não conferidos)', qtde: manuaisPendentes.length.toLocaleString('pt-BR'), valor: fmtMoeda(manuaisPendentesValor), itens: manuaisPendentes },
     { rotulo: 'Duplicados a revisar', qtde: duplicados.toLocaleString('pt-BR'), valor: fmtMoeda(duplicadosValor), classe: duplicados ? 'alerta' : '', itens: duplicadosItens },
   ];
@@ -2486,6 +2493,10 @@ document.getElementById('select-aporte-detalhe').addEventListener('change', rend
 
 // ---------- Análise (achados analíticos, calculados ao vivo) ----------
 let ultimoDadosAnalise = [];
+let ultimoSemRemessaAnalise = [];
+function abrirDetalheSemRemessaErp() {
+  abrirDetalhe('Títulos do ERP sem Remessa identificada', ultimoSemRemessaAnalise);
+}
 
 function renderizarAnalise() {
   const itens = combinadoParaAnalise();
@@ -2561,6 +2572,13 @@ function renderizarAnalise() {
   });
   let remessasAprovadas = 0, remessasAAprovar = 0;
   Object.values(remessasGrupos).forEach((g) => { if (g.aprovados === g.total) remessasAprovadas++; else remessasAAprovar++; });
+
+  // Remessa é atributo só do ERP — títulos sem Remessa preenchida ficam de
+  // fora de todo card/gráfico de Remessa (todos filtram "if (!r) return"),
+  // então sem isto aqui eles ficavam invisíveis pra quem olha só por essa
+  // ótica. ultimoSemRemessaAnalise guarda a lista pro link abrir o detalhe.
+  ultimoSemRemessaAnalise = erpFiltrado().filter((i) => !i['Remessa']);
+  const semRemessaValorAnalise = ultimoSemRemessaAnalise.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
 
   // Forma de pagamento: pra que a diretoria veja se dá pra negociar melhor
   // com o banco (ex.: concentrar em TED reduz custo de boleto).
@@ -2677,6 +2695,9 @@ function renderizarAnalise() {
     <h3>Remessas</h3>
     <ul>
       <li><strong>${remessasAprovadas.toLocaleString('pt-BR')}</strong> remessas totalmente aprovadas e <strong>${remessasAAprovar.toLocaleString('pt-BR')}</strong> ainda com pendência de aprovação.</li>
+      <li>${ultimoSemRemessaAnalise.length
+        ? `<strong><a href="javascript:void(0)" onclick="abrirDetalheSemRemessaErp()">${ultimoSemRemessaAnalise.length.toLocaleString('pt-BR')} título(s) do ERP</a></strong> sem Remessa identificada — ${fmtMoeda(semRemessaValorAnalise)}, de fora de todos os números de Remessa acima (vale conferir se falta preencher no Protheus).`
+        : 'Todos os títulos do ERP têm Remessa identificada.'}</li>
     </ul>
     <h3>Formas de pagamento</h3>
     <ul>
@@ -2735,6 +2756,8 @@ function renderizarAnalise() {
     ['Prazo médio de baixa (dias)', dpoMedio != null ? dpoMedio.toFixed(0) : ''],
     ['Remessas aprovadas', remessasAprovadas],
     ['Remessas a aprovar', remessasAAprovar],
+    ['ERP sem Remessa identificada — qtde', ultimoSemRemessaAnalise.length],
+    ['ERP sem Remessa identificada — valor', fmtMoeda(semRemessaValorAnalise)],
     ...formasOrdenadas.map(([fp, d]) => [`Forma de pagamento — ${fp}`, `${d.qtde} título(s), ${fmtMoeda(d.valor)}`]),
     ['ERP — qtde', totalErpQtde],
     ['ERP — valor', fmtMoeda(valorErp)],
