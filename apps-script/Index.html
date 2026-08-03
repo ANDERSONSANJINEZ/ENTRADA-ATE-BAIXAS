@@ -76,6 +76,10 @@
   .aba { display: none; }
   .aba.ativa { display: block; }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  /* #cards-remessa tem só 1 card — sem isso ele esticaria pra ocupar a
+     linha inteira (auto-fit some com as colunas vazias e dá tudo pra quem
+     sobrou), ficando bem maior que os cards padrão ao lado. */
+  #cards-remessa { grid-template-columns: minmax(180px, 260px); }
   .card { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px 16px; text-align: center; display: flex; flex-direction: column; }
   .card .rotulo { font-size: 12px; color: var(--cinza); margin-bottom: 6px; }
   .card .card-valores { margin-top: auto; }
@@ -137,18 +141,13 @@
   #conteudo-analise h3:first-child { margin-top: 0; }
   #conteudo-analise a { color: var(--azul); font-weight: bold; text-decoration: none; cursor: pointer; }
   #conteudo-analise a:hover { text-decoration: underline; }
-  .cards-remessa-status { margin-bottom: 24px; }
-  /* Um card só, 3 linhas: título "Remessas" e as duas linhas clicáveis
-     (Aprovadas/A Aprovar) embaixo — eram 2 cards lado a lado antes. */
-  .card-remessa-status { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px 20px; }
-  .card-remessa-titulo { font-size: 14px; font-weight: bold; color: var(--azul); margin-bottom: 8px; }
-  .card-remessa-linha { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 6px; border-left: 4px solid transparent; }
-  .card-remessa-linha + .card-remessa-linha { margin-top: 4px; }
-  .card-remessa-linha .rotulo { font-size: 13px; color: var(--cinza); }
-  .card-remessa-linha .card-qtde { font-size: 20px; font-weight: bold; }
-  .card-remessa-linha.aprovadas { border-left-color: var(--verde); }
+  /* Card "Remessas": mesma caixa padrão dos outros cards de KPI (.card),
+     só que com 2 números empilhados em vez de 1 — Aprovadas/A Aprovar,
+     cada um com seu rótulo pequeno em cima, igual ao card padrão. */
+  .card-remessa-linha { margin-top: 10px; }
+  .card-remessa-linha:first-child { margin-top: 0; }
+  .card-remessa-linha .rotulo { font-size: 12px; color: var(--cinza); margin-bottom: 2px; }
   .card-remessa-linha.aprovadas .card-qtde { color: var(--verde); }
-  .card-remessa-linha.a-aprovar { border-left-color: var(--laranja); }
   .card-remessa-linha.a-aprovar .card-qtde { color: var(--laranja); }
   .grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -300,7 +299,7 @@
   <section id="aba-dashboard" class="aba ativa">
     <input id="busca-dashboard" class="busca-tabela" placeholder="Buscar em Remessa, Aporte e Curva ABC…" style="max-width:420px; margin-bottom:16px;">
     <div class="cards" id="cards-kpi"></div>
-    <div class="cards-remessa-status" id="cards-remessa"></div>
+    <div class="cards" id="cards-remessa"></div>
     <div class="grid-2">
       <div class="painel">
         <h2>Títulos em aberto por faixa de vencimento</h2>
@@ -1597,15 +1596,17 @@ function renderizarCardsRemessa() {
   Object.entries(grupos).forEach(([rem, g]) => { (g.aprovados === g.total ? remessasAprovadas : remessasAAprovar).add(rem); });
 
   document.getElementById('cards-remessa').innerHTML = `
-    <div class="card-remessa-status">
-      <div class="card-remessa-titulo">Remessas</div>
-      <div class="card-remessa-linha aprovadas clicavel" id="card-remessas-aprovadas">
-        <span class="rotulo">Aprovadas</span>
-        <span class="card-qtde">${remessasAprovadas.size.toLocaleString('pt-BR')}</span>
-      </div>
-      <div class="card-remessa-linha a-aprovar clicavel" id="card-remessas-a-aprovar">
-        <span class="rotulo">A Aprovar</span>
-        <span class="card-qtde">${remessasAAprovar.size.toLocaleString('pt-BR')}</span>
+    <div class="card">
+      <div class="rotulo">Remessas</div>
+      <div class="card-valores">
+        <div class="card-remessa-linha aprovadas clicavel" id="card-remessas-aprovadas">
+          <div class="rotulo">Aprovadas</div>
+          <div class="card-qtde">${remessasAprovadas.size.toLocaleString('pt-BR')}</div>
+        </div>
+        <div class="card-remessa-linha a-aprovar clicavel" id="card-remessas-a-aprovar">
+          <div class="rotulo">A Aprovar</div>
+          <div class="card-qtde">${remessasAAprovar.size.toLocaleString('pt-BR')}</div>
+        </div>
       </div>
     </div>`;
   // remessasAprovadas/AAprovar vêm de Object.entries (chaves sempre viram
