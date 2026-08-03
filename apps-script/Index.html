@@ -167,13 +167,13 @@
   .badge-manual { background: #ede9fe; color: #5b21b6; }
   .badge-ok { background: #dcfce7; color: var(--verde); }
   .badge-dup { background: #fee2e2; color: var(--vermelho); }
-  /* Coluna Valor do Detalhe por Aporte no estilo contábil: "R$" grudado à
-     esquerda da célula e o número grudado à direita — flex/space-between
-     empurra os dois pras pontas, então os dígitos ficam alinhados entre
-     linhas independente do tamanho do valor (diferente do texto "R$ x,xx"
-     corrido, que desalinha os dígitos quando os valores têm tamanhos
-     diferentes). */
-  #tabela-detalhe-aporte td.col-valor { display: flex; justify-content: space-between; align-items: center; }
+  /* Coluna Valor no estilo contábil (Detalhe por Aporte e o modal de
+     detalhamento genérico): "R$" grudado à esquerda da célula e o número
+     grudado à direita — flex/space-between empurra os dois pras pontas,
+     então os dígitos ficam alinhados entre linhas independente do
+     tamanho do valor (diferente do texto "R$ x,xx" corrido, que
+     desalinha os dígitos quando os valores têm tamanhos diferentes). */
+  #tabela-detalhe-aporte td.col-valor, #modal-detalhe-tabela td.col-valor { display: flex; justify-content: space-between; align-items: center; }
   /* Linha clicável pra abrir o anexo (documento/comprovante) do título —
      mesmo comportamento do modal-detalhe genérico. */
   #tabela-detalhe-aporte tbody tr { cursor: pointer; }
@@ -338,7 +338,7 @@
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Curva ABC dos fornecedores</h2>
-        <button class="btn secundario small" onclick="restaurarSelecaoPadraoAbc()" title="Volta a mostrar os 15 fornecedores de maior valor no período">↺ Padrão (15 maiores)</button>
+        <button class="btn secundario small" onclick="restaurarSelecaoPadraoAbc()" title="Volta a mostrar os 5 fornecedores de maior valor no período">↺ Padrão (5 maiores)</button>
         <button class="btn secundario small" onclick="exportarXlsx('pagosAbc')">⬇ Exportar Excel</button>
       </div>
       <div id="pagos-abc-vazio" style="font-size:13px; color:var(--cinza); display:none;">Nenhum título baixado (pago) no período pra estes fornecedores.</div>
@@ -349,6 +349,7 @@
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Curva ABC de fornecedores</h2>
+        <button class="btn secundario small" onclick="limparSelecaoAbcGrafico()" title="Desmarca todos os fornecedores do gráfico 'Curva ABC dos fornecedores'">☐ Limpar seleção</button>
         <button class="btn secundario small" onclick="exportarXlsx('abc')">⬇ Exportar Excel</button>
       </div>
       <div id="total-abc" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
@@ -1383,7 +1384,7 @@ function renderizarModalDetalhe() {
       <td title="${escaparHtml(i['Código Fornecedor'])}">${i['Código Fornecedor'] || ''}</td>
       <td>${i['Razão Social'] || ''}</td>
       <td>${fmtData(i['Vencimento'])}</td>
-      <td title="${escaparHtml(fmtMoeda(i['R$ Valor']))}">${fmtMoeda(i['R$ Valor'])}</td>
+      <td class="col-valor">${htmlMoedaAlinhada(i['R$ Valor'])}</td>
       <td>${fmtData(i['Data Baixa'])}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="9" style="color:var(--cinza)">Nenhum título encontrado para este filtro.</td></tr>';
@@ -1563,7 +1564,7 @@ function exportarXlsx(qual) {
     baixarXlsx('valor_por_remessa.xlsx', ['Remessa', 'Qtde', 'Valor'], linhas);
   } else if (qual === 'pagosAbc') {
     const linhas = ultimoDadosPagosAbc.map(([nome, mes, valor]) => [nome, mes, fmtMoeda(valor)]);
-    baixarXlsx('pagos_top15_abc.xlsx', ['Fornecedor', 'Mês', 'Valor Pago'], linhas);
+    baixarXlsx('pagos_curva_abc.xlsx', ['Fornecedor', 'Mês', 'Valor Pago'], linhas);
   } else if (qual === 'detalheAporte') {
     // Mesma marcação de grupo (troca de Vencimento) usada na tela via
     // tr.separador-grupo — replicada aqui como borda superior mais grossa.
@@ -2012,15 +2013,20 @@ function renderizarFluxoCaixa(abertos, hoje) {
 
 const EXTRATORES_ABC = [undefined, l => l.cod, l => l.nome, l => l.qtde, l => l.valor, l => l.pct, l => l.acum, l => l.classe];
 
+// Quantos fornecedores entram por padrão no gráfico "Curva ABC dos
+// fornecedores" quando ninguém marcou/desmarcou nada na tabela ainda.
+const TOP_N_PADRAO_ABC = 5;
+
 // Quais fornecedores aparecem no gráfico "Curva ABC dos fornecedores":
-// null = automático (os 15 de maior valor no período, comportamento
-// original); Set = escolha manual feita marcando/desmarcando linhas na
-// tabela Curva ABC. Persiste entre re-renderizações (filtro, busca,
-// ordenação da tabela) até o usuário clicar em "Padrão (15 maiores)".
+// null = automático (os TOP_N_PADRAO_ABC de maior valor no período,
+// comportamento original); Set (mesmo vazio, via "Limpar seleção") =
+// escolha manual feita marcando/desmarcando linhas na tabela Curva ABC.
+// Persiste entre re-renderizações (filtro, busca, ordenação da tabela)
+// até o usuário clicar em "Padrão".
 let selecaoAbcGrafico = null;
 
 // Ranking por valor (maior pra menor) — mesmo critério usado tanto pra
-// decidir os "15 maiores" padrão quanto pra popular a Curva ABC.
+// decidir os maiores padrão quanto pra popular a Curva ABC.
 function calcularRankingAbc(itens) {
   const grupos = {};
   itens.forEach(i => {
@@ -2034,7 +2040,7 @@ function calcularRankingAbc(itens) {
 
 function toggleSelecaoAbcGrafico(cod) {
   if (selecaoAbcGrafico === null) {
-    const codigosPadrao = calcularRankingAbc(ultimoItensAnalise).slice(0, 15).map(([c]) => c);
+    const codigosPadrao = calcularRankingAbc(ultimoItensAnalise).slice(0, TOP_N_PADRAO_ABC).map(([c]) => c);
     selecaoAbcGrafico = new Set(codigosPadrao);
   }
   if (selecaoAbcGrafico.has(cod)) selecaoAbcGrafico.delete(cod); else selecaoAbcGrafico.add(cod);
@@ -2046,12 +2052,20 @@ function restaurarSelecaoPadraoAbc() {
   renderizarCurvaAbc(ultimoItensAnalise);
   renderizarPagosAbcTop15(ultimoItensAnalise);
 }
+// Desmarca todos os fornecedores de uma vez (Set vazio — diferente de
+// null, que é o padrão automático) — pra quem quer montar a seleção do
+// zero em vez de partir dos maiores e ir desmarcando um a um.
+function limparSelecaoAbcGrafico() {
+  selecaoAbcGrafico = new Set();
+  renderizarCurvaAbc(ultimoItensAnalise);
+  renderizarPagosAbcTop15(ultimoItensAnalise);
+}
 
 function renderizarCurvaAbc(itens) {
   ultimoItensAnalise = itens;
   const totalGeral = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   const ordenadoBase = calcularRankingAbc(itens);
-  const codigosPadrao = ordenadoBase.slice(0, 15).map(([cod]) => cod);
+  const codigosPadrao = ordenadoBase.slice(0, TOP_N_PADRAO_ABC).map(([cod]) => cod);
   const selecaoAtual = selecaoAbcGrafico === null ? new Set(codigosPadrao) : selecaoAbcGrafico;
   let acumulado = 0;
   let linhas = ordenadoBase.map(([cod, g]) => {
@@ -2087,15 +2101,15 @@ const PALETA_15 = [
 let ultimoDadosPagosAbc = []; // export: [fornecedor, mês, valor]
 
 // Valores efetivamente PAGOS (com Data Baixa) aos fornecedores selecionados
-// na tabela Curva ABC (padrão: os 15 de maior valor no período — mesmo
-// critério de ranking da Curva ABC — mais o filtro de "pago", já que a
-// Curva ABC em si soma aberto + baixado). Agrupado por mês da baixa: é o
-// "ao longo do período" — quando o dinheiro de fato saiu, não a data de
-// vencimento do título.
+// na tabela Curva ABC (padrão: os TOP_N_PADRAO_ABC de maior valor no
+// período — mesmo critério de ranking da Curva ABC — mais o filtro de
+// "pago", já que a Curva ABC em si soma aberto + baixado). Agrupado por
+// mês da baixa: é o "ao longo do período" — quando o dinheiro de fato
+// saiu, não a data de vencimento do título.
 function renderizarPagosAbcTop15(itens) {
   const ranking = calcularRankingAbc(itens);
   const selecionados = selecaoAbcGrafico === null
-    ? ranking.slice(0, 15)
+    ? ranking.slice(0, TOP_N_PADRAO_ABC)
     : ranking.filter(([cod]) => selecaoAbcGrafico.has(cod));
   const codigosSelecionados = new Set(selecionados.map(([cod]) => cod));
   const nomePorCodigo = {};
@@ -2738,7 +2752,7 @@ function renderizarAnalise() {
           <li>Sem título correspondente: <strong>${qtdeConc('Sem título correspondente').toLocaleString('pt-BR')}</strong> lançamento(s) do extrato — ${fmtMoeda(valorConc('Sem título correspondente'))} sem nenhum título batendo (pagamento feito mas não registrado no sistema? vale conferir).</li>
         `}
     </ul>
-    <h3>Aging dos títulos vencidos em aberto</h3>
+    <h3>Títulos vencidos em aberto</h3>
     <ul>
       <li>1–30 dias: ${fmtMoeda(faixas['1–30 dias'])}</li>
       <li>31–60 dias: ${fmtMoeda(faixas['31–60 dias'])}</li>
