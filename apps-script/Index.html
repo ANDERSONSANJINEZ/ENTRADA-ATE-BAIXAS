@@ -182,6 +182,10 @@
      corrido, que desalinha os dígitos quando os valores têm tamanhos
      diferentes). */
   #tabela-detalhe-aporte td.col-valor { display: flex; justify-content: space-between; align-items: center; }
+  /* Linha clicável pra abrir o anexo (documento/comprovante) do título —
+     mesmo comportamento do modal-detalhe genérico. */
+  #tabela-detalhe-aporte tbody tr { cursor: pointer; }
+  #tabela-detalhe-aporte tbody tr:hover { background: var(--azul-claro); }
   .filtros { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
   .filtros input, .filtros select { padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; font-size: 13px; }
   .btn { background: var(--azul); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
@@ -497,7 +501,10 @@
       <select id="select-aporte-detalhe" class="busca-tabela" style="max-width:420px;">
         <option value="">Selecione um aporte…</option>
       </select>
-      <div id="total-detalhe-aporte" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+        <div id="total-detalhe-aporte" style="font-size:13px; color:var(--cinza);"></div>
+        <div style="font-size:12px; color:var(--cinza);">Clique no título de uma coluna pra ordenar (clique de novo pra inverter)</div>
+      </div>
       <div class="tabela-scroll">
         <table id="tabela-detalhe-aporte">
           <thead><tr><th>Data</th><th>N/Doc.</th><th>Descrição</th><th>Venc.</th><th>Valor</th></tr></thead>
@@ -1033,6 +1040,16 @@ function limparNumeroDocDoHistorico_(historico, nDoc) {
   }
   return h.replace(/\s*-\s*-\s*/g, ' - ').replace(/^\s*-\s*/, '').replace(/\s*-\s*$/, '').trim();
 }
+// Descrição exibida/exportada em Detalhe por Aporte — função única usada
+// tanto pela tela quanto pela exportação Excel (e pelo extrator de
+// ordenação da coluna Descrição), pra nunca ficarem divergentes.
+function montarDescricaoAporte_(i) {
+  const nDoc = `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim();
+  const partes = [i['Razão Social'], limparNumeroDocDoHistorico_(i['Histórico'], nDoc)].filter(Boolean);
+  let descricao = partes.join(' - ');
+  if (i['Parcela']) descricao += ` - PARC.: ${i['Parcela']}`;
+  return descricao;
+}
 // Timestamp (ms) do "dia calendário" em UTC, usado para comparar datas sem
 // hora entre si e com hojeCalendario(), sem deslocamento de fuso.
 function diaCalendario(d) { return d ? Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) : null; }
@@ -1566,11 +1583,10 @@ function exportarXlsx(qual) {
       const vencAtual = fmtData(i['Vencimento']);
       if (vencAnterior !== null && vencAnterior !== vencAtual) linhasComSeparador.add(idx);
       vencAnterior = vencAtual;
-      const nDoc = `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim();
       return [
         fmtData(i['Data Emissão']),
-        nDoc,
-        [i['Razão Social'], limparNumeroDocDoHistorico_(i['Histórico'], nDoc)].filter(Boolean).join(' - ') + (i['Parcela'] ? ` - PARC.: ${i['Parcela']}` : ''),
+        `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(),
+        montarDescricaoAporte_(i),
         vencAtual,
         fmtMoeda(i['R$ Valor']),
       ];
@@ -2575,6 +2591,18 @@ function popularSelectAporteDetalhe() {
   sel.value = disponiveis.includes(atual) ? atual : '';
 }
 
+// Um extrator por coluna (Data, N/Doc., Descrição, Venc., Valor) — usado
+// por aplicarOrdenacao/tornarOrdenavel, mesmas funções genéricas de
+// clique-pra-ordenar já usadas em tabela-aporte/tabela-abc/
+// tabela-lancamentos/modal-detalhe.
+const EXTRATORES_DETALHE_APORTE = [
+  i => paraData(i['Data Emissão']) || 0,
+  i => `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(),
+  i => montarDescricaoAporte_(i),
+  i => paraData(i['Vencimento']) || 0,
+  i => paraNumero(i['R$ Valor']),
+];
+
 function renderizarDetalheAporte() {
   const aporte = document.getElementById('select-aporte-detalhe').value;
   const tbody = document.querySelector('#tabela-detalhe-aporte tbody');
@@ -2585,23 +2613,31 @@ function renderizarDetalheAporte() {
     ultimoDetalheAporte = [];
     return;
   }
-  let itens = ultimoItensAnalise.filter((i) => calcularAporte(i['Vencimento']) === aporte);
-  itens.sort((a, b) => (paraData(a['Vencimento']) || 0) - (paraData(b['Vencimento']) || 0));
-  ultimoDetalheAporte = itens;
+  const itens = ultimoItensAnalise.filter((i) => calcularAporte(i['Vencimento']) === aporte);
+  // Padrão na 1ª vez que esta tabela é ordenada na sessão (ninguém clicou
+  // num cabeçalho ainda): Venc., mais antigo primeiro — igual ao
+  // comportamento fixo que este recurso substitui.
+  if (!estadoOrdenacao['tabela-detalhe-aporte']) estadoOrdenacao['tabela-detalhe-aporte'] = { colIdx: 3, asc: true };
+  ultimoDetalheAporte = aplicarOrdenacao('tabela-detalhe-aporte', itens, EXTRATORES_DETALHE_APORTE);
 
   let vencAnterior = null;
-  const linhas = itens.map((i) => {
+  const linhas = ultimoDetalheAporte.map((i) => {
     const vencAtual = fmtData(i['Vencimento']);
     const separador = (vencAnterior !== null && vencAnterior !== vencAtual) ? ' class="separador-grupo"' : '';
     vencAnterior = vencAtual;
     const nDoc = `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim();
-    const partes = [i['Razão Social'], limparNumeroDocDoHistorico_(i['Histórico'], nDoc)].filter(Boolean);
-    let descricao = partes.join(' - ');
-    if (i['Parcela']) descricao += ` - PARC.: ${i['Parcela']}`;
-    return `<tr${separador}><td>${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td>${vencAtual}</td><td class="col-valor">${htmlMoedaAlinhada(i['R$ Valor'])}</td></tr>`;
+    const descricao = montarDescricaoAporte_(i);
+    const linkDoc = i['Link Documento'] || '';
+    const linkComp = i['Link Comprovante'] || '';
+    const tituloLinha = (linkDoc || linkComp)
+      ? `Clique para abrir o anexo (${[linkDoc ? 'documento' : '', linkComp ? 'comprovante' : ''].filter(Boolean).join(' e ')})`
+      : 'Nenhum anexo cadastrado para este título';
+    return `<tr${separador} onclick="abrirAnexoLinhaModalDetalhe('${escaparAtributo(linkDoc)}','${escaparAtributo(linkComp)}')" title="${escaparHtml(tituloLinha)}"><td>${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td>${vencAtual}</td><td class="col-valor">${htmlMoedaAlinhada(i['R$ Valor'])}</td></tr>`;
   });
   tbody.innerHTML = linhas.join('') || '<tr><td colspan="5" style="color:var(--cinza)">Nenhum título encontrado para este aporte.</td></tr>';
-  definirTotalizador('total-detalhe-aporte', itens);
+  definirTotalizador('total-detalhe-aporte', ultimoDetalheAporte);
+  tornarOrdenavel('tabela-detalhe-aporte', EXTRATORES_DETALHE_APORTE, renderizarDetalheAporte);
+  atualizarSetasOrdenacao('tabela-detalhe-aporte');
 }
 document.getElementById('select-aporte-detalhe').addEventListener('change', renderizarDetalheAporte);
 
