@@ -615,12 +615,7 @@
     </div>
     <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
       <div id="modal-detalhe-total" style="font-size:13px; color:var(--cinza);"></div>
-      <select id="modal-detalhe-ordenar" onchange="mudarOrdemModalDetalhe(this.value)" style="padding:5px 8px; border:1px solid var(--borda); border-radius:6px; font-size:13px;">
-        <option value="vencimento-asc">Vencimento — mais antigo primeiro</option>
-        <option value="vencimento-desc">Vencimento — mais recente primeiro</option>
-        <option value="valor-desc">Valor — maior primeiro</option>
-        <option value="valor-asc">Valor — menor primeiro</option>
-      </select>
+      <div style="font-size:12px; color:var(--cinza);">Clique no título de uma coluna pra ordenar (clique de novo pra inverter)</div>
     </div>
     <div class="tabela-scroll" style="max-height:60vh;">
       <table id="modal-detalhe-tabela">
@@ -1023,6 +1018,21 @@ function fmtData(v) {
   const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
   return `${dia}/${mes}/${d.getUTCFullYear()}`;
 }
+// O Protheus às vezes embute no próprio Histórico o mesmo "Tipo Nº
+// Documento" que já aparece na coluna N/Doc. ao lado (ex.: histórico
+// "MADEIREIRA CASTELO - 3/3 - NF 367 - TABUA MISTA..." quando N/Doc. já é
+// "NF 367") — tira essa repetição da descrição exibida/exportada em
+// Detalhe por Aporte. Não faz nada quando o histórico não repete o
+// número (a maioria dos casos), só limpa hífens soltos que sobrarem.
+function limparNumeroDocDoHistorico_(historico, nDoc) {
+  if (!historico) return historico || '';
+  let h = historico;
+  if (nDoc) {
+    const escapado = nDoc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    h = h.replace(new RegExp(escapado, 'i'), '');
+  }
+  return h.replace(/\s*-\s*-\s*/g, ' - ').replace(/^\s*-\s*/, '').replace(/\s*-\s*$/, '').trim();
+}
 // Timestamp (ms) do "dia calendário" em UTC, usado para comparar datas sem
 // hora entre si e com hojeCalendario(), sem deslocamento de fuso.
 function diaCalendario(d) { return d ? Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) : null; }
@@ -1254,13 +1264,14 @@ function escaparHtml(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;
 // "Todos os lançamentos".
 let ultimoItensModalDetalhe = [];
 let ultimoTituloModalDetalhe = '';
-// Fica de uma abertura do modal pra outra de propósito — é uma preferência
-// de visualização, não algo específico do conjunto de títulos que estava
-// sendo mostrado, então não faz sentido resetar toda vez que o modal abre.
-let ordemModalDetalhe = 'vencimento-asc';
-// Filtros por coluna, ao contrário da ordem, são resetados a cada abertura
-// (ver abrirDetalhe) — são específicos do conjunto de títulos que está
-// sendo mostrado agora, não uma preferência geral de visualização.
+// Filtros por coluna são resetados a cada abertura (ver abrirDetalhe) —
+// são específicos do conjunto de títulos que está sendo mostrado agora.
+// A ORDEM (clique no título da coluna, ver EXTRATORES_MODAL_DETALHE mais
+// abaixo) fica de uma abertura pra outra de propósito, guardada em
+// estadoOrdenacao['modal-detalhe-tabela'] igual às outras planilhas com
+// cabeçalho clicável (tabela-aporte, tabela-abc, tabela-lancamentos) — é
+// uma preferência de visualização, não algo específico do conjunto de
+// títulos que estava sendo mostrado.
 let filtrosModalDetalhe = { origem: '', status: '', tipo: '', nDoc: '', fornecedor: '', razaoSocial: '', vencimento: '', valor: '', dataBaixa: '' };
 
 function calcularStatusExibicaoModalDetalhe(i) {
@@ -1298,19 +1309,24 @@ function aplicarFiltrosModalDetalhe() {
   renderizarModalDetalhe();
 }
 
-function ordenarItensModalDetalhe(itens, ordem) {
-  const copia = itens.slice();
-  if (ordem === 'valor-desc') copia.sort((a, b) => paraNumero(b['R$ Valor']) - paraNumero(a['R$ Valor']));
-  else if (ordem === 'valor-asc') copia.sort((a, b) => paraNumero(a['R$ Valor']) - paraNumero(b['R$ Valor']));
-  else if (ordem === 'vencimento-desc') copia.sort((a, b) => (paraData(b['Vencimento']) || 0) - (paraData(a['Vencimento']) || 0));
-  else copia.sort((a, b) => (paraData(a['Vencimento']) || 0) - (paraData(b['Vencimento']) || 0)); // vencimento-asc (padrão)
-  return copia;
-}
-
-function mudarOrdemModalDetalhe(ordem) {
-  ordemModalDetalhe = ordem;
-  renderizarModalDetalhe();
-}
+// Um extrator por coluna, na mesma ordem do cabeçalho da tabela — usado
+// por aplicarOrdenacao/tornarOrdenavel (mesmas funções genéricas de
+// clique-pra-ordenar já usadas em tabela-aporte/tabela-abc/
+// tabela-lancamentos). Vencimento e Data Baixa extraem a data já
+// convertida (não o texto formatado) pra ordenar cronologicamente, não
+// alfabeticamente (senão "02/01" viria antes de "15/12" por comparação de
+// texto).
+const EXTRATORES_MODAL_DETALHE = [
+  i => i.Origem,
+  i => calcularStatusExibicaoModalDetalhe(i),
+  i => i.Tipo,
+  i => i['Nº Documento'],
+  i => i['Código Fornecedor'],
+  i => i['Razão Social'],
+  i => paraData(i['Vencimento']) || 0,
+  i => paraNumero(i['R$ Valor']),
+  i => paraData(i['Data Baixa']) || 0,
+];
 
 // Clicar numa linha do modal abre o anexo (documento e/ou comprovante) já
 // cadastrado pra aquele título — abre os dois se ambos existirem, já que
@@ -1332,14 +1348,17 @@ function abrirDetalhe(titulo, itens) {
   ['mdf-origem', 'mdf-status', 'mdf-tipo', 'mdf-ndoc', 'mdf-fornecedor', 'mdf-razao', 'mdf-vencimento', 'mdf-valor', 'mdf-databaixa']
     .forEach((id) => { document.getElementById(id).value = ''; });
   document.getElementById('modal-detalhe-titulo').textContent = titulo;
-  document.getElementById('modal-detalhe-ordenar').value = ordemModalDetalhe;
   renderizarModalDetalhe();
   document.getElementById('modal-detalhe').classList.add('aberto');
 }
 
 function renderizarModalDetalhe() {
+  // Padrão de ordenação na 1ª vez que este modal é aberto em toda a sessão
+  // (ninguém clicou num cabeçalho ainda): Vencimento, mais antigo primeiro
+  // — igual ao comportamento antigo do seletor que este recurso substitui.
+  if (!estadoOrdenacao['modal-detalhe-tabela']) estadoOrdenacao['modal-detalhe-tabela'] = { colIdx: 6, asc: true };
   const filtrados = filtrarItensModalDetalhe(ultimoItensModalDetalhe, filtrosModalDetalhe);
-  const linhas = ordenarItensModalDetalhe(filtrados, ordemModalDetalhe);
+  const linhas = aplicarOrdenacao('modal-detalhe-tabela', filtrados, EXTRATORES_MODAL_DETALHE);
   document.querySelector('#modal-detalhe-tabela tbody').innerHTML = linhas.map((i) => {
     const origemBadge = i.Origem === 'ERP' ? 'badge-erp' : 'badge-manual';
     const statusTxt = calcularStatusExibicaoModalDetalhe(i);
@@ -1363,6 +1382,12 @@ function renderizarModalDetalhe() {
   }).join('') || '<tr><td colspan="9" style="color:var(--cinza)">Nenhum título encontrado para este filtro.</td></tr>';
   const total = filtrados.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   document.getElementById('modal-detalhe-total').textContent = `${filtrados.length.toLocaleString('pt-BR')} título(s) · Total: ${fmtMoeda(total)}`;
+  tornarOrdenavel('modal-detalhe-tabela', EXTRATORES_MODAL_DETALHE, renderizarModalDetalhe);
+  // tornarOrdenavel só atualiza as setas sozinho a partir da 2ª chamada em
+  // diante (a 1ª só monta os cliques) — sem isto, a seta da ordenação
+  // padrão (Vencimento) não apareceria na primeira vez que o modal abre
+  // na sessão, mesmo a lista já saindo ordenada certo.
+  atualizarSetasOrdenacao('modal-detalhe-tabela');
 }
 function fecharModalDetalhe() {
   document.getElementById('modal-detalhe').classList.remove('aberto');
@@ -1373,7 +1398,7 @@ function exportarModalDetalhe() {
   // Excel viria com títulos e numa ordem diferentes do que a pessoa
   // acabou de ver e organizar.
   const filtrados = filtrarItensModalDetalhe(ultimoItensModalDetalhe, filtrosModalDetalhe);
-  const linhas = ordenarItensModalDetalhe(filtrados, ordemModalDetalhe)
+  const linhas = aplicarOrdenacao('modal-detalhe-tabela', filtrados, EXTRATORES_MODAL_DETALHE)
     .map((i) => [
       i.Origem || '', calcularStatusExibicaoModalDetalhe(i),
       i.Tipo || '', i['Nº Documento'] || '', i['Código Fornecedor'] || '', i['Razão Social'] || '',
@@ -1541,10 +1566,11 @@ function exportarXlsx(qual) {
       const vencAtual = fmtData(i['Vencimento']);
       if (vencAnterior !== null && vencAnterior !== vencAtual) linhasComSeparador.add(idx);
       vencAnterior = vencAtual;
+      const nDoc = `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim();
       return [
         fmtData(i['Data Emissão']),
-        `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(),
-        [i['Razão Social'], i['Histórico']].filter(Boolean).join(' - ') + (i['Parcela'] ? ` - PARC.: ${i['Parcela']}` : ''),
+        nDoc,
+        [i['Razão Social'], limparNumeroDocDoHistorico_(i['Histórico'], nDoc)].filter(Boolean).join(' - ') + (i['Parcela'] ? ` - PARC.: ${i['Parcela']}` : ''),
         vencAtual,
         fmtMoeda(i['R$ Valor']),
       ];
@@ -2569,7 +2595,7 @@ function renderizarDetalheAporte() {
     const separador = (vencAnterior !== null && vencAnterior !== vencAtual) ? ' class="separador-grupo"' : '';
     vencAnterior = vencAtual;
     const nDoc = `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim();
-    const partes = [i['Razão Social'], i['Histórico']].filter(Boolean);
+    const partes = [i['Razão Social'], limparNumeroDocDoHistorico_(i['Histórico'], nDoc)].filter(Boolean);
     let descricao = partes.join(' - ');
     if (i['Parcela']) descricao += ` - PARC.: ${i['Parcela']}`;
     return `<tr${separador}><td>${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td>${vencAtual}</td><td class="col-valor">${htmlMoedaAlinhada(i['R$ Valor'])}</td></tr>`;
