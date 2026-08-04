@@ -82,6 +82,35 @@ a tela em modo leitura mesmo que o navegador já tenha uma sessão salva —
 útil para um link específico que você quer garantir que nunca vai editar
 nada, independentemente de quem o abra.
 
+## Links de acesso restrito por pessoa (`?usuario=`)
+
+Além do `?modo=leitura` (que só força leitura, sem mais restrição nenhuma),
+dá pra criar um link próprio pra uma pessoa específica que só deve ver
+**uma aba** e/ou **não deve ver alguns fornecedores**. Hoje existe um
+perfil assim cadastrado: `?usuario=sandro-costa`, que abre a tela travada
+só na aba **Lançamentos**, sem opção de editar, e sem os títulos de 14
+fornecedores específicos (nem em Lançamentos, nem em nenhum outro lugar do
+app — se um dia esse perfil ganhar acesso a outra aba, os fornecedores
+continuam de fora de tudo).
+
+Diferente do `?modo=leitura` (que só esconde botão na tela), esse filtro é
+aplicado dentro do `api_carregar()` no servidor — os títulos dos
+fornecedores excluídos nunca chegam a sair da planilha, então não tem como
+"destravar" isso só editando algo no navegador.
+
+Link pronto pra compartilhar com o Sandro: pegue a URL normal do Web App
+(a mesma usada por todo mundo) e acrescente `?usuario=sandro-costa` no
+final. Exemplo:
+```
+https://script.google.com/macros/s/SEU_ID_DE_IMPLANTACAO/exec?usuario=sandro-costa
+```
+
+**Para criar outro perfil restrito** (outra aba liberada e/ou outra lista
+de fornecedores excluídos), edite o objeto `PERFIS_RESTRITOS` no início do
+`Code.gs` e reimplante uma nova versão — é código, não dá pra cadastrar
+pela planilha (diferente da aba **Usuários**, que é só pra senha de
+edição). Cada chave do objeto vira o valor de `?usuario=` no link.
+
 ## Importação automática da pasta do Drive
 
 Na aba **Importar** da tela, o botão "🔄 Buscar arquivo mais recente do

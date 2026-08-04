@@ -750,6 +750,14 @@
 // chamadas fetch() ao backend.
 const URL_BACKEND = '<?!= urlBackend ?>';
 
+// Perfil de acesso restrito (?usuario=<chave> na URL, ver PERFIS_RESTRITOS
+// em Code.gs) — null no link normal. Precisa ser reenviado em toda
+// chamada de "carregar" (ver urlBase()/chamarServidor) porque o navegador
+// aqui dentro do iframe do Apps Script não enxerga a query string da URL
+// original (mesmo motivo do URL_BACKEND acima ser injetado pelo servidor).
+const USUARIO_RESTRITO = <?!= chaveUsuarioRestrito ?>;
+const ABAS_PERMITIDAS_RESTRITO = <?!= abasPermitidasRestrito ?>;
+
 // ---------- Acesso leitura/edição ----------
 // ?modo=leitura na URL força somente-leitura, ignorando qualquer senha
 // salva (útil para links repassados a terceiros). Fora isso, o app abre em
@@ -1020,7 +1028,8 @@ function urlBase() {
 async function chamarServidor(acao, payload) {
   payload = payload || {};
   if (acao === 'carregar') {
-    const resp = await fetch(urlBase() + '?api=json', { method: 'GET' });
+    const paramUsuario = USUARIO_RESTRITO ? '&usuario=' + encodeURIComponent(USUARIO_RESTRITO) : '';
+    const resp = await fetch(urlBase() + '?api=json' + paramUsuario, { method: 'GET' });
     return resp.json();
   }
   const resp = await fetch(urlBase(), {
@@ -1090,6 +1099,17 @@ document.querySelectorAll('nav button').forEach(btn => {
     if (btn.dataset.aba === 'historico' && !ultimoLogCarregado) carregarHistorico();
   };
 });
+
+// Perfil de acesso restrito (ver USUARIO_RESTRITO acima): esconde da
+// navegação qualquer aba fora da lista liberada e abre direto na primeira
+// (só existe hoje o perfil "sandro-costa", com só "lancamentos").
+if (ABAS_PERMITIDAS_RESTRITO) {
+  document.querySelectorAll('nav button[data-aba]').forEach((btn) => {
+    if (!ABAS_PERMITIDAS_RESTRITO.includes(btn.dataset.aba)) btn.style.display = 'none';
+  });
+  const abaInicialRestrita = document.querySelector(`nav button[data-aba="${ABAS_PERMITIDAS_RESTRITO[0]}"]`);
+  if (abaInicialRestrita) abaInicialRestrita.click();
+}
 
 // ---------- Utilitários de dados ----------
 function paraNumero(v) { return typeof v === 'number' ? v : parseFloat(v) || 0; }
@@ -3375,9 +3395,18 @@ function atualizarUiModoLeitura() {
   const btnRemoverDuplicados = document.getElementById('btn-remover-duplicados');
   if (btnRemoverDuplicados) btnRemoverDuplicados.style.display = MODO_LEITURA ? 'none' : '';
   const btnAcesso = document.getElementById('btn-acesso');
-  btnAcesso.textContent = MODO_LEITURA ? '🔓 Habilitar edição' : '🔒 Voltar para leitura';
-  btnAcesso.title = FORCAR_LEITURA_URL ? 'Link aberto em modo leitura' : '';
-  btnAcesso.onclick = MODO_LEITURA ? habilitarEdicao : desabilitarEdicao;
+  // Perfil de acesso restrito: nem mostra a opção de tentar editar — sem
+  // isso, alguém com o link do Sandro poderia tentar uma senha de edição
+  // (e, se a planilha ainda não tiver nenhum usuário cadastrado, qualquer
+  // senha libera — ver habilitarEdicao) e sair do modo leitura.
+  if (ABAS_PERMITIDAS_RESTRITO) {
+    btnAcesso.style.display = 'none';
+  } else {
+    btnAcesso.style.display = '';
+    btnAcesso.textContent = MODO_LEITURA ? '🔓 Habilitar edição' : '🔒 Voltar para leitura';
+    btnAcesso.title = FORCAR_LEITURA_URL ? 'Link aberto em modo leitura' : '';
+    btnAcesso.onclick = MODO_LEITURA ? habilitarEdicao : desabilitarEdicao;
+  }
   // Se a aba Importar estava ativa e foi escondida, volta para o Dashboard.
   if (MODO_LEITURA && document.getElementById('nav-importar').classList.contains('ativo')) {
     document.querySelector('nav button[data-aba="dashboard"]').click();

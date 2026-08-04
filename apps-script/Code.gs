@@ -22,6 +22,31 @@ var HEADERS = [
   'Link Documento', 'Link Comprovante', 'Chave Pix'
 ];
 
+// Perfis de acesso restrito por link próprio: ?usuario=<chave> na URL do
+// Web App. Cada perfil força modo leitura, esconde da navegação todas as
+// abas fora de "abas", e filtra ERP/Manual (dentro de api_carregar) pra
+// nunca mandar ao navegador os títulos dos fornecedores listados em
+// "fornecedoresExcluidos" — diferente do ?modo=leitura comum (só esconde
+// botão na tela), aqui a exclusão de fornecedor é reforçada no servidor,
+// antes do dado sair da planilha.
+var PERFIS_RESTRITOS = {
+  'sandro-costa': {
+    nome: 'Sandro Costa',
+    abas: ['lancamentos'],
+    fornecedoresExcluidos: [
+      '50458148', '63267110', '22407874', '5775268', '35021022',
+      '46170722', '63067344', '53734399', '60634166', '67791821',
+      '66769166', '63822521', '47811670', '67820752',
+    ],
+  },
+};
+
+function obterPerfilRestrito_(e) {
+  var chave = e && e.parameter && e.parameter.usuario;
+  if (!chave) return null;
+  return PERFIS_RESTRITOS[String(chave).toLowerCase()] || null;
+}
+
 var PROP_DATA_BASE = 'dataBaseImportacao';
 // Pasta do Drive onde o export diário do Protheus é salvo:
 // Compartilhados comigo / 4 - CE 007_ADMINISTRATIVO / 4.11 - FINANCEIRO / 17 CONTAS A PAGAR
@@ -383,9 +408,10 @@ function recalcularStatus_() {
 // ?api=json mantém o retorno JSON antigo, usado pela versão local de
 // web/index.html (que ainda faz fetch() em vez de google.script.run).
 function doGet(e) {
+  var perfil = obterPerfilRestrito_(e);
   if (e && e.parameter && e.parameter.api === 'json') {
     return ContentService
-      .createTextOutput(JSON.stringify(api_carregar()))
+      .createTextOutput(JSON.stringify(api_carregar(perfil)))
       .setMimeType(ContentService.MimeType.JSON);
   }
   // A página roda dentro de um iframe isolado (googleusercontent.com), então
@@ -397,8 +423,14 @@ function doGet(e) {
   // ?modo=leitura esconde as ações de escrita na tela (importar, lançar,
   // remover) — é uma restrição só de interface (o link compartilhado com
   // terceiros continua rodando com as mesmas permissões do dono do script;
-  // ver aviso no apps-script/README.md).
-  template.modoLeitura = !!(e && e.parameter && e.parameter.modo === 'leitura');
+  // ver aviso no apps-script/README.md). Um perfil restrito (?usuario=...)
+  // sempre força modo leitura também, além de limitar as abas.
+  template.modoLeitura = !!(e && e.parameter && e.parameter.modo === 'leitura') || !!perfil;
+  // 'null' (string, sem aspas) quando não há perfil — vira o literal
+  // JS "null" ao ser colado no <script> do template; com perfil, JSON.stringify
+  // já devolve a string entre aspas certa pra virar um array literal.
+  template.chaveUsuarioRestrito = perfil ? JSON.stringify(String(e.parameter.usuario)) : 'null';
+  template.abasPermitidasRestrito = perfil ? JSON.stringify(perfil.abas) : 'null';
   return template.evaluate()
     .setTitle('Entrada até Baixas — Financeiro Protheus')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
@@ -488,10 +520,26 @@ function api_validarEdicao(payload) {
   return { nome: encontrado.nome };
 }
 
-function api_carregar() {
+// "perfil" (ver PERFIS_RESTRITOS) é opcional — chamadas existentes
+// (api_importar, api_adicionarManual etc.) continuam passando nenhum
+// argumento e recebem ERP/Manual completos, sem filtro nenhum.
+function api_carregar(perfil) {
+  var erp = lerAba_('ERP');
+  var manual = lerAba_('Manual');
+  if (perfil && perfil.fornecedoresExcluidos && perfil.fornecedoresExcluidos.length) {
+    var excluidos = {};
+    perfil.fornecedoresExcluidos.forEach(function (cod) {
+      excluidos[removerZerosEsquerda_(String(cod).trim())] = true;
+    });
+    var mantemFornecedor_ = function (item) {
+      return !excluidos[removerZerosEsquerda_(String(item['Código Fornecedor'] || '').trim())];
+    };
+    erp = erp.filter(mantemFornecedor_);
+    manual = manual.filter(mantemFornecedor_);
+  }
   return {
-    erp: lerAba_('ERP'),
-    manual: lerAba_('Manual'),
+    erp: erp,
+    manual: manual,
     dataBase: getDataBase_(),
     usuariosConfigurados: listarUsuarios_().length > 0,
     // Nunca deixa o resumo de conciliação (recurso novo, secundário) travar
