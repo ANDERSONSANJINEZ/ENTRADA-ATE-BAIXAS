@@ -22,6 +22,12 @@
     --borda: #e2e8f0;
   }
   * { box-sizing: border-box; }
+  /* Sem isso, o Safari/Chrome no celular "engorda" sozinho a fonte de
+     blocos de texto que quebram em várias linhas (ex.: Histórico/Razão
+     Social, que usam white-space:normal) pra facilitar leitura — e o
+     texto dessas colunas acaba maior que o das colunas vizinhas (que não
+     quebram linha e por isso não recebem esse ajuste automático). */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   body {
     font-family: Arial, Helvetica, sans-serif;
     margin: 0;
@@ -144,14 +150,14 @@
   th.ordenavel { cursor: pointer; user-select: none; }
   th.ordenavel:hover { background: #dbe7f3; }
   .seta-ordenacao { font-size: 10px; }
-  /* Linha de filtros por coluna do modal-detalhe (genérico, usado por
-     cards/gráficos/linhas de tabela) — NÃO fixa junto com o cabeçalho
-     (que já é sticky por causa da regra "th { position: sticky }" geral):
-     só o rótulo da coluna precisa ficar sempre visível ao rolar; os
-     filtros em si são ajustados uma vez no topo, então podem rolar junto
-     com o corpo da tabela sem prejuízo. */
-  .linha-filtros-modal-detalhe th { position: static; top: auto; background: #fff; padding: 4px 6px; }
-  .linha-filtros-modal-detalhe select, .linha-filtros-modal-detalhe input {
+  /* Linha de filtros por coluna (usada no modal-detalhe genérico e em
+     "Todos os lançamentos") — NÃO fixa junto com o cabeçalho (que já é
+     sticky por causa da regra "th { position: sticky }" geral): só o
+     rótulo da coluna precisa ficar sempre visível ao rolar; os filtros em
+     si são ajustados uma vez no topo, então podem rolar junto com o corpo
+     da tabela sem prejuízo. */
+  .linha-filtros-coluna th { position: static; top: auto; background: #fff; padding: 4px 6px; }
+  .linha-filtros-coluna select, .linha-filtros-coluna input {
     width: 100%; box-sizing: border-box; padding: 4px 5px; font-size: 12px; font-weight: normal;
     border: 1px solid var(--borda); border-radius: 4px; color: #1e2430;
   }
@@ -435,8 +441,8 @@
           <button class="btn secundario small" onclick="exportarXlsx('lancamentos')">⬇ Exportar Excel</button>
         </div>
       </div>
-      <input id="busca" class="busca-tabela" placeholder="Buscar em todas as colunas…">
       <div class="filtros">
+        <input id="busca" class="busca-tabela" placeholder="Buscar em todas as colunas…" style="margin-bottom:0;">
         <select id="filtro-origem">
           <option value="">Origem: todas</option>
           <option value="ERP">ERP</option>
@@ -469,13 +475,37 @@
             <col style="width:4.69%"><col style="width:3.84%"><col style="width:6.50%">
             <col style="width:4.00%">
           </colgroup>
-          <thead><tr>
+          <thead>
+          <tr>
             <th>Origem</th><th>Status</th><th>Aporte</th><th>Tipo</th><th>Emissão</th><th>Nº Doc.</th>
             <th>Forma Pgto.</th><th>Chave Pix</th><th>Fornecedor</th><th>Razão Social</th>
             <th>Vencimento</th><th>Venc. Real</th><th>Valor</th><th>Parcela</th><th>Baixa</th>
             <th>Histórico</th><th>Usuário</th><th>Remessa</th>
             <th class="col-anexos">Anexos</th><th class="col-acao"></th>
-          </tr></thead>
+          </tr>
+          <!-- Origem/Status/Aporte já têm os seletores acima da tabela (ver
+               .filtros) — aqui só as colunas que ainda não tinham como ser
+               filtradas individualmente. -->
+          <tr class="linha-filtros-coluna">
+            <th></th><th></th><th></th>
+            <th><input id="flc-tipo" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th><input id="flc-emissao" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th><input id="flc-ndoc" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th><input id="flc-formapgto" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th><input id="flc-chavepix" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th><input id="flc-fornecedor" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th><input id="flc-razao" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th><input id="flc-vencimento" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th><input id="flc-vencreal" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th><input id="flc-valor" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th><input id="flc-parcela" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th><input id="flc-baixa" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th><input id="flc-historico" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th><input id="flc-usuario" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th><input id="flc-remessa" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th></th><th></th>
+          </tr>
+          </thead>
           <tbody></tbody>
         </table>
       </div>
@@ -622,7 +652,7 @@
             <th>Origem</th><th>Status</th><th>Tipo</th><th>Nº Doc.</th><th>Fornecedor</th>
             <th>Razão Social</th><th>Vencimento</th><th>Valor</th><th>Data Baixa</th>
           </tr>
-          <tr class="linha-filtros-modal-detalhe">
+          <tr class="linha-filtros-coluna">
             <th><select id="mdf-origem" onchange="aplicarFiltrosModalDetalhe()"><option value="">Todas</option><option value="ERP">ERP</option><option value="Manual">Manual</option></select></th>
             <th><select id="mdf-status" onchange="aplicarFiltrosModalDetalhe()"><option value="">Todos</option><option value="Em aberto">Em aberto</option><option value="Baixado">Baixado</option><option value="Duplicado">Duplicado</option></select></th>
             <th><input id="mdf-tipo" type="text" placeholder="Filtrar…" oninput="aplicarFiltrosModalDetalhe()"></th>
@@ -655,6 +685,28 @@
     <div style="display:flex; justify-content:flex-end; gap:10px;">
       <button class="btn secundario" onclick="resolverConfirmacao(false)">Cancelar</button>
       <button class="btn perigo" onclick="resolverConfirmacao(true)">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de senha própria, no lugar do prompt() nativo: prompt() não dá
+     pra mascarar (mostra a senha em texto puro), e diálogos nativos já são
+     pouco confiáveis dentro do iframe do Apps Script (ver modal-confirmar
+     acima). O olho alterna o type do campo entre password/text. -->
+<div class="modal-overlay" id="modal-senha" onclick="if (event.target === this) resolverSenha(null)">
+  <div class="modal-caixa" style="max-width:380px;">
+    <div class="modal-cabecalho">
+      <h2>Digite sua senha de edição</h2>
+    </div>
+    <div style="display:flex; gap:8px; margin-bottom:18px;">
+      <input id="input-senha" type="password" autocomplete="current-password" placeholder="Senha"
+        style="flex:1; min-width:0; padding:8px 10px; border:1px solid var(--borda); border-radius:6px; font-size:14px;"
+        onkeydown="if (event.key === 'Enter') resolverSenhaConfirmar(); if (event.key === 'Escape') resolverSenha(null);">
+      <button type="button" class="btn secundario" id="btn-olho-senha" title="Mostrar senha" onclick="alternarVisibilidadeSenha()">👁</button>
+    </div>
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn secundario" onclick="resolverSenha(null)">Cancelar</button>
+      <button class="btn" onclick="resolverSenhaConfirmar()">Confirmar</button>
     </div>
   </div>
 </div>
@@ -769,6 +821,43 @@ function resolverConfirmacao(valor) {
 }
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('modal-confirmar').classList.contains('aberto')) resolverConfirmacao(false);
+});
+
+// Substitui window.prompt() nativo pra pedir a senha de edição: além de não
+// dar pra confiar em diálogos nativos aqui dentro (ver comentário no HTML
+// do modal-confirmar), prompt() sempre mostra o texto digitado em claro —
+// não tem como mascarar. Devolve uma Promise com a senha digitada, ou null
+// se cancelado (mesmo contrato que prompt() tinha, pra não mexer em quem
+// chama esta função).
+let resolverSenhaAtual = null;
+function pedirSenha() {
+  const input = document.getElementById('input-senha');
+  input.value = '';
+  input.type = 'password';
+  document.getElementById('btn-olho-senha').textContent = '👁';
+  document.getElementById('btn-olho-senha').title = 'Mostrar senha';
+  document.getElementById('modal-senha').classList.add('aberto');
+  setTimeout(() => input.focus(), 50);
+  return new Promise((resolve) => { resolverSenhaAtual = resolve; });
+}
+function resolverSenha(valor) {
+  document.getElementById('modal-senha').classList.remove('aberto');
+  if (resolverSenhaAtual) { resolverSenhaAtual(valor); resolverSenhaAtual = null; }
+}
+function resolverSenhaConfirmar() {
+  resolverSenha(document.getElementById('input-senha').value);
+}
+function alternarVisibilidadeSenha() {
+  const input = document.getElementById('input-senha');
+  const btn = document.getElementById('btn-olho-senha');
+  const mostrando = input.type === 'text';
+  input.type = mostrando ? 'password' : 'text';
+  btn.textContent = mostrando ? '👁' : '🙈';
+  btn.title = mostrando ? 'Mostrar senha' : 'Ocultar senha';
+  input.focus();
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('modal-senha').classList.contains('aberto')) resolverSenha(null);
 });
 
 // ---------- Detalhamento de uma linha (Lançamentos), na ordem da planilha ----------
@@ -1430,7 +1519,10 @@ function tornarColunasRedimensionaveis(tabelaId) {
   const colgroup = tabela.querySelector('colgroup');
   if (!colgroup) return;
   const cols = Array.from(colgroup.children);
-  const ths = Array.from(tabela.querySelectorAll('thead th'));
+  // Só a 1ª linha do thead (cabeçalho de verdade) — tabelas com uma 2ª
+  // linha de filtros por coluna (ver linha-filtros-coluna) não entram
+  // nessa lista, senão o índice de "ths" descasa do colgroup.
+  const ths = Array.from(tabela.querySelectorAll('thead tr:first-child th'));
   let colunaAtual = null, larguraInicialColuna = 0, larguraInicialTabela = 0, xInicial = 0;
 
   function congelarLargurasEmPixel() {
@@ -1618,7 +1710,7 @@ function tornarOrdenavel(tabelaId, extratores, aoMudar) {
   const tabela = document.getElementById(tabelaId);
   if (tabela.dataset.ordenavel) { atualizarSetasOrdenacao(tabelaId); return; }
   tabela.dataset.ordenavel = '1';
-  const ths = tabela.querySelectorAll('thead th');
+  const ths = tabela.querySelectorAll('thead tr:first-child th');
   ths.forEach((th, idx) => {
     if (!extratores[idx]) return;
     th.classList.add('ordenavel');
@@ -1638,7 +1730,7 @@ function tornarOrdenavel(tabelaId, extratores, aoMudar) {
 
 function atualizarSetasOrdenacao(tabelaId) {
   const est = estadoOrdenacao[tabelaId];
-  document.querySelectorAll(`#${tabelaId} thead th`).forEach((th, idx) => {
+  document.querySelectorAll(`#${tabelaId} thead tr:first-child th`).forEach((th, idx) => {
     const seta = th.querySelector('.seta-ordenacao');
     if (!seta) return;
     seta.textContent = est && est.colIdx === idx ? (est.asc ? ' ▲' : ' ▼') : '';
@@ -2243,6 +2335,61 @@ const EXTRATORES_LANCAMENTOS = [
   null, // ação (não ordenável)
 ];
 
+// Filtros por coluna (2ª linha do cabeçalho de "Todos os lançamentos") —
+// Origem/Status/Aporte ficam de fora daqui porque já têm seletor próprio
+// acima da tabela (ver .filtros); esses aqui cobrem o restante das
+// colunas, um texto por vez, igual ao mesmo recurso já usado no
+// modal-detalhe genérico (ver filtrarItensModalDetalhe).
+let filtrosColunaLancamentos = {
+  tipo: '', emissao: '', nDoc: '', formaPgto: '', chavePix: '', fornecedor: '',
+  razaoSocial: '', vencimento: '', vencReal: '', valor: '', parcela: '', baixa: '',
+  historico: '', usuario: '', remessa: '',
+};
+
+function aplicarFiltrosColunaLancamentos(itens, f) {
+  const norm = (v) => String(v == null ? '' : v).toLowerCase();
+  return itens.filter((i) => {
+    if (f.tipo && !norm(i.Tipo).includes(norm(f.tipo))) return false;
+    if (f.emissao && !norm(fmtData(i['Data Emissão'])).includes(norm(f.emissao))) return false;
+    if (f.nDoc && !norm(i['Nº Documento']).includes(norm(f.nDoc))) return false;
+    if (f.formaPgto && !norm(i['Forma Pagamento']).includes(norm(f.formaPgto))) return false;
+    if (f.chavePix && !norm(i['Chave Pix']).includes(norm(f.chavePix))) return false;
+    if (f.fornecedor && !norm(i['Código Fornecedor']).includes(norm(f.fornecedor))) return false;
+    if (f.razaoSocial && !norm(i['Razão Social']).includes(norm(f.razaoSocial))) return false;
+    if (f.vencimento && !norm(fmtData(i['Vencimento'])).includes(norm(f.vencimento))) return false;
+    if (f.vencReal && !norm(fmtData(i['Vencimento Real'])).includes(norm(f.vencReal))) return false;
+    if (f.valor && !norm(fmtMoeda(i['R$ Valor'])).includes(norm(f.valor))) return false;
+    if (f.parcela && !norm(i['Parcela']).includes(norm(f.parcela))) return false;
+    if (f.baixa && !norm(fmtData(i['Data Baixa'])).includes(norm(f.baixa))) return false;
+    if (f.historico && !norm(i['Histórico']).includes(norm(f.historico))) return false;
+    if (f.usuario && !norm(i['Usuário Inclusor']).includes(norm(f.usuario))) return false;
+    if (f.remessa && !norm(i['Remessa']).includes(norm(f.remessa))) return false;
+    return true;
+  });
+}
+
+function lerFiltrosColunaLancamentos() {
+  filtrosColunaLancamentos = {
+    tipo: document.getElementById('flc-tipo').value,
+    emissao: document.getElementById('flc-emissao').value,
+    nDoc: document.getElementById('flc-ndoc').value,
+    formaPgto: document.getElementById('flc-formapgto').value,
+    chavePix: document.getElementById('flc-chavepix').value,
+    fornecedor: document.getElementById('flc-fornecedor').value,
+    razaoSocial: document.getElementById('flc-razao').value,
+    vencimento: document.getElementById('flc-vencimento').value,
+    vencReal: document.getElementById('flc-vencreal').value,
+    valor: document.getElementById('flc-valor').value,
+    parcela: document.getElementById('flc-parcela').value,
+    baixa: document.getElementById('flc-baixa').value,
+    historico: document.getElementById('flc-historico').value,
+    usuario: document.getElementById('flc-usuario').value,
+    remessa: document.getElementById('flc-remessa').value,
+  };
+  paginaLancamentos = 1;
+  renderizarLancamentos();
+}
+
 // Renderizar milhares de <tr> de uma vez (innerHTML com o dataset inteiro)
 // é, sozinho, a maior fatia do tempo de carregamento da tela com o volume
 // atual de títulos — o navegador precisa criar todos os nós no DOM mesmo
@@ -2295,6 +2442,7 @@ function renderizarLancamentos() {
   if (fStatus) itens = itens.filter(i => i.Status === fStatus);
   if (fAporte) itens = itens.filter(i => i.Aporte === fAporte);
   if (busca) itens = itens.filter(i => textoBuscavel(i).includes(busca));
+  itens = aplicarFiltrosColunaLancamentos(itens, filtrosColunaLancamentos);
 
   itens.sort((a, b) => (paraData(b['Vencimento']) || 0) - (paraData(a['Vencimento']) || 0));
   itens = aplicarOrdenacao('tabela-lancamentos', itens, EXTRATORES_LANCAMENTOS);
@@ -3142,7 +3290,7 @@ async function habilitarEdicao() {
     toast('Este link foi aberto em modo leitura (?modo=leitura) — abra o link normal para editar.');
     return;
   }
-  const senha = prompt('Digite sua senha de edição:');
+  const senha = await pedirSenha();
   if (senha == null) return; // cancelado
   const senhaLimpa = senha.trim();
   try {
