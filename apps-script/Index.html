@@ -103,6 +103,32 @@
      maior que a tela nesse caso e .tabela-scroll (que já tem overflow:auto)
      vira scroll horizontal — o padrão normal pra tabela larga no celular. */
   #tabela-lancamentos { table-layout: fixed; min-width: 1100px; }
+  /* Versão simplificada (ver TABELA_LANCAMENTOS_SIMPLIFICADA/PERFIS_RESTRITOS)
+     — some com as colunas Origem/Status/Aporte/Usuário/Remessa e a largura
+     delas é redistribuída entre as que sobraram, ocupando a tela toda.
+     Descoberto por tentativa: display:none (no <col> OU nas células th/td)
+     não redistribui a largura direito em table-layout:fixed no Chrome —
+     sobra um vão vazio, ou pior, embaralha a largura das colunas vizinhas.
+     visibility:collapse no <col> É o jeito que funciona pra redistribuir
+     (some a coluna inteira e reparte o % sozinho, sem cálculo nenhum por
+     JS) — mas sozinho ele não esconde o CONTEÚDO da célula (o texto ainda
+     pinta, "vazando" pra fora da largura zerada da coluna), por isso as
+     células (th/td) também levam visibility:hidden (não display:none, que
+     quebraria a redistribuição de novo) só pra apagar o conteúdo sem
+     interferir na largura calculada pelo <col>. min-width:0 solta o piso
+     de 1100px de cima, que existe só pra forçar scroll horizontal na
+     versão completa (aqui o objetivo é o oposto). */
+  #tabela-lancamentos.simplificada { min-width: 0; }
+  #tabela-lancamentos.simplificada col.col-origem,
+  #tabela-lancamentos.simplificada col.col-status,
+  #tabela-lancamentos.simplificada col.col-aporte,
+  #tabela-lancamentos.simplificada col.col-usuario,
+  #tabela-lancamentos.simplificada col.col-remessa { visibility: collapse; }
+  #tabela-lancamentos.simplificada th.col-origem, #tabela-lancamentos.simplificada td.col-origem,
+  #tabela-lancamentos.simplificada th.col-status, #tabela-lancamentos.simplificada td.col-status,
+  #tabela-lancamentos.simplificada th.col-aporte, #tabela-lancamentos.simplificada td.col-aporte,
+  #tabela-lancamentos.simplificada th.col-usuario, #tabela-lancamentos.simplificada td.col-usuario,
+  #tabela-lancamentos.simplificada th.col-remessa, #tabela-lancamentos.simplificada td.col-remessa { visibility: hidden; }
   #tabela-lancamentos th {
     /* Quebra só entre palavras (no espaço), nunca no meio de uma palavra —
        colunas são largas o bastante pra cada palavra caber inteira numa
@@ -179,7 +205,7 @@
      então os dígitos ficam alinhados entre linhas independente do
      tamanho do valor (diferente do texto "R$ x,xx" corrido, que
      desalinha os dígitos quando os valores têm tamanhos diferentes). */
-  #tabela-detalhe-aporte td.col-valor, #modal-detalhe-tabela td.col-valor { display: flex; justify-content: space-between; align-items: center; }
+  #tabela-detalhe-aporte td.col-valor, #modal-detalhe-tabela td.col-valor, #tabela-lancamentos td.col-valor { display: flex; justify-content: space-between; align-items: center; }
   /* Linha clicável pra abrir o anexo (documento/comprovante) do título —
      mesmo comportamento do modal-detalhe genérico. */
   #tabela-detalhe-aporte tbody tr { cursor: pointer; }
@@ -396,7 +422,7 @@
         <h2>Todos os lançamentos</h2>
         <div style="display:flex; gap:8px;">
           <button class="btn perigo small" id="btn-remover-duplicados" onclick="removerDuplicados()">🗑 Excluir duplicados</button>
-          <button class="btn secundario small" onclick="exportarXlsx('lancamentos')">⬇ Exportar Excel</button>
+          <button class="btn secundario small" id="btn-exportar-lancamentos" onclick="exportarXlsx('lancamentos')">⬇ Exportar Excel</button>
         </div>
       </div>
       <div class="filtros">
@@ -426,26 +452,26 @@
                e o excesso (overflow:visible) vazava por cima do botão Remover
                na coluna seguinte, deixando os dois quase colados. -->
           <colgroup>
-            <col style="width:3.66%"><col style="width:4.12%"><col style="width:3.66%"><col style="width:2.81%">
-            <col style="width:5.53%"><col style="width:3.66%"><col style="width:5.05%"><col style="width:5.00%">
-            <col style="width:5.15%"><col style="width:6.83%"><col style="width:5.53%"><col style="width:5.53%">
-            <col style="width:4.36%"><col style="width:3.84%"><col style="width:5.53%"><col style="width:6.83%">
-            <col style="width:4.69%"><col style="width:3.84%"><col style="width:6.50%">
+            <col class="col-origem" style="width:3.66%"><col class="col-status" style="width:4.12%"><col class="col-aporte" style="width:3.66%"><col style="width:2.81%">
+            <col class="col-data" style="width:5.53%"><col class="col-ndoc" style="width:3.66%"><col style="width:5.05%"><col style="width:5.00%">
+            <col class="col-fornecedor" style="width:5.15%"><col class="col-razao" style="width:6.83%"><col class="col-data" style="width:5.53%"><col class="col-data" style="width:5.53%">
+            <col class="col-valor" style="width:4.36%"><col style="width:3.84%"><col class="col-data" style="width:5.53%"><col class="col-historico" style="width:6.83%">
+            <col class="col-usuario" style="width:4.69%"><col class="col-remessa" style="width:3.84%"><col style="width:6.50%">
             <col style="width:4.00%">
           </colgroup>
           <thead>
           <tr>
-            <th>Origem</th><th>Status</th><th>Aporte</th><th>Tipo</th><th>Emissão</th><th>Nº Doc.</th>
+            <th class="col-origem">Origem</th><th class="col-status">Status</th><th class="col-aporte">Aporte</th><th>Tipo</th><th>Emissão</th><th>Nº Doc.</th>
             <th>Forma Pgto.</th><th>Chave Pix</th><th>Fornecedor</th><th>Razão Social</th>
-            <th>Vencimento</th><th>Venc. Real</th><th>Valor</th><th>Parcela</th><th>Baixa</th>
-            <th>Histórico</th><th>Usuário</th><th>Remessa</th>
+            <th>Vencimento</th><th>Venc. Real</th><th>Valor</th><th class="col-parcela">Parcela</th><th>Baixa</th>
+            <th>Histórico</th><th class="col-usuario">Usuário</th><th class="col-remessa">Remessa</th>
             <th class="col-anexos">Anexos</th><th class="col-acao"></th>
           </tr>
           <!-- Origem/Status/Aporte já têm os seletores acima da tabela (ver
                .filtros) — aqui só as colunas que ainda não tinham como ser
                filtradas individualmente. -->
           <tr class="linha-filtros-coluna">
-            <th></th><th></th><th></th>
+            <th class="col-origem"></th><th class="col-status"></th><th class="col-aporte"></th>
             <th><input id="flc-tipo" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
             <th><input id="flc-emissao" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
             <th><input id="flc-ndoc" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
@@ -459,8 +485,8 @@
             <th><input id="flc-parcela" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
             <th><input id="flc-baixa" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
             <th><input id="flc-historico" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
-            <th><input id="flc-usuario" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
-            <th><input id="flc-remessa" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th class="col-usuario"><input id="flc-usuario" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
+            <th class="col-remessa"><input id="flc-remessa" type="text" placeholder="Filtrar…" oninput="lerFiltrosColunaLancamentos()"></th>
             <th></th><th></th>
           </tr>
           </thead>
@@ -757,6 +783,11 @@ const URL_BACKEND = '<?!= urlBackend ?>';
 // original (mesmo motivo do URL_BACKEND acima ser injetado pelo servidor).
 const USUARIO_RESTRITO = <?!= chaveUsuarioRestrito ?>;
 const ABAS_PERMITIDAS_RESTRITO = <?!= abasPermitidasRestrito ?>;
+// Some busca/filtros/exportar/totalizador e as colunas Origem, Status,
+// Aporte, Usuário e Remessa de "Todos os lançamentos" (ver PERFIS_RESTRITOS
+// em Code.gs) — só decoração de tela, não é o que garante a exclusão de
+// fornecedor (isso já é feito no servidor, ver USUARIO_RESTRITO acima).
+const TABELA_LANCAMENTOS_SIMPLIFICADA = <?!= tabelaLancamentosSimplificada ? 'true' : 'false' ?>;
 
 // ---------- Acesso leitura/edição ----------
 // ?modo=leitura na URL força somente-leitura, ignorando qualquer senha
@@ -1109,6 +1140,50 @@ if (ABAS_PERMITIDAS_RESTRITO) {
   });
   const abaInicialRestrita = document.querySelector(`nav button[data-aba="${ABAS_PERMITIDAS_RESTRITO[0]}"]`);
   if (abaInicialRestrita) abaInicialRestrita.click();
+}
+
+// Versão simplificada de "Todos os lançamentos" pra esse perfil: sem
+// busca/filtros/exportar/totalizador, e sem as colunas Origem/Status/
+// Aporte/Usuário/Remessa (ver classes col-* no <colgroup>/th/td e a regra
+// CSS de #tabela-lancamentos.simplificada). Aplicado uma vez, no
+// carregamento. visibility:collapse (CSS) já esconde a coluna inteira sem
+// bagunçar a largura das vizinhas, mas sozinho o Chrome encolhe a tabela
+// pelo tanto de % que as colunas escondidas tinham (em vez de manter
+// width:100%) — por isso aqui zeramos o % delas E redistribuímos entre as
+// que sobraram, pra não sobrar (nem faltar) espaço.
+if (TABELA_LANCAMENTOS_SIMPLIFICADA) {
+  const COLUNAS_ESCONDIDAS_SIMPLIFICADA = ['col-origem', 'col-status', 'col-aporte', 'col-usuario', 'col-remessa'];
+  document.getElementById('tabela-lancamentos').classList.add('simplificada');
+  document.querySelector('#tabela-lancamentos th.col-parcela').textContent = 'Parc.';
+  document.querySelector('#aba-lancamentos .filtros').style.display = 'none';
+  document.getElementById('total-lancamentos').style.display = 'none';
+  document.getElementById('btn-exportar-lancamentos').style.display = 'none';
+
+  const cols = Array.from(document.querySelectorAll('#tabela-lancamentos colgroup col'));
+  const ehEscondida = (col) => COLUNAS_ESCONDIDAS_SIMPLIFICADA.some((c) => col.classList.contains(c));
+  // Razão Social e Histórico entram no cálculo com o dobro do % original, e
+  // Valor também (peso, não largura final) — são as colunas que mais
+  // importam nessa visão simplificada. Data (Emissão/Vencimento/Venc.
+  // Real/Baixa), Fornecedor e Nº Doc. levam um reforço menor (1.4x) só pra
+  // não truncar dd/mm/aaaa, código de fornecedor e número de documento,
+  // que senão ficam curtos demais depois que Razão/Histórico/Valor puxam a
+  // maior parte do espaço que sobrou das colunas escondidas.
+  const MULTIPLICADOR_LARGURA_COLUNA = { 'col-razao': 2, 'col-historico': 2, 'col-valor': 2, 'col-data': 1.4, 'col-fornecedor': 1.4, 'col-ndoc': 1.4 };
+  const pesoColuna = (col) => {
+    const larguraOriginal = parseFloat(col.style.width) || 0;
+    const multiplicador = Object.keys(MULTIPLICADOR_LARGURA_COLUNA).find((c) => col.classList.contains(c));
+    return larguraOriginal * (multiplicador ? MULTIPLICADOR_LARGURA_COLUNA[multiplicador] : 1);
+  };
+  // Reescala pelo total ATUAL das colunas visíveis (não por "100 menos o %
+  // das escondidas"): os % do <colgroup> já não somavam 100% certinho antes
+  // dessa mudança (folga/arredondamento antigos), então basear no que
+  // sobra de verdade garante que as visíveis fecham em 100%, sem vão.
+  const larguraVisivelTotal = cols.filter((c) => !ehEscondida(c)).reduce((soma, col) => soma + pesoColuna(col), 0);
+  const fatorReescala = 100 / larguraVisivelTotal;
+  cols.forEach((col) => {
+    if (ehEscondida(col)) { col.style.width = '0%'; return; }
+    col.style.width = (pesoColuna(col) * fatorReescala) + '%';
+  });
 }
 
 // ---------- Utilitários de dados ----------
@@ -2508,9 +2583,9 @@ function renderizarLancamentos() {
         <button class="btn secundario small anexo-comp ${linkComp ? 'anexo-definido-verde' : ''}" title="${tituloComp}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','comprovante','${escaparAtributo(linkComp)}')">🧾</button>
       </div>`;
     return `<tr onclick="abrirDetalheLinha(event, '${idEsc}', '${i.Origem}')" title="Clique para ver o lançamento por completo">
-      <td><span class="badge ${origemBadge}">${i.Origem}</span></td>
-      <td title="${escaparHtml(i.Status)}"><span class="badge ${statusBadge}">${i.Status}</span></td>
-      <td>${i.Aporte || ''}</td>
+      <td class="col-origem"><span class="badge ${origemBadge}">${i.Origem}</span></td>
+      <td class="col-status" title="${escaparHtml(i.Status)}"><span class="badge ${statusBadge}">${i.Status}</span></td>
+      <td class="col-aporte">${i.Aporte || ''}</td>
       <td>${i.Tipo || ''}</td>
       <td>${fmtData(i['Data Emissão'])}</td>
       <td>${i['Nº Documento'] || ''}</td>
@@ -2520,12 +2595,12 @@ function renderizarLancamentos() {
       <td class="col-razao">${i['Razão Social'] || ''}</td>
       <td>${fmtData(i['Vencimento'])}</td>
       <td>${fmtData(i['Vencimento Real'])}</td>
-      <td title="${escaparHtml(fmtMoeda(i['R$ Valor']))}">${fmtMoeda(i['R$ Valor'])}</td>
+      <td${TABELA_LANCAMENTOS_SIMPLIFICADA ? ' class="col-valor"' : ''} title="${escaparHtml(fmtMoeda(i['R$ Valor']))}">${TABELA_LANCAMENTOS_SIMPLIFICADA ? htmlMoedaAlinhada(i['R$ Valor']) : fmtMoeda(i['R$ Valor'])}</td>
       <td>${i['Parcela'] || ''}</td>
       <td>${fmtData(i['Data Baixa'])}</td>
       <td class="col-historico">${i['Histórico'] || ''}</td>
-      <td title="${escaparHtml(i['Usuário Inclusor'])}">${i['Usuário Inclusor'] || ''}</td>
-      <td>${i['Remessa'] || ''}</td>
+      <td class="col-usuario" title="${escaparHtml(i['Usuário Inclusor'])}">${i['Usuário Inclusor'] || ''}</td>
+      <td class="col-remessa">${i['Remessa'] || ''}</td>
       <td class="col-anexos">${anexos}</td>
       <td class="col-acao">${acao}</td>
     </tr>`;

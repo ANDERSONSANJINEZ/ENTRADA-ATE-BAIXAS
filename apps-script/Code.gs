@@ -38,6 +38,12 @@ var PERFIS_RESTRITOS = {
       '46170722', '63067344', '53734399', '60634166', '67791821',
       '66769166', '63822521', '47811670', '67820752',
     ],
+    // Simplifica a tela de "Todos os lançamentos" pra esse perfil: some
+    // busca/filtros/exportar/totalizador e as colunas Origem, Status,
+    // Aporte, Usuário e Remessa (não fazem sentido pra um link externo
+    // travado numa aba só) — a tabela passa a ocupar a largura toda,
+    // redistribuindo o espaço entre as colunas que sobraram.
+    tabelaLancamentosSimplificada: true,
   },
 };
 
@@ -431,6 +437,7 @@ function doGet(e) {
   // já devolve a string entre aspas certa pra virar um array literal.
   template.chaveUsuarioRestrito = perfil ? JSON.stringify(String(e.parameter.usuario)) : 'null';
   template.abasPermitidasRestrito = perfil ? JSON.stringify(perfil.abas) : 'null';
+  template.tabelaLancamentosSimplificada = !!(perfil && perfil.tabelaLancamentosSimplificada);
   return template.evaluate()
     .setTitle('Entrada até Baixas — Financeiro Protheus')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
