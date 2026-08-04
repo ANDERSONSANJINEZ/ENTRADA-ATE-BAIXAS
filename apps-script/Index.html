@@ -391,48 +391,6 @@
   </section>
 
   <section id="aba-lancamentos" class="aba">
-    <div class="painel" id="painel-lancamento-manual">
-      <h2>Novo lançamento manual</h2>
-      <form class="manual" id="form-manual">
-        <!-- Linha 1 em grade própria (0.5fr/1fr/1fr/1.5fr) em vez das 4
-             colunas iguais do restante do formulário: Tipo só precisa de
-             metade do espaço (é um <select> com poucas letras), e essa
-             metade "sobrando" vai pra Razão Social, que costuma ter nome de
-             empresa comprido. grid-column:1/-1 faz esse wrapper ocupar a
-             linha inteira das 4 colunas originais, igual à classe .full. -->
-        <div class="full linha-tipo-razao">
-          <div>
-            <label>Tipo</label>
-            <select name="Tipo" required>
-              <option value="NF">NF</option><option value="NFS">NFS</option>
-              <option value="NFAG">NFAG</option><option value="ND">ND</option>
-              <option value="NF3E">NF3E</option><option value="DACTE">DACTE</option>
-              <option value="BOL">BOL</option><option value="FAT">FAT</option>
-              <option value="FOL">FOL</option><option value="FGTS">FGTS</option>
-              <option value="DARF">DARF</option><option value="DAM">DAM</option>
-            </select>
-          </div>
-          <div><label>Data Emissão</label><input type="date" name="Data Emissão" required></div>
-          <div><label>Código Fornecedor</label><input type="text" name="Código Fornecedor" required></div>
-          <div><label>Razão Social</label><input type="text" name="Razão Social" required></div>
-        </div>
-        <div><label>Nº Documento</label><input type="text" name="Nº Documento"></div>
-        <div><label>Histórico</label><input type="text" name="Histórico"></div>
-        <div><label>R$ Valor</label><input type="number" step="0.01" name="R$ Valor" required></div>
-        <div><label>Vencimento</label><input type="date" name="Vencimento" required></div>
-        <div>
-          <label>Forma Pagamento</label>
-          <select name="Forma Pagamento">
-            <option value="Boleto">Boleto</option><option value="Pix">Pix</option>
-            <option value="TED">TED</option>
-          </select>
-        </div>
-        <div><label>Chave Pix do Fornecedor</label><input type="text" name="Chave Pix" placeholder="CPF/CNPJ, e-mail, telefone ou aleatória"></div>
-        <div><label>Usuário Inclusor</label><input type="text" name="Usuário Inclusor"></div>
-        <div class="full"><button class="btn" type="submit">Adicionar lançamento manual</button></div>
-      </form>
-    </div>
-
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Todos os lançamentos</h2>
@@ -511,6 +469,8 @@
       </div>
       <div id="paginacao-lancamentos" class="paginacao"></div>
     </div>
+
+    <button class="btn" id="btn-abrir-lancamento-manual" onclick="abrirModalLancamentoManual()" style="margin-top:4px;">+ Adicionar lançamento manual</button>
   </section>
 
   <section id="aba-detalhe-aporte" class="aba">
@@ -708,6 +668,59 @@
       <button class="btn secundario" onclick="resolverSenha(null)">Cancelar</button>
       <button class="btn" onclick="resolverSenhaConfirmar()">Confirmar</button>
     </div>
+  </div>
+</div>
+
+<!-- Pop-up de "Novo lançamento manual", acionado pelo botão logo abaixo da
+     planilha "Todos os lançamentos" — mesmos campos, na mesma ordem, do
+     formulário que ficava fixo na tela. -->
+<div class="modal-overlay" id="modal-lancamento-manual" onclick="if (event.target === this) cancelarLancamentoManual()">
+  <div class="modal-caixa">
+    <div class="modal-cabecalho">
+      <h2>Novo lançamento manual</h2>
+      <button class="modal-fechar" onclick="cancelarLancamentoManual()" title="Fechar (Esc)">✕</button>
+    </div>
+    <form class="manual" id="form-manual">
+      <!-- Linha 1 em grade própria (0.5fr/1fr/1fr/1.5fr) em vez das 4
+           colunas iguais do restante do formulário: Tipo só precisa de
+           metade do espaço (é um <select> com poucas letras), e essa
+           metade "sobrando" vai pra Razão Social, que costuma ter nome de
+           empresa comprido. grid-column:1/-1 faz esse wrapper ocupar a
+           linha inteira das 4 colunas originais, igual à classe .full. -->
+      <div class="full linha-tipo-razao">
+        <div>
+          <label>Tipo</label>
+          <select name="Tipo" required>
+            <option value="NF">NF</option><option value="NFS">NFS</option>
+            <option value="NFAG">NFAG</option><option value="ND">ND</option>
+            <option value="NF3E">NF3E</option><option value="DACTE">DACTE</option>
+            <option value="BOL">BOL</option><option value="FAT">FAT</option>
+            <option value="FOL">FOL</option><option value="FGTS">FGTS</option>
+            <option value="DARF">DARF</option><option value="DAM">DAM</option>
+          </select>
+        </div>
+        <div><label>Data Emissão</label><input type="date" name="Data Emissão" required></div>
+        <div><label>Código Fornecedor</label><input type="text" name="Código Fornecedor" required></div>
+        <div><label>Razão Social</label><input type="text" name="Razão Social" required></div>
+      </div>
+      <div><label>Nº Documento</label><input type="text" name="Nº Documento"></div>
+      <div><label>Histórico</label><input type="text" name="Histórico"></div>
+      <div><label>R$ Valor</label><input type="number" step="0.01" name="R$ Valor" required></div>
+      <div><label>Vencimento</label><input type="date" name="Vencimento" required></div>
+      <div>
+        <label>Forma Pagamento</label>
+        <select name="Forma Pagamento">
+          <option value="Boleto">Boleto</option><option value="Pix">Pix</option>
+          <option value="TED">TED</option>
+        </select>
+      </div>
+      <div><label>Chave Pix do Fornecedor</label><input type="text" name="Chave Pix" placeholder="CPF/CNPJ, e-mail, telefone ou aleatória"></div>
+      <div><label>Usuário Inclusor</label><input type="text" name="Usuário Inclusor"></div>
+      <div class="full" style="display:flex; justify-content:flex-end; gap:10px; margin-bottom:0;">
+        <button class="btn secundario" type="button" onclick="cancelarLancamentoManual()">Cancelar</button>
+        <button class="btn" type="submit">Salvar</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -2590,6 +2603,30 @@ function chaveDuplicidadeCliente(item) {
   return fornecedor + '|' + valor + '|' + vencStr;
 }
 
+// Pop-up de "Novo lançamento manual" — ver botão "+ Adicionar lançamento
+// manual" logo abaixo da planilha "Todos os lançamentos". Abre sempre com o
+// formulário limpo (reset), pra não repetir por engano os dados de uma
+// inclusão anterior.
+function abrirModalLancamentoManual() {
+  document.getElementById('form-manual').reset();
+  prefillUsuarioInclusor();
+  document.getElementById('modal-lancamento-manual').classList.add('aberto');
+}
+function fecharModalLancamentoManual() {
+  document.getElementById('modal-lancamento-manual').classList.remove('aberto');
+}
+// Cancelar (botão, X ou clique fora) e Esc caem todos aqui: fecha sem
+// salvar nada, e avisa que a ação foi mesmo o cancelamento — sem essa
+// mensagem, some o pop-up e não fica claro se o lançamento foi perdido de
+// propósito ou por engano.
+function cancelarLancamentoManual() {
+  fecharModalLancamentoManual();
+  toast('Lançamento cancelado — nenhum dado foi salvo.');
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('modal-lancamento-manual').classList.contains('aberto')) cancelarLancamentoManual();
+});
+
 document.getElementById('form-manual').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const form = ev.target;
@@ -2616,7 +2653,8 @@ document.getElementById('form-manual').addEventListener('submit', async (ev) => 
     await postarAcao('adicionarManual', { item });
     form.reset();
     prefillUsuarioInclusor();
-    toast('Lançamento manual adicionado.');
+    fecharModalLancamentoManual();
+    toast('Lançamento manual salvo com sucesso.');
   } catch (erro) {
     // erro já mostrado via toast dentro de postarAcao
   } finally {
@@ -3332,7 +3370,8 @@ function prefillUsuarioInclusor() {
 
 function atualizarUiModoLeitura() {
   document.getElementById('nav-importar').style.display = MODO_LEITURA ? 'none' : '';
-  document.getElementById('painel-lancamento-manual').style.display = MODO_LEITURA ? 'none' : '';
+  document.getElementById('btn-abrir-lancamento-manual').style.display = MODO_LEITURA ? 'none' : '';
+  if (MODO_LEITURA) fecharModalLancamentoManual(); // voltar pra leitura com o pop-up aberto não deveria deixar editar
   const btnRemoverDuplicados = document.getElementById('btn-remover-duplicados');
   if (btnRemoverDuplicados) btnRemoverDuplicados.style.display = MODO_LEITURA ? 'none' : '';
   const btnAcesso = document.getElementById('btn-acesso');
