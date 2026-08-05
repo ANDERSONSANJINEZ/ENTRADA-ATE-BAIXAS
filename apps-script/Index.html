@@ -686,7 +686,7 @@
         <thead>
           <tr>
             <th>Origem</th><th>Status</th><th>Tipo</th><th>Nº Doc.</th><th>Fornecedor</th>
-            <th>Razão Social</th><th>Vencimento</th><th>Valor</th><th>Data Baixa</th>
+            <th>Razão Social</th><th>Vencimento</th><th>Valor</th><th>Data Baixa</th><th></th>
           </tr>
           <tr class="linha-filtros-coluna">
             <th><select id="mdf-origem" onchange="aplicarFiltrosModalDetalhe()"><option value="">Todas</option><option value="ERP">ERP</option><option value="Manual">Manual</option></select></th>
@@ -698,6 +698,7 @@
             <th><input id="mdf-vencimento" type="text" placeholder="Filtrar…" oninput="aplicarFiltrosModalDetalhe()"></th>
             <th><input id="mdf-valor" type="text" placeholder="Filtrar…" oninput="aplicarFiltrosModalDetalhe()"></th>
             <th><input id="mdf-databaixa" type="text" placeholder="Filtrar…" oninput="aplicarFiltrosModalDetalhe()"></th>
+            <th></th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -1627,6 +1628,7 @@ const EXTRATORES_MODAL_DETALHE = [
   i => paraData(i['Vencimento']) || 0,
   i => paraNumero(i['R$ Valor']),
   i => paraData(i['Data Baixa']) || 0,
+  null, // ação (não ordenável)
 ];
 
 // Clicar numa linha do modal abre o anexo (documento e/ou comprovante) já
@@ -1669,6 +1671,13 @@ function renderizarModalDetalhe() {
     const tituloLinha = (linkDoc || linkComp)
       ? `Clique para abrir o anexo (${[linkDoc ? 'documento' : '', linkComp ? 'comprovante' : ''].filter(Boolean).join(' e ')})`
       : 'Nenhum anexo cadastrado para este título';
+    // Remover só faz sentido pra lançamento Manual (um título ERP volta na
+    // próxima importação diária, não existe "remover" nele — mesma regra
+    // já usada na coluna Ação de "Todos os lançamentos") e só fora do modo
+    // leitura.
+    const acao = (!MODO_LEITURA && i.Origem === 'Manual')
+      ? `<button class="btn perigo small" title="Remover lançamento manual" onclick="event.stopPropagation(); removerManualDoModalDetalhe('${escaparAtributo(i.ID)}')">🗑️</button>`
+      : '';
     return `<tr onclick="abrirAnexoLinhaModalDetalhe('${escaparAtributo(linkDoc)}','${escaparAtributo(linkComp)}')" title="${escaparHtml(tituloLinha)}">
       <td><span class="badge ${origemBadge}">${i.Origem || ''}</span></td>
       <td><span class="badge ${statusBadge}">${statusTxt}</span></td>
@@ -1679,8 +1688,9 @@ function renderizarModalDetalhe() {
       <td>${fmtData(i['Vencimento'])}</td>
       <td class="col-valor">${htmlMoedaAlinhada(i['R$ Valor'])}</td>
       <td>${fmtData(i['Data Baixa'])}</td>
+      <td>${acao}</td>
     </tr>`;
-  }).join('') || '<tr><td colspan="9" style="color:var(--cinza)">Nenhum título encontrado para este filtro.</td></tr>';
+  }).join('') || '<tr><td colspan="10" style="color:var(--cinza)">Nenhum título encontrado para este filtro.</td></tr>';
   const total = filtrados.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   document.getElementById('modal-detalhe-total').textContent = `${filtrados.length.toLocaleString('pt-BR')} título(s) · Total: ${fmtMoeda(total)}`;
   tornarOrdenavel('modal-detalhe-tabela', EXTRATORES_MODAL_DETALHE, renderizarModalDetalhe);
@@ -2873,10 +2883,34 @@ function renderizarLancamentos() {
 ['busca', 'filtro-origem', 'filtro-status', 'filtro-aporte'].forEach(id =>
   document.getElementById(id).addEventListener('input', () => { paginaLancamentos = 1; renderizarLancamentos(); }));
 
-async function removerManual(id) {
-  if (!(await confirmarAcao('Remover este lançamento manual?', 'Remover lançamento'))) return;
+// Núcleo compartilhado entre o botão Remover de "Todos os lançamentos" e o
+// da coluna de ação do modal-detalhe genérico (ver removerManualDoModalDetalhe)
+// — devolve true só quando a remoção de fato aconteceu (confirmada e
+// salva), pra quem chama saber se precisa atualizar mais alguma coisa
+// própria (o modal-detalhe guarda sua própria cópia da lista de itens).
+async function executarRemocaoManual_(id) {
+  if (!(await confirmarAcao('Remover este lançamento manual?', 'Remover lançamento'))) return false;
   await postarAcao('removerManual', { id });
   toast('Lançamento removido.');
+  return true;
+}
+
+async function removerManual(id) {
+  await executarRemocaoManual_(id);
+}
+
+// Remove um lançamento manual clicado direto na coluna de ação do
+// modal-detalhe genérico (ex.: abrindo pelo card "Duplicados a revisar" ou
+// "Lançados manualmente (não conferidos)" no Dashboard) — além de remover
+// de verdade (mesmo caminho de "Todos os lançamentos"), também tira o item
+// da lista própria do modal (ultimoItensModalDetalhe) e re-renderiza,
+// senão o modal continuaria mostrando a linha já removida até ser fechado
+// e reaberto.
+async function removerManualDoModalDetalhe(id) {
+  const removido = await executarRemocaoManual_(id);
+  if (!removido) return;
+  ultimoItensModalDetalhe = ultimoItensModalDetalhe.filter((i) => i.ID !== id);
+  renderizarModalDetalhe();
 }
 
 async function removerDuplicados() {
