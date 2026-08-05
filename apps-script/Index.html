@@ -3394,7 +3394,15 @@ function conciliarExtrato(itensExtrato) {
   const periodoMin = datasExtrato.length ? Math.min(...datasExtrato) - TOLERANCIA_DIAS_MS : null;
   const periodoMax = datasExtrato.length ? Math.max(...datasExtrato) + TOLERANCIA_DIAS_MS : null;
   const todosBaixados = state.erp.concat(state.manual.filter((m) => m.Status !== 'Duplicado – revisar'))
-    .filter((i) => i['Data Baixa']);
+    .filter((i) => i['Data Baixa'])
+    // Vencimento no ano 2000 é o marcador que o Protheus usa pra imposto
+    // retido/recolhido automaticamente (ex.: ISS retido na fonte) — não é
+    // um pagamento avulso que sai do banco como um débito à parte, então
+    // nunca vai ter uma linha própria no extrato pra conciliar com ele.
+    .filter((i) => {
+      const venc = paraData(i['Vencimento']);
+      return !(venc && venc.getUTCFullYear() === 2000);
+    });
   const baixados = todosBaixados.filter((i) => {
     if (periodoMin == null) return true; // extrato sem nenhum débito com data — não filtra por período
     const d = diaCalendario(paraData(i['Data Baixa']));
