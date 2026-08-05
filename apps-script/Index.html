@@ -136,8 +136,22 @@
        numa linha, a próxima palavra desce para a linha de baixo. */
     white-space: normal; word-break: keep-all; overflow-wrap: normal;
     font-size: 12px; line-height: 1.25; vertical-align: middle;
-    text-align: center; position: relative;
+    text-align: center;
+    /* sticky (não mais "relative"): o seletor #tabela-lancamentos th tem
+       mais especificidade (ID) que a regra genérica "th { position:
+       sticky }" lá embaixo, então SEMPRE vencia — com "relative" aqui, o
+       cabeçalho desta tabela nunca ficava fixo ao rolar, mesmo a regra
+       genérica dizendo sticky. position:sticky continua servindo de
+       "containing block" pra .alca-redimensionar (position:absolute), do
+       mesmo jeito que relative servia — não quebra o redimensionamento. */
+    position: sticky; top: 0; z-index: 3;
   }
+  /* Arrastar para reordenar colunas (ver ativarArrastarColunasLancamentos) —
+     só nos <th> do cabeçalho de verdade (não da linha de filtros, nem
+     Anexos/Ação, que ficam fixos no fim). */
+  #tabela-lancamentos th[draggable="true"] { cursor: grab; }
+  #tabela-lancamentos th.coluna-arrastando { opacity: .35; }
+  #tabela-lancamentos th.coluna-alvo-drop { background: #dbe7f3; }
   #tabela-lancamentos td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #tabela-lancamentos td.col-historico, #tabela-lancamentos td.col-razao { white-space: normal; word-break: break-word; text-overflow: clip; }
   #tabela-lancamentos td.col-anexos, #tabela-lancamentos td.col-acao { overflow: visible; text-overflow: clip; }
@@ -182,6 +196,13 @@
      rótulo da coluna precisa ficar sempre visível ao rolar; os filtros em
      si são ajustados uma vez no topo, então podem rolar junto com o corpo
      da tabela sem prejuízo. */
+  /* #tabela-lancamentos .linha-filtros-coluna th (com o ID) é necessário
+     além de ".linha-filtros-coluna th": o seletor de baixo sozinho perde
+     pra "#tabela-lancamentos th" (ID bate classe em especificidade), então
+     nesta tabela especificamente a linha de filtros ficava "sticky" por
+     engano junto com o cabeçalho de verdade, grudando as duas linhas uma
+     em cima da outra ao rolar. */
+  #tabela-lancamentos .linha-filtros-coluna th,
   .linha-filtros-coluna th { position: static; top: auto; background: #fff; padding: 4px 6px; }
   .linha-filtros-coluna select, .linha-filtros-coluna input {
     width: 100%; box-sizing: border-box; padding: 4px 5px; font-size: 12px; font-weight: normal;
@@ -1687,6 +1708,8 @@ function tornarColunasRedimensionaveis(tabelaId) {
     const alca = document.createElement('span');
     alca.className = 'alca-redimensionar';
     alca.title = 'Arraste para ajustar a largura da coluna';
+    alca.draggable = false; // nunca inicia o drag de reordenar coluna (ver ativarArrastarColunasLancamentos) — só redimensiona
+    alca.addEventListener('dragstart', (ev) => ev.preventDefault());
     alca.addEventListener('click', (ev) => ev.stopPropagation()); // não aciona a ordenação do cabeçalho
     alca.addEventListener('mousedown', (ev) => {
       ev.preventDefault();
@@ -2449,28 +2472,202 @@ function textoBuscavel(i) {
   ].map(v => String(v == null ? '' : v).toLowerCase()).join(' ␟ ');
 }
 
-const EXTRATORES_LANCAMENTOS = [
-  i => i.Origem,
-  i => i.Status,
-  i => i.Aporte,
-  i => i.Tipo,
-  i => paraData(i['Data Emissão']),
-  i => i['Nº Documento'],
-  i => i['Forma Pagamento'],
-  i => i['Chave Pix'],
-  i => i['Código Fornecedor'],
-  i => i['Razão Social'],
-  i => paraData(i['Vencimento']),
-  i => paraData(i['Vencimento Real']),
-  i => paraNumero(i['R$ Valor']),
-  i => i['Parcela'],
-  i => paraData(i['Data Baixa']),
-  i => i['Histórico'],
-  i => i['Usuário Inclusor'],
-  i => i['Remessa'],
-  null, // Anexos (não ordenável)
-  null, // ação (não ordenável)
+// Definição de cada coluna de "Todos os lançamentos" — uma única fonte de
+// verdade usada pra montar o <colgroup>, as duas linhas do cabeçalho (título
+// + filtro) e cada célula do corpo, tudo na ORDEM ATUAL escolhida pelo
+// usuário (ver ordemColunasLancamentos). Antes cada uma dessas quatro
+// coisas (colgroup, cabeçalho, filtros, célula) era HTML/array estático e
+// fixo, em paralelo — deixava fácil os quatro ficarem fora de sincronia; do
+// jeito atual, mudar a ordem é só reordenar um array de chaves e tudo mais
+// é derivado dele. Origem/Status/Aporte não têm filtroId porque já têm
+// seletor próprio acima da tabela (ver .filtros); Anexos/Ação ficam de fora
+// daqui (não são arrastáveis nem ordenáveis) — ver
+// COLUNAS_LANCAMENTOS_FIXAS_FINAL mais abaixo.
+const DEFINICAO_COLUNAS_LANCAMENTOS = [
+  { chave: 'origem', rotulo: 'Origem', classeCol: 'col-origem', classeTh: 'col-origem', classeFiltroTh: 'col-origem', larguraBase: 3.66, extrator: i => i.Origem, filtroId: null },
+  { chave: 'status', rotulo: 'Status', classeCol: 'col-status', classeTh: 'col-status', classeFiltroTh: 'col-status', larguraBase: 4.12, extrator: i => i.Status, filtroId: null },
+  { chave: 'aporte', rotulo: 'Aporte', classeCol: 'col-aporte', classeTh: 'col-aporte', classeFiltroTh: 'col-aporte', larguraBase: 3.66, extrator: i => i.Aporte, filtroId: null },
+  { chave: 'tipo', rotulo: 'Tipo', classeCol: null, classeTh: null, classeFiltroTh: null, larguraBase: 2.81, extrator: i => i.Tipo, filtroId: 'flc-tipo' },
+  { chave: 'emissao', rotulo: 'Emissão', classeCol: 'col-data', classeTh: null, classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Data Emissão']), filtroId: 'flc-emissao' },
+  { chave: 'ndoc', rotulo: 'Nº Doc.', classeCol: 'col-ndoc', classeTh: null, classeFiltroTh: null, larguraBase: 3.66, extrator: i => i['Nº Documento'], filtroId: 'flc-ndoc' },
+  { chave: 'formapgto', rotulo: 'Forma Pgto.', classeCol: null, classeTh: null, classeFiltroTh: null, larguraBase: 5.05, extrator: i => i['Forma Pagamento'], filtroId: 'flc-formapgto' },
+  { chave: 'chavepix', rotulo: 'Chave Pix', classeCol: null, classeTh: null, classeFiltroTh: null, larguraBase: 5.00, extrator: i => i['Chave Pix'], filtroId: 'flc-chavepix' },
+  { chave: 'fornecedor', rotulo: 'Fornecedor', classeCol: 'col-fornecedor', classeTh: null, classeFiltroTh: null, larguraBase: 5.15, extrator: i => i['Código Fornecedor'], filtroId: 'flc-fornecedor' },
+  { chave: 'razao', rotulo: 'Razão Social', classeCol: 'col-razao', classeTh: null, classeFiltroTh: null, larguraBase: 6.83, extrator: i => i['Razão Social'], filtroId: 'flc-razao' },
+  { chave: 'vencimento', rotulo: 'Vencimento', classeCol: 'col-data', classeTh: null, classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Vencimento']), filtroId: 'flc-vencimento' },
+  { chave: 'vencreal', rotulo: 'Venc. Real', classeCol: 'col-data', classeTh: null, classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Vencimento Real']), filtroId: 'flc-vencreal' },
+  { chave: 'valor', rotulo: 'Valor', classeCol: 'col-valor', classeTh: null, classeFiltroTh: null, larguraBase: 4.36, extrator: i => paraNumero(i['R$ Valor']), filtroId: 'flc-valor' },
+  { chave: 'parcela', rotulo: 'Parcela', classeCol: null, classeTh: 'col-parcela', classeFiltroTh: null, larguraBase: 3.84, extrator: i => i['Parcela'], filtroId: 'flc-parcela' },
+  { chave: 'baixa', rotulo: 'Baixa', classeCol: 'col-data', classeTh: null, classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Data Baixa']), filtroId: 'flc-baixa' },
+  { chave: 'historico', rotulo: 'Histórico', classeCol: 'col-historico', classeTh: null, classeFiltroTh: null, larguraBase: 6.83, extrator: i => i['Histórico'], filtroId: 'flc-historico' },
+  { chave: 'usuario', rotulo: 'Usuário', classeCol: 'col-usuario', classeTh: 'col-usuario', classeFiltroTh: 'col-usuario', larguraBase: 4.69, extrator: i => i['Usuário Inclusor'], filtroId: 'flc-usuario' },
+  { chave: 'remessa', rotulo: 'Remessa', classeCol: 'col-remessa', classeTh: 'col-remessa', classeFiltroTh: 'col-remessa', larguraBase: 3.84, extrator: i => i['Remessa'], filtroId: 'flc-remessa' },
 ];
+// Sempre no fim, nessa ordem, nunca arrastáveis (são funcionais, não dados
+// do lançamento) — Anexos tem os botões de documento/comprovante, Ação tem
+// o botão Remover.
+const COLUNAS_LANCAMENTOS_FIXAS_FINAL = [
+  { chave: 'anexos', rotulo: 'Anexos', classeTh: 'col-anexos', larguraBase: 6.50 },
+  { chave: 'acao', rotulo: '', classeTh: 'col-acao', larguraBase: 4.00 },
+];
+const MAPA_COLUNAS_LANCAMENTOS = {};
+DEFINICAO_COLUNAS_LANCAMENTOS.forEach((c) => { MAPA_COLUNAS_LANCAMENTOS[c.chave] = c; });
+COLUNAS_LANCAMENTOS_FIXAS_FINAL.forEach((c) => { MAPA_COLUNAS_LANCAMENTOS[c.chave] = c; });
+
+// Ordem escolhida pelo usuário (arrastando os cabeçalhos) — persiste entre
+// visitas via localStorage. Se o valor salvo não bater exatamente com o
+// conjunto atual de colunas (ex.: uma versão nova do app adicionou/removeu
+// coluna), ignora o salvo e volta pro padrão, em vez de quebrar a tela.
+const CHAVE_ORDEM_COLUNAS_LANCAMENTOS = 'eab_ordem_colunas_lancamentos';
+function lerOrdemColunasLancamentos_() {
+  const chavesValidas = new Set(DEFINICAO_COLUNAS_LANCAMENTOS.map((c) => c.chave));
+  try {
+    const salvo = JSON.parse(localStorage.getItem(CHAVE_ORDEM_COLUNAS_LANCAMENTOS) || 'null');
+    if (Array.isArray(salvo) && salvo.length === chavesValidas.size &&
+        new Set(salvo).size === salvo.length && salvo.every((c) => chavesValidas.has(c))) {
+      return salvo;
+    }
+  } catch (e) { /* localStorage corrompido — ignora e usa o padrão */ }
+  return DEFINICAO_COLUNAS_LANCAMENTOS.map((c) => c.chave);
+}
+let ordemColunasLancamentos = lerOrdemColunasLancamentos_();
+function colunasLancamentosEmOrdem() {
+  return ordemColunasLancamentos.map((chave) => MAPA_COLUNAS_LANCAMENTOS[chave]).concat(COLUNAS_LANCAMENTOS_FIXAS_FINAL);
+}
+function extratoresLancamentosEmOrdem() {
+  return colunasLancamentosEmOrdem().map((c) => c.extrator || null);
+}
+
+// Monta de novo o <colgroup> e as duas linhas do <thead> a partir de
+// ordemColunasLancamentos — chamado uma vez no carregamento e de novo toda
+// vez que o usuário solta uma coluna arrastada (ver
+// ativarArrastarColunasLancamentos). Preserva o texto já digitado nos
+// filtros por coluna (lê antes de sobrescrever o HTML).
+function reconstruirCabecalhoLancamentos() {
+  const tabela = document.getElementById('tabela-lancamentos');
+  const colunas = colunasLancamentosEmOrdem();
+
+  const valoresFiltros = {};
+  DEFINICAO_COLUNAS_LANCAMENTOS.forEach((c) => {
+    if (!c.filtroId) return;
+    const el = document.getElementById(c.filtroId);
+    if (el) valoresFiltros[c.filtroId] = el.value;
+  });
+
+  tabela.querySelector('colgroup').innerHTML = colunas
+    .map((c) => `<col${c.classeCol ? ` class="${c.classeCol}"` : ''} style="width:${c.larguraBase}%">`)
+    .join('');
+
+  tabela.querySelector('thead tr:first-child').innerHTML = colunas.map((c) => {
+    const classeAttr = c.classeTh ? ` class="${c.classeTh}"` : '';
+    if (c.chave === 'anexos' || c.chave === 'acao') return `<th${classeAttr}>${escaparHtml(c.rotulo)}</th>`;
+    return `<th${classeAttr} draggable="true" data-chave-coluna="${c.chave}" title="Arraste para reordenar">${escaparHtml(c.rotulo)}</th>`;
+  }).join('');
+
+  tabela.querySelector('thead tr.linha-filtros-coluna').innerHTML = colunas.map((c) => {
+    const classeAttr = c.classeFiltroTh ? ` class="${c.classeFiltroTh}"` : '';
+    if (c.chave === 'anexos' || c.chave === 'acao') return '<th></th>';
+    if (!c.filtroId) return `<th${classeAttr}></th>`;
+    const valorAtual = escaparAtributo(valoresFiltros[c.filtroId] || '');
+    return `<th${classeAttr}><input id="${c.filtroId}" type="text" placeholder="Filtrar…" value="${valorAtual}" oninput="lerFiltrosColunaLancamentos()"></th>`;
+  }).join('');
+
+  // Os <th> foram recriados do zero acima — os listeners de ordenar/
+  // redimensionar de uma reconstrução anterior ficaram presos aos
+  // elementos antigos (que saíram do DOM). Limpa os flags de "já
+  // inicializado" pra tornarOrdenavel/tornarColunasRedimensionaveis
+  // reconectarem tudo nos <th> novos na próxima renderizarLancamentos().
+  delete tabela.dataset.ordenavel;
+  delete tabela.dataset.redimensionavel;
+  delete tabela.dataset.congelada;
+  tabela.style.width = '';
+  estadoOrdenacao['tabela-lancamentos'] = null; // a ordenação por coluna não sobrevive a uma reordenação de colunas
+
+  ativarArrastarColunasLancamentos();
+}
+
+// Arrastar um <th> do cabeçalho pra outra posição reordena
+// ordemColunasLancamentos, salva no localStorage (mantém na próxima visita,
+// ver lerOrdemColunasLancamentos_) e reconstrói cabeçalho + corpo da
+// tabela. Não roda na visão simplificada (Sandro Costa): lá o <colgroup> é
+// controlado inteiro pela lógica de esconder colunas (ver
+// TABELA_LANCAMENTOS_SIMPLIFICADA), e essa tela é só uma aba restrita —
+// reordenar coluna não faz sentido nesse contexto.
+let colunaArrastadaLancamentos = null;
+function ativarArrastarColunasLancamentos() {
+  if (TABELA_LANCAMENTOS_SIMPLIFICADA) return;
+  const ths = document.querySelectorAll('#tabela-lancamentos thead tr:first-child th[draggable="true"]');
+  ths.forEach((th) => {
+    th.addEventListener('dragstart', () => {
+      colunaArrastadaLancamentos = th.dataset.chaveColuna;
+      th.classList.add('coluna-arrastando');
+    });
+    th.addEventListener('dragend', () => th.classList.remove('coluna-arrastando'));
+    th.addEventListener('dragover', (ev) => {
+      ev.preventDefault(); // sem isso o navegador não permite soltar aqui
+      th.classList.add('coluna-alvo-drop');
+    });
+    th.addEventListener('dragleave', () => th.classList.remove('coluna-alvo-drop'));
+    th.addEventListener('drop', (ev) => {
+      ev.preventDefault();
+      th.classList.remove('coluna-alvo-drop');
+      const chaveDestino = th.dataset.chaveColuna;
+      if (!colunaArrastadaLancamentos || colunaArrastadaLancamentos === chaveDestino) return;
+      const origemIdx = ordemColunasLancamentos.indexOf(colunaArrastadaLancamentos);
+      const destinoIdx = ordemColunasLancamentos.indexOf(chaveDestino);
+      if (origemIdx === -1 || destinoIdx === -1) return;
+      ordemColunasLancamentos.splice(origemIdx, 1);
+      ordemColunasLancamentos.splice(destinoIdx, 0, colunaArrastadaLancamentos);
+      localStorage.setItem(CHAVE_ORDEM_COLUNAS_LANCAMENTOS, JSON.stringify(ordemColunasLancamentos));
+      reconstruirCabecalhoLancamentos();
+      renderizarLancamentos();
+      toast('Ordem das colunas salva.');
+    });
+  });
+}
+
+// Uma célula de "Todos os lançamentos" por chave de coluna — usada pela
+// renderização do corpo (ver renderizarLancamentos), na ordem atual de
+// ordemColunasLancamentos. Mantém exatamente a mesma marcação (classes,
+// title, badges) que a tabela sempre teve; só passou a ser gerada por
+// chave em vez de sempre na mesma posição fixa.
+function celulaLancamento_(chave, i) {
+  switch (chave) {
+    case 'origem': {
+      const badge = i.Origem === 'ERP' ? 'badge-erp' : 'badge-manual';
+      return `<td class="col-origem"><span class="badge ${badge}">${i.Origem}</span></td>`;
+    }
+    case 'status': {
+      const badge = i.Status === 'Duplicado – revisar' ? 'badge-dup' : 'badge-ok';
+      return `<td class="col-status" title="${escaparHtml(i.Status)}"><span class="badge ${badge}">${i.Status}</span></td>`;
+    }
+    case 'aporte': return `<td class="col-aporte">${i.Aporte || ''}</td>`;
+    case 'tipo': return `<td>${i.Tipo || ''}</td>`;
+    case 'emissao': return `<td>${fmtData(i['Data Emissão'])}</td>`;
+    case 'ndoc': return `<td>${i['Nº Documento'] || ''}</td>`;
+    case 'formapgto': return `<td title="${escaparHtml(i['Forma Pagamento'])}">${i['Forma Pagamento'] || ''}</td>`;
+    case 'chavepix': return `<td title="${escaparHtml(i['Chave Pix'])}">${i['Chave Pix'] || ''}</td>`;
+    case 'fornecedor': return `<td title="${escaparHtml(i['Código Fornecedor'])}">${i['Código Fornecedor'] || ''}</td>`;
+    case 'razao': return `<td class="col-razao">${i['Razão Social'] || ''}</td>`;
+    case 'vencimento': return `<td>${fmtData(i['Vencimento'])}</td>`;
+    case 'vencreal': return `<td>${fmtData(i['Vencimento Real'])}</td>`;
+    case 'valor':
+      return `<td${TABELA_LANCAMENTOS_SIMPLIFICADA ? ' class="col-valor"' : ''} title="${escaparHtml(fmtMoeda(i['R$ Valor']))}">${TABELA_LANCAMENTOS_SIMPLIFICADA ? htmlMoedaAlinhada(i['R$ Valor']) : fmtMoeda(i['R$ Valor'])}</td>`;
+    case 'parcela': return `<td>${i['Parcela'] || ''}</td>`;
+    case 'baixa': return `<td>${fmtData(i['Data Baixa'])}</td>`;
+    case 'historico': return `<td class="col-historico">${i['Histórico'] || ''}</td>`;
+    case 'usuario': return `<td class="col-usuario" title="${escaparHtml(i['Usuário Inclusor'])}">${i['Usuário Inclusor'] || ''}</td>`;
+    case 'remessa': return `<td class="col-remessa">${i['Remessa'] || ''}</td>`;
+    default: return '<td></td>';
+  }
+}
+
+// Monta o cabeçalho já na ordem salva (ou padrão) assim que o script roda —
+// antes do primeiro carregarTudo()/renderizarLancamentos(). Não roda na
+// visão simplificada (Sandro Costa): lá o <colgroup>/cabeçalho já são
+// tratados inteiramente pelo bloco TABELA_LANCAMENTOS_SIMPLIFICADA acima
+// (esconder colunas fixas, sem reordenação nenhuma).
+if (!TABELA_LANCAMENTOS_SIMPLIFICADA) reconstruirCabecalhoLancamentos();
 
 // Filtros por coluna (2ª linha do cabeçalho de "Todos os lançamentos") —
 // Origem/Status/Aporte ficam de fora daqui porque já têm seletor próprio
@@ -2582,7 +2779,7 @@ function renderizarLancamentos() {
   itens = aplicarFiltrosColunaLancamentos(itens, filtrosColunaLancamentos);
 
   itens.sort((a, b) => (paraData(b['Vencimento']) || 0) - (paraData(a['Vencimento']) || 0));
-  itens = aplicarOrdenacao('tabela-lancamentos', itens, EXTRATORES_LANCAMENTOS);
+  itens = aplicarOrdenacao('tabela-lancamentos', itens, extratoresLancamentosEmOrdem());
   ultimoItensLancamentosFiltrados = itens;
 
   const totalPaginas = Math.max(1, Math.ceil(itens.length / TAMANHO_PAGINA_LANCAMENTOS));
@@ -2590,9 +2787,8 @@ function renderizarLancamentos() {
   if (paginaLancamentos < 1) paginaLancamentos = 1;
   const itensPagina = itens.slice((paginaLancamentos - 1) * TAMANHO_PAGINA_LANCAMENTOS, paginaLancamentos * TAMANHO_PAGINA_LANCAMENTOS);
 
+  const colunasEmOrdem = ordemColunasLancamentos; // sem os fixos (anexos/ação), tratados à parte abaixo
   document.querySelector('#tabela-lancamentos tbody').innerHTML = itensPagina.map(i => {
-    const origemBadge = i.Origem === 'ERP' ? 'badge-erp' : 'badge-manual';
-    const statusBadge = i.Status === 'Duplicado – revisar' ? 'badge-dup' : 'badge-ok';
     const acao = (!MODO_LEITURA && i.Origem === 'Manual')
       ? `<button class="btn perigo small" title="Remover lançamento manual" onclick="removerManual('${i.ID}')">🗑️</button>`
       : '';
@@ -2607,30 +2803,14 @@ function renderizarLancamentos() {
       : (linkComp ? 'Abrir/editar link do comprovante' : 'Adicionar link do comprovante');
     // Documento = azul, Comprovante = verde (cores diferentes pra distinguir
     // rápido qual botão é qual) — Remover, na coluna Ação, é vermelho.
-    const anexos = `<div class="anexos-col">
+    const anexos = `<td class="col-anexos"><div class="anexos-col">
         <button class="btn secundario small anexo-doc ${linkDoc ? 'anexo-definido' : ''}" title="${tituloDoc}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','documento','${escaparAtributo(linkDoc)}')">📄</button>
         <button class="btn secundario small anexo-comp ${linkComp ? 'anexo-definido-verde' : ''}" title="${tituloComp}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','comprovante','${escaparAtributo(linkComp)}')">🧾</button>
-      </div>`;
+      </div></td>`;
+    const celulasDados = colunasEmOrdem.map((chave) => celulaLancamento_(chave, i)).join('');
     return `<tr onclick="abrirDetalheLinha(event, '${idEsc}', '${i.Origem}')" title="Clique para ver o lançamento por completo">
-      <td class="col-origem"><span class="badge ${origemBadge}">${i.Origem}</span></td>
-      <td class="col-status" title="${escaparHtml(i.Status)}"><span class="badge ${statusBadge}">${i.Status}</span></td>
-      <td class="col-aporte">${i.Aporte || ''}</td>
-      <td>${i.Tipo || ''}</td>
-      <td>${fmtData(i['Data Emissão'])}</td>
-      <td>${i['Nº Documento'] || ''}</td>
-      <td title="${escaparHtml(i['Forma Pagamento'])}">${i['Forma Pagamento'] || ''}</td>
-      <td title="${escaparHtml(i['Chave Pix'])}">${i['Chave Pix'] || ''}</td>
-      <td title="${escaparHtml(i['Código Fornecedor'])}">${i['Código Fornecedor'] || ''}</td>
-      <td class="col-razao">${i['Razão Social'] || ''}</td>
-      <td>${fmtData(i['Vencimento'])}</td>
-      <td>${fmtData(i['Vencimento Real'])}</td>
-      <td${TABELA_LANCAMENTOS_SIMPLIFICADA ? ' class="col-valor"' : ''} title="${escaparHtml(fmtMoeda(i['R$ Valor']))}">${TABELA_LANCAMENTOS_SIMPLIFICADA ? htmlMoedaAlinhada(i['R$ Valor']) : fmtMoeda(i['R$ Valor'])}</td>
-      <td>${i['Parcela'] || ''}</td>
-      <td>${fmtData(i['Data Baixa'])}</td>
-      <td class="col-historico">${i['Histórico'] || ''}</td>
-      <td class="col-usuario" title="${escaparHtml(i['Usuário Inclusor'])}">${i['Usuário Inclusor'] || ''}</td>
-      <td class="col-remessa">${i['Remessa'] || ''}</td>
-      <td class="col-anexos">${anexos}</td>
+      ${celulasDados}
+      ${anexos}
       <td class="col-acao">${acao}</td>
     </tr>`;
   }).join('');
@@ -2641,7 +2821,7 @@ function renderizarLancamentos() {
   // pra todo clique de ordenação dali em diante, por isso a volta pra
   // página 1 tem que estar dentro dele (mudar a ordenação muda o que cai em
   // cada página).
-  tornarOrdenavel('tabela-lancamentos', EXTRATORES_LANCAMENTOS, () => { paginaLancamentos = 1; renderizarLancamentos(); });
+  tornarOrdenavel('tabela-lancamentos', extratoresLancamentosEmOrdem(), () => { paginaLancamentos = 1; renderizarLancamentos(); });
   tornarColunasRedimensionaveis('tabela-lancamentos');
 }
 ['busca', 'filtro-origem', 'filtro-status', 'filtro-aporte'].forEach(id =>
