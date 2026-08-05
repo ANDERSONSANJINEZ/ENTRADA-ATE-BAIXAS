@@ -3294,12 +3294,28 @@ async function processarExtrato(file) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const linhas = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
     if (!linhas.length) throw new Error('Arquivo vazio.');
-    const cols = detectarColunasExtrato(linhas[0]);
-    if (cols.data < 0 || (cols.valor < 0 && cols.credito < 0 && cols.debito < 0)) {
-      throw new Error('Não encontrei as colunas de Data e/ou Valor (ou Crédito/Débito) no cabeçalho da 1ª linha (colunas lidas: ' + linhas[0].join(', ') + ').');
+    // O cabeçalho de verdade nem sempre está na 1ª linha da planilha — o
+    // extrato do Bradesco (Net Empresa), por exemplo, tem logo/título/dados
+    // da agência nas primeiras linhas antes da linha com "Data",
+    // "Lançamento", "Crédito (R$)" etc. Por isso procura, dentre as
+    // primeiras linhas, a primeira que realmente bate com Data + algum
+    // valor (Valor único ou Crédito/Débito) — em vez de assumir que é
+    // sempre a linha 1.
+    const LIMITE_BUSCA_CABECALHO = Math.min(linhas.length, 30);
+    let cols = null, linhaCabecalhoIdx = -1;
+    for (let r = 0; r < LIMITE_BUSCA_CABECALHO; r++) {
+      const tentativa = detectarColunasExtrato(linhas[r]);
+      if (tentativa.data >= 0 && (tentativa.valor >= 0 || tentativa.credito >= 0 || tentativa.debito >= 0)) {
+        cols = tentativa;
+        linhaCabecalhoIdx = r;
+        break;
+      }
+    }
+    if (!cols) {
+      throw new Error('Não encontrei uma linha de cabeçalho com colunas de Data e Valor (ou Crédito/Débito) nas primeiras ' + LIMITE_BUSCA_CABECALHO + ' linhas do arquivo.');
     }
     const itensExtrato = [];
-    for (let r = 1; r < linhas.length; r++) {
+    for (let r = linhaCabecalhoIdx + 1; r < linhas.length; r++) {
       const linha = linhas[r];
       if (!linha || linha.every((c) => c === '' || c == null)) continue;
       const data = parseDataExtrato_(linha[cols.data]);
