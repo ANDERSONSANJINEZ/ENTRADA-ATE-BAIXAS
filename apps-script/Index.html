@@ -461,6 +461,7 @@
         <select id="filtro-aporte">
           <option value="">Aporte: todos</option>
         </select>
+        <button type="button" class="btn secundario small" onclick="limparFiltrosLancamentos()">✕ Limpar filtros</button>
       </div>
       <div id="total-lancamentos" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
       <div class="tabela-scroll">
@@ -674,6 +675,7 @@
   <div class="modal-caixa">
     <div class="modal-cabecalho">
       <h2 id="modal-detalhe-titulo"></h2>
+      <button class="btn secundario small" onclick="limparFiltrosModalDetalhe()">✕ Limpar filtros</button>
       <button class="btn secundario small" onclick="exportarModalDetalhe()">⬇ Exportar Excel</button>
       <button class="modal-fechar" onclick="fecharModalDetalhe()" title="Fechar (Esc)">✕</button>
     </div>
@@ -1612,6 +1614,17 @@ function aplicarFiltrosModalDetalhe() {
     dataBaixa: document.getElementById('mdf-databaixa').value,
   };
   renderizarModalDetalhe();
+}
+
+// Limpa os filtros por coluna do pop-up de detalhamento (Origem/Status +
+// todos os campos de texto da linha de filtros da tabela) sem fechar o
+// pop-up nem mudar a ordenação atual.
+function limparFiltrosModalDetalhe() {
+  document.getElementById('mdf-origem').value = '';
+  document.getElementById('mdf-status').value = '';
+  ['mdf-tipo', 'mdf-ndoc', 'mdf-fornecedor', 'mdf-razao', 'mdf-vencimento', 'mdf-valor', 'mdf-databaixa']
+    .forEach((id) => { document.getElementById(id).value = ''; });
+  aplicarFiltrosModalDetalhe();
 }
 
 // Um extrator por coluna, na mesma ordem do cabeçalho da tabela — usado
@@ -2885,6 +2898,22 @@ function renderizarLancamentos() {
 }
 ['busca', 'filtro-origem', 'filtro-status', 'filtro-aporte'].forEach(id =>
   document.getElementById(id).addEventListener('input', () => { paginaLancamentos = 1; renderizarLancamentos(); }));
+
+// Limpa a busca, os 3 seletores (Origem/Status/Aporte) e todos os filtros
+// por coluna de "Todos os lançamentos" de uma vez — sem isso, um filtro
+// esquecido em alguma coluna escondida (fora da largura visível da tela,
+// como no print que motivou este botão) passava despercebido.
+const IDS_FLC_LANCAMENTOS = ['flc-tipo', 'flc-emissao', 'flc-ndoc', 'flc-formapgto', 'flc-chavepix',
+  'flc-fornecedor', 'flc-razao', 'flc-vencimento', 'flc-vencreal', 'flc-valor', 'flc-parcela',
+  'flc-baixa', 'flc-historico', 'flc-usuario', 'flc-remessa'];
+function limparFiltrosLancamentos() {
+  document.getElementById('busca').value = '';
+  document.getElementById('filtro-origem').value = '';
+  document.getElementById('filtro-status').value = '';
+  document.getElementById('filtro-aporte').value = '';
+  IDS_FLC_LANCAMENTOS.forEach((id) => { document.getElementById(id).value = ''; });
+  lerFiltrosColunaLancamentos(); // já volta pra página 1 e re-renderiza
+}
 
 // Núcleo compartilhado entre o botão Remover de "Todos os lançamentos" e o
 // da coluna de ação do modal-detalhe genérico (ver removerManualDoModalDetalhe)
