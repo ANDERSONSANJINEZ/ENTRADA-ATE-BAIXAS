@@ -3356,12 +3356,32 @@ async function processarExtrato(file) {
   }
 }
 
+// Extrai do texto do lançamento bancário os números de nota/documento
+// citados (ex.: "PAGTO ELETRON COBRANCA NF 5858 G M B DE FREITAS" -> "5858";
+// "COBRANCA NFS 1328 LOQUICENTER" -> "1328") — reconhece os mesmos
+// prefixos de Tipo usados no lançamento manual (NF, NFS, NFAG, ND, NF3E,
+// DACTE, BOL, FAT, FOL, FGTS, DARF, DAM). O "Dcto." do extrato é só uma
+// referência interna do banco (não bate com o Nº Documento do título), por
+// isso o número certo tem que vir do texto do lançamento mesmo.
+const RE_NDOC_LANCAMENTO = /\b(?:NFS?e?|NFAG|ND|NF3E|DACTE|BOL|FAT|FOL|FGTS|DARF|DAM)\.?\s*(\d+)\b/gi;
+function extrairNumerosDocumento_(historico) {
+  const h = String(historico || '');
+  const numeros = new Set();
+  let m;
+  RE_NDOC_LANCAMENTO.lastIndex = 0;
+  while ((m = RE_NDOC_LANCAMENTO.exec(h))) {
+    numeros.add(m[1].replace(/^0+/, '') || '0');
+  }
+  return numeros;
+}
+
 function conciliarExtrato(itensExtrato) {
   // Um título baixado é sempre uma saída de dinheiro — só compara com os
   // lançamentos de DÉBITO do extrato. Créditos (aportes, rentabilidade
   // etc.) nunca "pagam" um título, então nem entram nessa lista — eles têm
   // a própria análise em analisarCreditos_.
   const itensDebito = itensExtrato.filter((i) => i.tipo === 'debito');
+  itensDebito.forEach((mov) => { mov.numerosDoc = extrairNumerosDocumento_(mov.historico); });
   // Um extrato normalmente cobre só um período curto (ex.: um mês) — sem
   // isso, títulos baixados MUITO antes ou depois do período do extrato
   // (que nunca poderiam aparecer nele) inundavam "Sem correspondência no
@@ -3382,7 +3402,41 @@ function conciliarExtrato(itensExtrato) {
   });
   const foraDoPeriodo = todosBaixados.length - baixados.length;
   const usados = new Set();
-  const resultado = baixados.map((titulo) => {
+  const resultadoPorId = new Map();
+
+  // Passo 1 — Nº Documento do título citado no texto do lançamento + valor
+  // batendo: sinal bem mais forte que só valor+data (dois títulos
+  // raramente têm o mesmo valor E o mesmo número de nota), então aqui não
+  // fica preso à janela de 5 dias — a baixa pode ter sido lançada no
+  // sistema num dia diferente da compensação bancária.
+  baixados.forEach((titulo) => {
+    const nDocTitulo = removerZerosEsquerdaCliente(String(titulo['Nº Documento'] || '').trim());
+    if (!nDocTitulo) return;
+    const dataBaixa = diaCalendario(paraData(titulo['Data Baixa']));
+    const valorTitulo = paraNumero(titulo['R$ Valor']);
+    let melhorIdx = -1, melhorDiffDias = Infinity;
+    itensDebito.forEach((mov, idx) => {
+      if (usados.has(idx)) return;
+      if (!mov.numerosDoc.has(nDocTitulo)) return;
+      if (Math.abs(mov.valor - valorTitulo) > 0.01) return;
+      const dataMov = diaCalendario(mov.data);
+      const diffDias = (dataBaixa != null && dataMov != null) ? Math.abs(dataMov - dataBaixa) / 86400000 : 0;
+      if (diffDias < melhorDiffDias) { melhorDiffDias = diffDias; melhorIdx = idx; }
+    });
+    if (melhorIdx >= 0) {
+      usados.add(melhorIdx);
+      resultadoPorId.set(titulo.ID, {
+        titulo, mov: itensDebito[melhorIdx],
+        status: melhorDiffDias === 0 ? 'Conciliado' : 'Divergência de data',
+      });
+    }
+  });
+
+  // Passo 2 — só valor + data mais próxima (como antes), pros títulos que
+  // o passo 1 não resolveu (extrato sem o número da nota no texto, ou
+  // título sem Nº Documento preenchido).
+  baixados.forEach((titulo) => {
+    if (resultadoPorId.has(titulo.ID)) return;
     const dataBaixa = diaCalendario(paraData(titulo['Data Baixa']));
     const valorTitulo = paraNumero(titulo['R$ Valor']);
     let melhorIdx = -1, melhorDiffDias = Infinity;
@@ -3395,10 +3449,15 @@ function conciliarExtrato(itensExtrato) {
     });
     if (melhorIdx >= 0 && melhorDiffDias <= 5) {
       usados.add(melhorIdx);
-      return { titulo, mov: itensDebito[melhorIdx], status: melhorDiffDias === 0 ? 'Conciliado' : 'Divergência de data' };
+      resultadoPorId.set(titulo.ID, {
+        titulo, mov: itensDebito[melhorIdx],
+        status: melhorDiffDias === 0 ? 'Conciliado' : 'Divergência de data',
+      });
     }
-    return { titulo, mov: null, status: 'Sem correspondência no extrato' };
   });
+
+  const resultado = baixados.map((titulo) =>
+    resultadoPorId.get(titulo.ID) || { titulo, mov: null, status: 'Sem correspondência no extrato' });
   const semTitulo = itensDebito.filter((_, idx) => !usados.has(idx));
   return { resultado, semTitulo, foraDoPeriodo };
 }

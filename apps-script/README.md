@@ -218,12 +218,27 @@ exemplo — cada uma preenchida só quando é o caso da linha). A coluna de
 histórico/descrição aceita variações como "Lançamento", "Data Movimento",
 "Histórico" etc.
 
-**Títulos pagos x Débitos do extrato.** Cada título já **baixado** na
-planilha é cruzado só com os lançamentos de **débito** do extrato (um
-título pago é sempre uma saída de dinheiro) por valor idêntico (tolerância
-de 1 centavo) e data — igual (Conciliado) ou até 5 dias de diferença
-(Divergência de data, comum quando a compensação bancária atrasa). 4
-situações possíveis:
+**Títulos pagos x Débitos do extrato.** Só entram na comparação os
+títulos **baixados dentro do período coberto pelo extrato** (com uma
+folga de 5 dias) — títulos de outras épocas nunca poderiam aparecer no
+extrato mesmo, então nem entram, evitando ruído em "Sem correspondência".
+Dois critérios de cruzamento, nessa ordem:
+
+1. **Nº Documento + valor** — procura, no texto do lançamento, o número
+   da nota citado (ex.: "COBRANCA NF 5858 ..." reconhece "5858"; aceita os
+   mesmos prefixos do Tipo: NF, NFS, NFAG, ND, NF3E, DACTE, BOL, FAT, FOL,
+   FGTS, DARF, DAM). Se bater com o Nº Documento do título **e** o valor
+   for idêntico (tolerância de 1 centavo), concilia — sem limite de dias
+   de diferença, já que é um sinal bem mais forte que só valor+data (o
+   "Dcto." do próprio extrato é só uma referência interna do banco, não
+   bate com o Nº Documento do título, por isso o número certo vem do
+   texto do lançamento).
+2. **Valor + data mais próxima** — pros títulos que o passo 1 não
+   resolveu (extrato sem o número da nota no texto, ou título sem Nº
+   Documento preenchido): mesmo critério de antes, valor idêntico e data
+   igual ou até 5 dias de diferença.
+
+4 situações possíveis:
 
 - **Conciliado** — bate valor e data.
 - **Divergência de data** — bate o valor, mas a data no extrato é diferente
