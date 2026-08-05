@@ -532,46 +532,37 @@
   </section>
 
   <section id="aba-conciliacao" class="aba">
-    <div class="painel">
-      <h2>Conciliação Bancária</h2>
+    <div class="painel" id="painel-resultado-conciliacao" style="display:none;">
+      <div class="cabecalho-painel">
+        <h2>Resultado da conciliação bancária</h2>
+        <button class="btn secundario small" onclick="exportarConciliacao()">⬇ Exportar Excel</button>
+      </div>
+      <div id="total-conciliacao" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
+      <div class="filtros">
+        <select id="filtro-conciliacao">
+          <option value="">Situação: todas</option>
+          <option value="Conciliado">Conciliado</option>
+          <option value="Divergência de data">Divergência de data</option>
+          <option value="Sem correspondência no extrato">Sem correspondência no extrato</option>
+          <option value="Sem título correspondente">Sem título correspondente (extrato)</option>
+        </select>
+      </div>
+      <div class="tabela-scroll">
+        <table id="tabela-conciliacao">
+          <thead><tr>
+            <th>Situação</th><th>Fornecedor</th><th>Nº Doc.</th><th>Data Baixa</th>
+            <th>Valor Título</th><th>Data Extrato</th><th>Valor Extrato</th><th>Histórico Extrato</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="painel" id="painel-conciliacao-vazio">
       <p style="font-size:13px;color:var(--cinza)">
-        Envie o extrato bancário em .xlsx (qualquer nome de arquivo) pra
-        cruzar com os títulos já baixados na planilha. O arquivo precisa
-        ter colunas de Data, Valor e Histórico/Descrição — os nomes exatos
-        variam de banco pra banco, o app tenta reconhecer automaticamente.
-        Casamento por valor idêntico e data igual (ou próxima, em até 5
-        dias) — tudo é calculado aqui na tela, o extrato não é salvo em
-        lugar nenhum.
+        Nenhum extrato bancário processado ainda nesta sessão. Envie o
+        extrato na aba <strong>Atualizar Dados</strong> — o resultado do
+        cruzamento aparece aqui.
       </p>
-      <div id="dropzone-extrato">Arraste o extrato aqui ou clique para selecionar
-        <input type="file" id="arquivo-extrato" accept=".xlsx" style="display:none">
-      </div>
-      <div id="resumo-conciliacao"></div>
-      <div id="painel-resultado-conciliacao" style="display:none;">
-        <div class="cabecalho-painel">
-          <h2 style="font-size:14px;">Resultado da conciliação</h2>
-          <button class="btn secundario small" onclick="exportarConciliacao()">⬇ Exportar Excel</button>
-        </div>
-        <div id="total-conciliacao" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
-        <div class="filtros">
-          <select id="filtro-conciliacao">
-            <option value="">Situação: todas</option>
-            <option value="Conciliado">Conciliado</option>
-            <option value="Divergência de data">Divergência de data</option>
-            <option value="Sem correspondência no extrato">Sem correspondência no extrato</option>
-            <option value="Sem título correspondente">Sem título correspondente (extrato)</option>
-          </select>
-        </div>
-        <div class="tabela-scroll">
-          <table id="tabela-conciliacao">
-            <thead><tr>
-              <th>Situação</th><th>Fornecedor</th><th>Nº Doc.</th><th>Data Baixa</th>
-              <th>Valor Título</th><th>Data Extrato</th><th>Valor Extrato</th><th>Histórico Extrato</th>
-            </tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -600,18 +591,36 @@
   </section>
 
   <section id="aba-atualizar" class="aba">
-    <div class="painel" id="painel-atualizar-baixas">
-      <h2>Títulos (baixas) — TOTVS Protheus</h2>
-      <p style="font-size:13px;color:var(--cinza)">
-        Envie o export do Protheus em .xlsx (qualquer nome de arquivo). Os
-        títulos importados substituem a última importação salva; os
-        lançamentos manuais não são afetados — apenas recomparados para
-        sinalizar duplicidade.
-      </p>
-      <div id="dropzone">Arraste o arquivo .xlsx aqui ou clique para selecionar
-        <input type="file" id="arquivo-erp" accept=".xlsx" style="display:none">
+    <div class="grid-2">
+      <div class="painel" id="painel-atualizar-baixas">
+        <h2>Títulos (baixas) — TOTVS Protheus</h2>
+        <p style="font-size:13px;color:var(--cinza)">
+          Envie o export do Protheus em .xlsx (qualquer nome de arquivo). Os
+          títulos importados substituem a última importação salva; os
+          lançamentos manuais não são afetados — apenas recomparados para
+          sinalizar duplicidade.
+        </p>
+        <div id="dropzone">Arraste o arquivo .xlsx aqui ou clique para selecionar
+          <input type="file" id="arquivo-erp" accept=".xlsx" style="display:none">
+        </div>
+        <div id="resumo-importacao"></div>
       </div>
-      <div id="resumo-importacao"></div>
+
+      <div class="painel">
+        <h2>Extrato bancário</h2>
+        <p style="font-size:13px;color:var(--cinza)">
+          Envie o extrato bancário em .xlsx (qualquer nome de arquivo) pra
+          cruzar com os títulos já baixados na planilha. O arquivo precisa
+          ter colunas de Data, Valor e Histórico/Descrição — os nomes exatos
+          variam de banco pra banco, o app tenta reconhecer automaticamente.
+          Casamento por valor idêntico e data igual (ou próxima, em até 5
+          dias) — o resultado aparece na aba "Conciliação".
+        </p>
+        <div id="dropzone-extrato">Arraste o extrato aqui ou clique para selecionar
+          <input type="file" id="arquivo-extrato" accept=".xlsx" style="display:none">
+        </div>
+        <div id="resumo-conciliacao"></div>
+      </div>
     </div>
   </section>
 
@@ -3210,6 +3219,7 @@ async function processarExtrato(file) {
   const resumo = document.getElementById('resumo-conciliacao');
   resumo.innerHTML = '<div class="aviso">Lendo o extrato…</div>';
   document.getElementById('painel-resultado-conciliacao').style.display = 'none';
+  document.getElementById('painel-conciliacao-vazio').style.display = '';
   try {
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: 'array', cellDates: true });
@@ -3234,6 +3244,7 @@ async function processarExtrato(file) {
     ultimoResultadoConciliacao = conciliarExtrato(itensExtrato);
     renderizarConciliacao();
     document.getElementById('painel-resultado-conciliacao').style.display = '';
+    document.getElementById('painel-conciliacao-vazio').style.display = 'none';
 
     // Salva o resultado no histórico da planilha (aba "Conciliação
     // Bancária") pra a aba Análise enxergar isso de QUALQUER sessão, não só
@@ -3247,9 +3258,10 @@ async function processarExtrato(file) {
       await salvarConciliacaoNaPlanilha();
       avisoSalvar = ' Resultado salvo no histórico (a aba Análise já reflete isso).';
     } catch (e) {
-      avisoSalvar = ` (Não deu pra salvar no histórico da planilha: ${e.message} — o resultado abaixo continua válido só nesta tela.)`;
+      avisoSalvar = ` (Não deu pra salvar no histórico da planilha: ${e.message} — o resultado na aba "Conciliação" continua válido só nesta tela.)`;
     }
-    resumo.innerHTML = `<div class="aviso">${itensExtrato.length} lançamento(s) lidos de "${file.name}". Veja o resultado abaixo.${avisoSalvar}</div>`;
+    resumo.innerHTML = `<div class="aviso">${itensExtrato.length} lançamento(s) lidos de "${file.name}". Veja o resultado na aba "Conciliação".${avisoSalvar}</div>`;
+    toast('Extrato processado — veja o resultado na aba "Conciliação".');
   } catch (e) {
     resumo.innerHTML = `<div class="aviso">Falha ao processar o extrato: ${e.message}</div>`;
   }
