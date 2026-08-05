@@ -3081,51 +3081,67 @@ function dataParaISO(v) {
 // coluna AW do Protheus (não confiável) por este script, fornecido pelo
 // Anderson. Vale pra qualquer dado futuro que precise de Remessa: sempre
 // calcular por aqui, nunca ler de uma coluna do arquivo importado.
-// Tradução literal da fórmula original (sintaxe Quickbase):
+// Tradução da fórmula original (sintaxe Quickbase), com UM ajuste: a
+// referência ("semana 0") não é mais uma data fixa escrita no código — isso
+// ficaria desatualizado com o tempo — e sim o Vencimento mais antigo
+// encontrado no PRÓPRIO arquivo sendo importado (dataRefMs, calculado uma
+// vez por importação logo abaixo, em parseArquivoProtheus). Como cada
+// importação substitui a aba ERP inteira (ver substituirErp_ no Code.gs),
+// isso não gera inconsistência entre importações — cada uma recalcula sua
+// própria referência a partir dos dados que ela mesma trouxe.
 //   IF(ISBLANK([VENCIMENTO]), "",
-//     RIGHT("00" & (IF(23 + FLOOR(TOTALHOURS(DATE([VENCIMENTO]) - DATE("2026-01-31")) / 168) < 1,
-//       "", 23 + FLOOR(TOTALHOURS(DATE([VENCIMENTO]) - DATE("2026-01-31")) / 168))), 2))
-const REMESSA_DATA_REF_MS = Date.UTC(2026, 0, 31); // 2026-01-31, em UTC (sem hora) pra bater com DATE() da fórmula
-function calcularRemessa(vencimentoISO) {
-  if (!vencimentoISO) return '';
+//     RIGHT("00" & (IF(23 + FLOOR(TOTALHOURS(DATE([VENCIMENTO]) - DATE([REFERÊNCIA])) / 168) < 1,
+//       "", 23 + FLOOR(TOTALHOURS(DATE([VENCIMENTO]) - DATE([REFERÊNCIA])) / 168))), 2))
+function calcularRemessa(vencimentoISO, dataRefMs) {
+  if (!vencimentoISO || dataRefMs == null) return '';
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(vencimentoISO));
   if (!m) return '';
   const dataVencMs = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  const totalHoras = (dataVencMs - REMESSA_DATA_REF_MS) / (1000 * 60 * 60);
+  const totalHoras = (dataVencMs - dataRefMs) / (1000 * 60 * 60);
   const bruto = 23 + Math.floor(totalHoras / 168);
   const comZeros = '00' + (bruto < 1 ? '' : String(bruto));
   return comZeros.slice(-2);
 }
 
+// Converte uma data "yyyy-MM-dd" pra milissegundos UTC (meia-noite), ou
+// null se não for uma data válida — usado só para achar o Vencimento mais
+// antigo do arquivo (referência da Remessa, ver calcularRemessa acima).
+function dataIsoParaMsUtc(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  return m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
+
 function parseArquivoProtheus(workbook) {
   const ws = workbook.Sheets[workbook.SheetNames[0]];
   const range = XLSX.utils.decode_range(ws['!ref']);
-  const itens = [];
+  const linhasLidas = [];
+  let dataRefMs = null; // Vencimento mais antigo do arquivo — referência da Remessa
   for (let r = 2; r <= range.e.r; r++) { // linha 3 do Excel = índice 2 (0-based)
     const linha = r + 1;
     const tipo = celula(ws, SRC.tipo + linha);
     if (tipo === undefined || tipo === null || tipo === '') continue;
     const vencimentoISO = dataParaISO(celula(ws, SRC.vencimento + linha));
-    const item = {
-      'Tipo': tipo,
-      'Data Emissão': dataParaISO(celula(ws, SRC.dt_emissao + linha)),
-      'Nº Documento': removerZerosEsquerda(celula(ws, SRC.no_titulo + linha)),
-      'Vencimento Real': dataParaISO(celula(ws, SRC.vencto_real + linha)),
-      'Forma Pagamento': celula(ws, SRC.form_pagto + linha),
-      'Código Fornecedor': removerZerosEsquerda(celula(ws, SRC.fornecedor + linha)),
-      'Parcela': celula(ws, SRC.parcela + linha),
-      'Data Baixa': dataParaISO(celula(ws, SRC.dt_baixa + linha)),
-      'Vencimento': vencimentoISO,
-      'R$ Valor': celula(ws, SRC.vlr_titulo + linha),
-      'Usuário Inclusor': celula(ws, SRC.usuario + linha),
-      'Razão Social': celula(ws, SRC.nome_fornece + linha),
-      'Aprovação Remessa': celula(ws, SRC.aprovacao + linha),
-      'Remessa': calcularRemessa(vencimentoISO),
-      'Histórico': celula(ws, SRC.historico + linha),
-    };
-    itens.push(item);
+    const vencimentoMs = dataIsoParaMsUtc(vencimentoISO);
+    if (vencimentoMs != null && (dataRefMs === null || vencimentoMs < dataRefMs)) dataRefMs = vencimentoMs;
+    linhasLidas.push({ linha, tipo, vencimentoISO });
   }
-  return itens;
+  return linhasLidas.map(({ linha, tipo, vencimentoISO }) => ({
+    'Tipo': tipo,
+    'Data Emissão': dataParaISO(celula(ws, SRC.dt_emissao + linha)),
+    'Nº Documento': removerZerosEsquerda(celula(ws, SRC.no_titulo + linha)),
+    'Vencimento Real': dataParaISO(celula(ws, SRC.vencto_real + linha)),
+    'Forma Pagamento': celula(ws, SRC.form_pagto + linha),
+    'Código Fornecedor': removerZerosEsquerda(celula(ws, SRC.fornecedor + linha)),
+    'Parcela': celula(ws, SRC.parcela + linha),
+    'Data Baixa': dataParaISO(celula(ws, SRC.dt_baixa + linha)),
+    'Vencimento': vencimentoISO,
+    'R$ Valor': celula(ws, SRC.vlr_titulo + linha),
+    'Usuário Inclusor': celula(ws, SRC.usuario + linha),
+    'Razão Social': celula(ws, SRC.nome_fornece + linha),
+    'Aprovação Remessa': celula(ws, SRC.aprovacao + linha),
+    'Remessa': calcularRemessa(vencimentoISO, dataRefMs),
+    'Histórico': celula(ws, SRC.historico + linha),
+  }));
 }
 
 // ---------- Detalhe por Aporte ----------
