@@ -557,6 +557,29 @@
         </table>
       </div>
     </div>
+    <div class="painel" id="painel-creditos" style="display:none;">
+      <div class="cabecalho-painel">
+        <h2>Créditos recebidos (aportes e rendimentos)</h2>
+        <button class="btn secundario small" onclick="exportarCreditos()">⬇ Exportar Excel</button>
+      </div>
+      <div id="total-creditos" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
+      <div class="tabela-scroll">
+        <table id="tabela-creditos">
+          <thead><tr>
+            <th>Origem</th><th>Qtde</th><th>Total Recebido</th><th>% dos Créditos</th>
+            <th>Débito Atribuído (estimado)</th><th>Sobra Estimada</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:var(--cinza); margin-top:10px;">
+        "Débito Atribuído" e "Sobra Estimada" são uma estimativa: dividem o
+        total pago a fornecedores no período proporcionalmente entre as
+        consorciadas, conforme o peso do aporte de cada uma — o crédito do
+        Estado do Ceará (🏛️) e a rentabilidade de aplicações (📈) não entram
+        nessa proporção, só os aportes das consorciadas.
+      </p>
+    </div>
     <div class="painel" id="painel-conciliacao-vazio">
       <p style="font-size:13px;color:var(--cinza)">
         Nenhum extrato bancário processado ainda nesta sessão. Envie o
@@ -3166,28 +3189,43 @@ document.getElementById('busca-historico').addEventListener('input', renderizarH
 
 // ---------- Conciliação Bancária ----------
 // Casamento por valor idêntico (tolerância de 1 centavo) entre um título já
-// baixado e um lançamento do extrato — na mesma data (Conciliado) ou até 5
-// dias de diferença (Divergência de data, ex.: compensação bancária).
-// Compara sempre por valor ABSOLUTO (o formato de cada banco varia — débito
-// pode vir negativo, ou numa coluna separada — por isso não distinguimos
-// débito/crédito aqui, só valor e data).
+// baixado e um lançamento de DÉBITO do extrato — na mesma data (Conciliado)
+// ou até 5 dias de diferença (Divergência de data, ex.: compensação
+// bancária). Um título pago é sempre uma saída de dinheiro (débito), nunca
+// entra em jogo aqui um crédito do banco — créditos (aportes das
+// consorciadas, rentabilidade etc.) são tratados à parte, ver
+// analisarCreditos_ mais abaixo.
 let ultimoResultadoConciliacao = { resultado: [], semTitulo: [] };
+let ultimoResultadoCreditos = { linhas: [], totalCreditos: 0, totalDebitos: 0 };
 
 function normalizarTexto_(s) {
   return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 }
 
-// Tenta achar as colunas de Data/Valor/Histórico pelo nome do cabeçalho —
-// os nomes exatos variam de banco pra banco, então procura por palavras-chave
-// em vez de exigir um nome fixo.
+// Tenta achar as colunas de Data/Valor(ou Crédito+Débito)/Histórico pelo
+// nome do cabeçalho — os nomes exatos variam de banco pra banco, então
+// procura por palavras-chave em vez de exigir um nome fixo. O Bradesco (Net
+// Empresa), por exemplo, não tem uma única coluna "Valor" — tem "Crédito
+// (R$)" e "Débito (R$)" separadas, cada uma preenchida só quando é o caso
+// daquela linha; outros bancos costumam ter uma única coluna "Valor" com o
+// débito já negativo.
 function detectarColunasExtrato(linhaCabecalho) {
   const normalizado = linhaCabecalho.map(normalizarTexto_);
   const acharIdx = (candidatos, evitar) => normalizado.findIndex((h, i) =>
     !(evitar || []).includes(i) && candidatos.some((c) => h.includes(c)));
   const idxData = acharIdx(['data']);
-  const idxValor = acharIdx(['valor']);
-  const idxHistorico = acharIdx(['historico', 'descricao', 'complemento', 'detalhes', 'memo'], [idxData, idxValor]);
-  return { data: idxData, valor: idxValor, historico: idxHistorico };
+  const idxCredito = acharIdx(['credito']);
+  const idxDebito = acharIdx(['debito']);
+  // Só procura uma coluna "Valor" única quando não achou Crédito/Débito
+  // separados — senão "Valor" poderia bater tanto em "Crédito (R$)" quanto
+  // "Débito (R$)" à toa (nenhuma das duas contém a palavra "valor", mas
+  // por segurança evita a ambiguidade em bancos que usem outro nome).
+  const idxValor = (idxCredito < 0 && idxDebito < 0) ? acharIdx(['valor']) : -1;
+  const idxHistorico = acharIdx(
+    ['historico', 'descricao', 'complemento', 'detalhes', 'memo', 'lancamento'],
+    [idxData, idxCredito, idxDebito, idxValor]
+  );
+  return { data: idxData, credito: idxCredito, debito: idxDebito, valor: idxValor, historico: idxHistorico };
 }
 
 function parseDataExtrato_(v) {
@@ -3203,22 +3241,52 @@ function parseDataExtrato_(v) {
 }
 
 // Aceita "1.234,56", "1234.56", "-150,00", "(150,00)" (negativo entre
-// parênteses) e "R$ 150,00" — sempre devolve o valor absoluto.
+// parênteses) e "R$ 150,00". Devolve { valor: <absoluto>, negativo } — o
+// sinal só importa pro formato de coluna "Valor" única (outros bancos);
+// quando o extrato já separa Crédito/Débito em colunas (Bradesco), cada
+// coluna só tem valor positivo e o sinal nem entra em jogo (ver
+// leituraCreditoDebito_ mais abaixo).
 function parseValorExtrato_(v) {
-  if (typeof v === 'number' && !isNaN(v)) return Math.abs(v);
+  if (typeof v === 'number' && !isNaN(v)) return { valor: Math.abs(v), negativo: v < 0 };
   let s = String(v == null ? '' : v).trim();
   if (!s) return null;
+  const negativo = /^-/.test(s) || /^\(.*\)$/.test(s);
   s = s.replace(/[()]/g, '').replace(/R\$/gi, '').replace(/^-|-$/g, '').trim();
   if (/,\d{1,2}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
   else s = s.replace(/,/g, '');
   const n = parseFloat(s);
-  return isNaN(n) ? null : Math.abs(n);
+  return isNaN(n) ? null : { valor: Math.abs(n), negativo };
+}
+
+// Lê o valor (e o tipo crédito/débito) de uma linha do extrato, seguindo o
+// layout detectado por detectarColunasExtrato: colunas Crédito/Débito
+// separadas (cada uma só preenchida quando é o caso daquela linha) ou uma
+// única coluna "Valor" com o débito já negativo. Uma linha pode até ter
+// crédito E débito preenchidos (raro, mas alguns bancos consolidam estorno
+// e lançamento na mesma linha) — nesse caso devolve os dois.
+function leituraCreditoDebito_(linha, cols) {
+  const itens = [];
+  if (cols.credito >= 0 || cols.debito >= 0) {
+    if (cols.credito >= 0) {
+      const p = parseValorExtrato_(linha[cols.credito]);
+      if (p && p.valor) itens.push({ valor: p.valor, tipo: 'credito' });
+    }
+    if (cols.debito >= 0) {
+      const p = parseValorExtrato_(linha[cols.debito]);
+      if (p && p.valor) itens.push({ valor: p.valor, tipo: 'debito' });
+    }
+  } else {
+    const p = parseValorExtrato_(linha[cols.valor]);
+    if (p && p.valor) itens.push({ valor: p.valor, tipo: p.negativo ? 'debito' : 'credito' });
+  }
+  return itens;
 }
 
 async function processarExtrato(file) {
   const resumo = document.getElementById('resumo-conciliacao');
   resumo.innerHTML = '<div class="aviso">Lendo o extrato…</div>';
   document.getElementById('painel-resultado-conciliacao').style.display = 'none';
+  document.getElementById('painel-creditos').style.display = 'none';
   document.getElementById('painel-conciliacao-vazio').style.display = '';
   try {
     const buf = await file.arrayBuffer();
@@ -3227,23 +3295,28 @@ async function processarExtrato(file) {
     const linhas = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
     if (!linhas.length) throw new Error('Arquivo vazio.');
     const cols = detectarColunasExtrato(linhas[0]);
-    if (cols.data < 0 || cols.valor < 0) {
-      throw new Error('Não encontrei as colunas de Data e/ou Valor no cabeçalho da 1ª linha (colunas lidas: ' + linhas[0].join(', ') + ').');
+    if (cols.data < 0 || (cols.valor < 0 && cols.credito < 0 && cols.debito < 0)) {
+      throw new Error('Não encontrei as colunas de Data e/ou Valor (ou Crédito/Débito) no cabeçalho da 1ª linha (colunas lidas: ' + linhas[0].join(', ') + ').');
     }
     const itensExtrato = [];
     for (let r = 1; r < linhas.length; r++) {
       const linha = linhas[r];
       if (!linha || linha.every((c) => c === '' || c == null)) continue;
       const data = parseDataExtrato_(linha[cols.data]);
-      const valor = parseValorExtrato_(linha[cols.valor]);
-      if (!data || valor == null || valor === 0) continue;
-      itensExtrato.push({ data, valor, historico: cols.historico >= 0 ? String(linha[cols.historico] || '') : '' });
+      if (!data) continue;
+      const historico = cols.historico >= 0 ? String(linha[cols.historico] || '') : '';
+      leituraCreditoDebito_(linha, cols).forEach((item) => {
+        itensExtrato.push({ data, valor: item.valor, tipo: item.tipo, historico });
+      });
     }
-    if (!itensExtrato.length) throw new Error('Nenhuma linha válida encontrada — confira se as colunas de Data e Valor estão preenchidas.');
+    if (!itensExtrato.length) throw new Error('Nenhuma linha válida encontrada — confira se as colunas de Data e Valor (ou Crédito/Débito) estão preenchidas.');
 
     ultimoResultadoConciliacao = conciliarExtrato(itensExtrato);
     renderizarConciliacao();
+    ultimoResultadoCreditos = analisarCreditos_(itensExtrato);
+    renderizarCreditos();
     document.getElementById('painel-resultado-conciliacao').style.display = '';
+    document.getElementById('painel-creditos').style.display = '';
     document.getElementById('painel-conciliacao-vazio').style.display = 'none';
 
     // Salva o resultado no histórico da planilha (aba "Conciliação
@@ -3268,6 +3341,11 @@ async function processarExtrato(file) {
 }
 
 function conciliarExtrato(itensExtrato) {
+  // Um título baixado é sempre uma saída de dinheiro — só compara com os
+  // lançamentos de DÉBITO do extrato. Créditos (aportes, rentabilidade
+  // etc.) nunca "pagam" um título, então nem entram nessa lista — eles têm
+  // a própria análise em analisarCreditos_.
+  const itensDebito = itensExtrato.filter((i) => i.tipo === 'debito');
   const baixados = state.erp.concat(state.manual.filter((m) => m.Status !== 'Duplicado – revisar'))
     .filter((i) => i['Data Baixa']);
   const usados = new Set();
@@ -3275,7 +3353,7 @@ function conciliarExtrato(itensExtrato) {
     const dataBaixa = diaCalendario(paraData(titulo['Data Baixa']));
     const valorTitulo = paraNumero(titulo['R$ Valor']);
     let melhorIdx = -1, melhorDiffDias = Infinity;
-    itensExtrato.forEach((mov, idx) => {
+    itensDebito.forEach((mov, idx) => {
       if (usados.has(idx)) return;
       if (Math.abs(mov.valor - valorTitulo) > 0.01) return;
       const dataMov = diaCalendario(mov.data);
@@ -3284,12 +3362,100 @@ function conciliarExtrato(itensExtrato) {
     });
     if (melhorIdx >= 0 && melhorDiffDias <= 5) {
       usados.add(melhorIdx);
-      return { titulo, mov: itensExtrato[melhorIdx], status: melhorDiffDias === 0 ? 'Conciliado' : 'Divergência de data' };
+      return { titulo, mov: itensDebito[melhorIdx], status: melhorDiffDias === 0 ? 'Conciliado' : 'Divergência de data' };
     }
     return { titulo, mov: null, status: 'Sem correspondência no extrato' };
   });
-  const semTitulo = itensExtrato.filter((_, idx) => !usados.has(idx));
+  const semTitulo = itensDebito.filter((_, idx) => !usados.has(idx));
   return { resultado, semTitulo };
+}
+
+// ---------- Créditos recebidos (aportes das consorciadas e rendimentos) ----------
+// Agrupa os lançamentos de CRÉDITO do extrato pela origem, extraída do
+// texto do Lançamento/Histórico. Não depende de uma lista fixa de
+// consorciadas cadastrada em algum lugar — extrai o nome de quem enviou o
+// PIX/TED direto do texto (ex.: "PIX RECEBIDO REM: CONSTRUTORA A GASPAR
+// 01/07" vira "CONSTRUTORA A GASPAR"), então funciona pra qualquer
+// consorciada nova sem precisar mexer no código. Dois créditos recebem
+// tratamento à parte (não são aporte de consorciada):
+//   - Rentabilidade de aplicações financeiras (RENTAB., rendimento etc.).
+//   - Estado do Ceará — pagamento da fatura que origina os aportes
+//     diários das consorciadas (não é, ele mesmo, um aporte).
+function extrairOrigemCredito_(historico) {
+  const h = String(historico || '').trim();
+  const semAcento = normalizarTexto_(h);
+  if (/rentab|rendimento|aplicaca/.test(semAcento)) {
+    return { categoria: 'rentabilidade', nome: 'Rentabilidade / Aplicações financeiras' };
+  }
+  const m = /REM\s*:\s*(.+)$/i.exec(h);
+  let nome = (m ? m[1] : h)
+    .replace(/\s+\d{2}\/\d{2}(\/\d{2,4})?\s*$/, '') // data no final (ex.: " 01/07")
+    .replace(/\*+\s*$/, '')
+    .trim() || h;
+  const semAcentoNome = normalizarTexto_(nome);
+  if (semAcentoNome.includes('estado do ceara') || semAcentoNome.includes('governo do estado')) {
+    return { categoria: 'estado', nome: 'Estado do Ceará (pagamento de fatura)' };
+  }
+  return { categoria: 'consorciada', nome };
+}
+
+function analisarCreditos_(itensExtrato) {
+  const creditos = itensExtrato.filter((i) => i.tipo === 'credito');
+  const totalDebitos = itensExtrato.filter((i) => i.tipo === 'debito').reduce((s, i) => s + i.valor, 0);
+  const grupos = {};
+  creditos.forEach((i) => {
+    const { categoria, nome } = extrairOrigemCredito_(i.historico);
+    if (!grupos[nome]) grupos[nome] = { categoria, nome, qtde: 0, valor: 0 };
+    grupos[nome].qtde += 1;
+    grupos[nome].valor += i.valor;
+  });
+  const totalConsorciadas = Object.values(grupos)
+    .filter((g) => g.categoria === 'consorciada')
+    .reduce((s, g) => s + g.valor, 0);
+  // "Débito atribuído" e "sobra estimada": distribui o total pago a
+  // fornecedores no período (todos os débitos do extrato, não só os que
+  // bateram com um título) proporcionalmente ao peso do aporte de cada
+  // consorciada — é uma ESTIMATIVA (o app não sabe, de fato, qual aporte
+  // pagou qual fornecedor, já que é uma conta única compartilhada), por
+  // isso nunca aplicada às linhas "estado"/"rentabilidade" (não são aporte
+  // de consorciada).
+  const linhas = Object.values(grupos).map((g) => {
+    if (g.categoria !== 'consorciada' || !totalConsorciadas) {
+      return Object.assign({ debitoAtribuido: null, sobraEstimada: null }, g);
+    }
+    const debitoAtribuido = (g.valor / totalConsorciadas) * totalDebitos;
+    return Object.assign({ debitoAtribuido, sobraEstimada: g.valor - debitoAtribuido }, g);
+  }).sort((a, b) => b.valor - a.valor);
+  const totalCreditos = creditos.reduce((s, i) => s + i.valor, 0);
+  return { linhas, totalCreditos, totalDebitos, totalConsorciadas };
+}
+
+function renderizarCreditos() {
+  const { linhas, totalCreditos, totalDebitos } = ultimoResultadoCreditos;
+  const rotuloCategoria = { estado: ' 🏛️', rentabilidade: ' 📈', consorciada: '' };
+  document.querySelector('#tabela-creditos tbody').innerHTML = linhas.map((l) => `<tr>
+      <td>${escaparHtml(l.nome)}${rotuloCategoria[l.categoria] || ''}</td>
+      <td>${l.qtde}</td>
+      <td>${fmtMoeda(l.valor)}</td>
+      <td>${totalCreditos ? (l.valor / totalCreditos * 100).toFixed(1) : '0.0'}%</td>
+      <td>${l.debitoAtribuido == null ? '—' : fmtMoeda(l.debitoAtribuido)}</td>
+      <td>${l.sobraEstimada == null ? '—' : fmtMoeda(l.sobraEstimada)}</td>
+    </tr>`).join('') || '<tr><td colspan="6" style="color:var(--cinza)">Nenhum crédito encontrado no extrato.</td></tr>';
+  const totalSobra = linhas.filter((l) => l.sobraEstimada != null).reduce((s, l) => s + l.sobraEstimada, 0);
+  document.getElementById('total-creditos').textContent =
+    `${linhas.length} origem(ns) · Total recebido: ${fmtMoeda(totalCreditos)} · Total pago a fornecedores no período: ${fmtMoeda(totalDebitos)} · Sobra estimada das consorciadas: ${fmtMoeda(totalSobra)}`;
+}
+
+function exportarCreditos() {
+  const linhas = ultimoResultadoCreditos.linhas.map((l) => [
+    l.nome, l.qtde, fmtMoeda(l.valor),
+    ultimoResultadoCreditos.totalCreditos ? (l.valor / ultimoResultadoCreditos.totalCreditos * 100).toFixed(1) + '%' : '0.0%',
+    l.debitoAtribuido == null ? '' : fmtMoeda(l.debitoAtribuido),
+    l.sobraEstimada == null ? '' : fmtMoeda(l.sobraEstimada),
+  ]);
+  baixarXlsx('creditos_extrato.xlsx', [
+    'Origem', 'Qtde', 'Total Recebido', '% dos Créditos', 'Débito Atribuído (estimado)', 'Sobra Estimada',
+  ], linhas);
 }
 
 // Persiste o resultado de ultimoResultadoConciliacao na aba "Conciliação

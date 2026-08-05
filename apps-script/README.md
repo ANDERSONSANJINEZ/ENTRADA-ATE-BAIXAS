@@ -208,22 +208,50 @@ o horário direto na tela de Gatilhos, se tiver usado a segunda forma).
 ## Conciliação Bancária
 
 Envie o extrato do banco em `.xlsx` na aba **Atualizar Dados** (painel
-"Extrato bancário") — o resultado aparece na aba **Conciliação**. O app
-tenta reconhecer sozinho as colunas de Data, Valor e Histórico pelo
-nome do cabeçalho (aceita variações como "Data Movimento", "Valor (R$)"
-etc.). Cada título já **baixado** na planilha é cruzado com o extrato por
-valor idêntico (tolerância de 1 centavo) e data — igual (Conciliado) ou até
-5 dias de diferença (Divergência de data, comum quando a compensação
-bancária atrasa). O resultado mostra 4 situações possíveis:
+"Extrato bancário") — o resultado aparece na aba **Conciliação**, em duas
+tabelas.
+
+O app reconhece dois formatos de extrato pelo nome das colunas no
+cabeçalho: uma única coluna **Valor** (débito já negativo) ou colunas
+separadas **Crédito**/**Débito** (formato do Bradesco Net Empresa, por
+exemplo — cada uma preenchida só quando é o caso da linha). A coluna de
+histórico/descrição aceita variações como "Lançamento", "Data Movimento",
+"Histórico" etc.
+
+**Títulos pagos x Débitos do extrato.** Cada título já **baixado** na
+planilha é cruzado só com os lançamentos de **débito** do extrato (um
+título pago é sempre uma saída de dinheiro) por valor idêntico (tolerância
+de 1 centavo) e data — igual (Conciliado) ou até 5 dias de diferença
+(Divergência de data, comum quando a compensação bancária atrasa). 4
+situações possíveis:
 
 - **Conciliado** — bate valor e data.
 - **Divergência de data** — bate o valor, mas a data no extrato é diferente
   da Data Baixa registrada.
 - **Sem correspondência no extrato** — o título está marcado como baixado,
-  mas nenhum lançamento do extrato bate com ele (pode ser baixa registrada
+  mas nenhum débito do extrato bate com ele (pode ser baixa registrada
   errada, ou pago por outra conta).
-- **Sem título correspondente** — tem um lançamento no extrato que não bate
+- **Sem título correspondente** — tem um débito no extrato que não bate
   com nenhum título baixado (pode ser um pagamento não lançado no sistema).
+
+**Créditos recebidos (aportes e rendimentos).** Toda linha de **crédito**
+do extrato é agrupada pela origem, extraída do próprio texto do
+Lançamento (ex.: "PIX RECEBIDO REM: CONSTRUTORA A GASPAR 01/07" vira
+"CONSTRUTORA A GASPAR") — não depende de nenhuma lista cadastrada, então
+reconhece qualquer consorciada nova automaticamente. Dois créditos recebem
+categoria própria, fora da conta de aporte de consorciada:
+
+- **Estado do Ceará** (🏛️) — pagamento da fatura que origina os aportes
+  diários das consorciadas.
+- **Rentabilidade / Aplicações financeiras** (📈) — rendimento de
+  investimento (reconhece "RENTAB.", "Rendimento" etc. no texto).
+
+Para as demais origens (aportes de consorciada), a tabela também mostra
+"Débito Atribuído" e "Sobra Estimada": o total pago a fornecedores no
+período é distribuído proporcionalmente entre as consorciadas, conforme o
+peso do aporte de cada uma — é uma **estimativa** (a conta é única e
+compartilhada; o app não sabe de fato qual aporte pagou qual fornecedor),
+não um valor contábil exato.
 
 Nada do extrato é salvo na planilha — o cruzamento acontece só na tela, a
 cada vez que um arquivo é enviado.
