@@ -3405,8 +3405,15 @@ function conciliarExtrato(itensExtrato) {
     });
   const baixados = todosBaixados.filter((i) => {
     if (periodoMin == null) return true; // extrato sem nenhum débito com data — não filtra por período
-    const d = diaCalendario(paraData(i['Data Baixa']));
-    return d != null && d >= periodoMin && d <= periodoMax;
+    // Mantém o título se Data Baixa OU Vencimento cair dentro do período —
+    // o passo 3 (mais abaixo) também tenta casar pelo Vencimento, então
+    // um título com Data Baixa fora do período mas Vencimento dentro dele
+    // não pode ser descartado aqui antes de chegar lá.
+    const dBaixa = diaCalendario(paraData(i['Data Baixa']));
+    const dVenc = diaCalendario(paraData(i['Vencimento']));
+    const baixaDentro = dBaixa != null && dBaixa >= periodoMin && dBaixa <= periodoMax;
+    const vencDentro = dVenc != null && dVenc >= periodoMin && dVenc <= periodoMax;
+    return baixaDentro || vencDentro;
   });
   const foraDoPeriodo = todosBaixados.length - baixados.length;
   const usados = new Set();
@@ -3453,6 +3460,33 @@ function conciliarExtrato(itensExtrato) {
       if (Math.abs(mov.valor - valorTitulo) > 0.01) return;
       const dataMov = diaCalendario(mov.data);
       const diffDias = (dataBaixa != null && dataMov != null) ? Math.abs(dataMov - dataBaixa) / 86400000 : Infinity;
+      if (diffDias < melhorDiffDias) { melhorDiffDias = diffDias; melhorIdx = idx; }
+    });
+    if (melhorIdx >= 0 && melhorDiffDias <= 5) {
+      usados.add(melhorIdx);
+      resultadoPorId.set(titulo.ID, {
+        titulo, mov: itensDebito[melhorIdx],
+        status: melhorDiffDias === 0 ? 'Conciliado' : 'Divergência de data',
+      });
+    }
+  });
+
+  // Passo 3 — valor + Vencimento mais próximo, pros títulos que nem o Nº
+  // Documento nem a Data Baixa resolveram: às vezes a Data Baixa lançada
+  // no sistema não bate com quando o banco processou de fato, mas o
+  // Vencimento (data prevista de pagamento) fica mais próximo da data real
+  // do débito.
+  baixados.forEach((titulo) => {
+    if (resultadoPorId.has(titulo.ID)) return;
+    const vencimento = diaCalendario(paraData(titulo['Vencimento']));
+    if (vencimento == null) return;
+    const valorTitulo = paraNumero(titulo['R$ Valor']);
+    let melhorIdx = -1, melhorDiffDias = Infinity;
+    itensDebito.forEach((mov, idx) => {
+      if (usados.has(idx)) return;
+      if (Math.abs(mov.valor - valorTitulo) > 0.01) return;
+      const dataMov = diaCalendario(mov.data);
+      const diffDias = dataMov != null ? Math.abs(dataMov - vencimento) / 86400000 : Infinity;
       if (diffDias < melhorDiffDias) { melhorDiffDias = diffDias; melhorIdx = idx; }
     });
     if (melhorIdx >= 0 && melhorDiffDias <= 5) {

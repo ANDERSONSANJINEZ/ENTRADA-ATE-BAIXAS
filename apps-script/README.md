@@ -219,10 +219,14 @@ histórico/descrição aceita variações como "Lançamento", "Data Movimento",
 "Histórico" etc.
 
 **Títulos pagos x Débitos do extrato.** Só entram na comparação os
-títulos **baixados dentro do período coberto pelo extrato** (com uma
-folga de 5 dias) — títulos de outras épocas nunca poderiam aparecer no
-extrato mesmo, então nem entram, evitando ruído em "Sem correspondência".
-Dois critérios de cruzamento, nessa ordem:
+títulos com **Data Baixa OU Vencimento dentro do período coberto pelo
+extrato** (com uma folga de 5 dias) — títulos de outras épocas nunca
+poderiam aparecer no extrato mesmo, então nem entram, evitando ruído em
+"Sem correspondência". Também são excluídos títulos com Vencimento no
+ano 2000 (marcador do Protheus pra imposto retido/recolhido
+automaticamente, ex.: ISS retido na fonte — não é um pagamento avulso que
+sai do banco como débito à parte). Três critérios de cruzamento, nessa
+ordem — cada um só tenta pros títulos que o anterior não resolveu:
 
 1. **Nº Documento + valor** — procura, no texto do lançamento, o número
    da nota citado (ex.: "COBRANCA NF 5858 ..." reconhece "5858"; aceita os
@@ -233,10 +237,12 @@ Dois critérios de cruzamento, nessa ordem:
    "Dcto." do próprio extrato é só uma referência interna do banco, não
    bate com o Nº Documento do título, por isso o número certo vem do
    texto do lançamento).
-2. **Valor + data mais próxima** — pros títulos que o passo 1 não
-   resolveu (extrato sem o número da nota no texto, ou título sem Nº
-   Documento preenchido): mesmo critério de antes, valor idêntico e data
-   igual ou até 5 dias de diferença.
+2. **Valor + Data Baixa mais próxima** — valor idêntico e Data Baixa
+   igual ou até 5 dias de diferença da data do lançamento.
+3. **Valor + Vencimento mais próximo** — mesma lógica do passo 2, mas
+   usando o Vencimento em vez da Data Baixa (às vezes a Data Baixa
+   lançada no sistema não bate com quando o banco processou de fato, mas
+   o Vencimento fica mais próximo da data real do débito).
 
 4 situações possíveis:
 
