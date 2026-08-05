@@ -550,7 +550,7 @@
       <div class="tabela-scroll">
         <table id="tabela-conciliacao">
           <thead><tr>
-            <th>Situação</th><th>Fornecedor</th><th>Nº Doc.</th><th>Data Baixa</th>
+            <th>Situação</th><th>Fornecedor</th><th>Nº Doc.</th><th>Vencimento</th><th>Data Baixa</th>
             <th>Valor Título</th><th>Data Extrato</th><th>Valor Extrato</th><th>Histórico Extrato</th>
           </tr></thead>
           <tbody></tbody>
@@ -3382,17 +3382,20 @@ function conciliarExtrato(itensExtrato) {
   // a própria análise em analisarCreditos_.
   const itensDebito = itensExtrato.filter((i) => i.tipo === 'debito');
   itensDebito.forEach((mov) => { mov.numerosDoc = extrairNumerosDocumento_(mov.historico); });
-  // Um extrato normalmente cobre só um período curto (ex.: um mês) — sem
-  // isso, títulos baixados MUITO antes ou depois do período do extrato
-  // (que nunca poderiam aparecer nele) inundavam "Sem correspondência no
-  // extrato" com ruído (ex.: um título baixado em setembro/2025 jamais vai
-  // aparecer num extrato de julho/2026). Por isso só entram na comparação
-  // os títulos com Data Baixa dentro do período coberto pelo extrato, com
-  // a mesma folga de 5 dias usada pra considerar "Divergência de data".
-  const datasExtrato = itensDebito.map((i) => diaCalendario(i.data)).filter((d) => d != null);
-  const TOLERANCIA_DIAS_MS = 5 * 86400000;
-  const periodoMin = datasExtrato.length ? Math.min(...datasExtrato) - TOLERANCIA_DIAS_MS : null;
-  const periodoMax = datasExtrato.length ? Math.max(...datasExtrato) + TOLERANCIA_DIAS_MS : null;
+  // Só entram na comparação os títulos cujo VENCIMENTO cai no mês
+  // predominante entre as datas de débito do extrato (o "mês do extrato")
+  // — títulos com vencimento de outro mês não são o que esse extrato se
+  // refere, mesmo que a baixa/pagamento tenha caído dentro do período por
+  // coincidência. O mês é achado pela maioria das datas de débito, não só
+  // a primeira, pra não se confundir com uma linha isolada de outro mês
+  // (ex.: "SALDO ANTERIOR" do fim do mês anterior, ou um lançamento
+  // futuro isolado no fim do arquivo).
+  const contagemMes = {};
+  itensDebito.forEach((i) => {
+    const chave = i.data.getUTCFullYear() + '-' + String(i.data.getUTCMonth() + 1).padStart(2, '0');
+    contagemMes[chave] = (contagemMes[chave] || 0) + 1;
+  });
+  const mesAnoExtrato = Object.keys(contagemMes).sort((a, b) => contagemMes[b] - contagemMes[a])[0] || null;
   const todosBaixados = state.erp.concat(state.manual.filter((m) => m.Status !== 'Duplicado – revisar'))
     .filter((i) => i['Data Baixa'])
     // Vencimento no ano 2000 é o marcador que o Protheus usa pra imposto
@@ -3404,16 +3407,11 @@ function conciliarExtrato(itensExtrato) {
       return !(venc && venc.getUTCFullYear() === 2000);
     });
   const baixados = todosBaixados.filter((i) => {
-    if (periodoMin == null) return true; // extrato sem nenhum débito com data — não filtra por período
-    // Mantém o título se Data Baixa OU Vencimento cair dentro do período —
-    // o passo 3 (mais abaixo) também tenta casar pelo Vencimento, então
-    // um título com Data Baixa fora do período mas Vencimento dentro dele
-    // não pode ser descartado aqui antes de chegar lá.
-    const dBaixa = diaCalendario(paraData(i['Data Baixa']));
-    const dVenc = diaCalendario(paraData(i['Vencimento']));
-    const baixaDentro = dBaixa != null && dBaixa >= periodoMin && dBaixa <= periodoMax;
-    const vencDentro = dVenc != null && dVenc >= periodoMin && dVenc <= periodoMax;
-    return baixaDentro || vencDentro;
+    if (mesAnoExtrato == null) return true; // extrato sem nenhum débito com data — não filtra por mês
+    const venc = paraData(i['Vencimento']);
+    if (!venc) return false;
+    const chave = venc.getUTCFullYear() + '-' + String(venc.getUTCMonth() + 1).padStart(2, '0');
+    return chave === mesAnoExtrato;
   });
   const foraDoPeriodo = todosBaixados.length - baixados.length;
   const usados = new Set();
@@ -3627,6 +3625,7 @@ function renderizarConciliacao() {
     situacao: r.status,
     fornecedor: r.titulo['Razão Social'] || r.titulo['Código Fornecedor'] || '',
     nDoc: r.titulo['Nº Documento'] || '',
+    vencimento: fmtData(r.titulo['Vencimento']),
     dataBaixa: fmtData(r.titulo['Data Baixa']),
     valorTitulo: fmtMoeda(r.titulo['R$ Valor']),
     dataExtrato: r.mov ? fmtData(r.mov.data) : '',
@@ -3635,7 +3634,7 @@ function renderizarConciliacao() {
   }));
   const linhasSemTitulo = ultimoResultadoConciliacao.semTitulo.map((mov) => ({
     situacao: 'Sem título correspondente',
-    fornecedor: '', nDoc: '', dataBaixa: '', valorTitulo: '',
+    fornecedor: '', nDoc: '', vencimento: '', dataBaixa: '', valorTitulo: '',
     dataExtrato: fmtData(mov.data), valorExtrato: fmtMoeda(mov.valor), historicoExtrato: mov.historico,
   }));
   let todas = linhasResultado.concat(linhasSemTitulo);
@@ -3644,9 +3643,9 @@ function renderizarConciliacao() {
   const badgeClasse = (s) => s === 'Conciliado' ? 'badge-ok' : s === 'Divergência de data' ? 'badge-atencao' : 'badge-alerta';
   document.querySelector('#tabela-conciliacao tbody').innerHTML = todas.map((l) => `<tr>
       <td><span class="badge ${badgeClasse(l.situacao)}">${l.situacao}</span></td>
-      <td>${escaparHtml(l.fornecedor)}</td><td>${l.nDoc}</td><td>${l.dataBaixa}</td><td>${l.valorTitulo}</td>
+      <td>${escaparHtml(l.fornecedor)}</td><td>${l.nDoc}</td><td>${l.vencimento}</td><td>${l.dataBaixa}</td><td>${l.valorTitulo}</td>
       <td>${l.dataExtrato}</td><td>${l.valorExtrato}</td><td title="${escaparHtml(l.historicoExtrato)}">${escaparHtml(l.historicoExtrato)}</td>
-    </tr>`).join('') || '<tr><td colspan="8" style="color:var(--cinza)">Nenhum resultado para este filtro.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="9" style="color:var(--cinza)">Nenhum resultado para este filtro.</td></tr>';
 
   const conciliados = linhasResultado.filter((l) => l.situacao === 'Conciliado').length;
   const divergentes = linhasResultado.filter((l) => l.situacao === 'Divergência de data').length;
@@ -3654,16 +3653,16 @@ function renderizarConciliacao() {
   const foraDoPeriodo = ultimoResultadoConciliacao.foraDoPeriodo || 0;
   document.getElementById('total-conciliacao').textContent =
     `${conciliados} conciliado(s) · ${divergentes} com divergência de data · ${semExtrato} sem correspondência no extrato · ${linhasSemTitulo.length} lançamento(s) do extrato sem título` +
-    (foraDoPeriodo ? ` · ${foraDoPeriodo} título(s) baixado(s) fora do período do extrato (não entraram na comparação)` : '');
+    (foraDoPeriodo ? ` · ${foraDoPeriodo} título(s) com Vencimento fora do mês do extrato (não entraram na comparação)` : '');
 }
 document.getElementById('filtro-conciliacao').addEventListener('input', renderizarConciliacao);
 
 function exportarConciliacao() {
   const linhas = Array.from(document.querySelectorAll('#tabela-conciliacao tbody tr'))
-    .filter((tr) => tr.children.length === 8)
+    .filter((tr) => tr.children.length === 9)
     .map((tr) => Array.from(tr.children).map((td) => td.textContent.trim()));
   baixarXlsx('conciliacao_bancaria.xlsx', [
-    'Situação', 'Fornecedor', 'Nº Doc.', 'Data Baixa', 'Valor Título', 'Data Extrato', 'Valor Extrato', 'Histórico Extrato',
+    'Situação', 'Fornecedor', 'Nº Doc.', 'Vencimento', 'Data Baixa', 'Valor Título', 'Data Extrato', 'Valor Extrato', 'Histórico Extrato',
   ], linhas);
 }
 

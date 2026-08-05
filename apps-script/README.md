@@ -219,14 +219,17 @@ histórico/descrição aceita variações como "Lançamento", "Data Movimento",
 "Histórico" etc.
 
 **Títulos pagos x Débitos do extrato.** Só entram na comparação os
-títulos com **Data Baixa OU Vencimento dentro do período coberto pelo
-extrato** (com uma folga de 5 dias) — títulos de outras épocas nunca
-poderiam aparecer no extrato mesmo, então nem entram, evitando ruído em
-"Sem correspondência". Também são excluídos títulos com Vencimento no
-ano 2000 (marcador do Protheus pra imposto retido/recolhido
-automaticamente, ex.: ISS retido na fonte — não é um pagamento avulso que
-sai do banco como débito à parte). Três critérios de cruzamento, nessa
-ordem — cada um só tenta pros títulos que o anterior não resolveu:
+títulos cujo **Vencimento cai no mês predominante entre as datas de
+débito do extrato** ("o mês do extrato", achado pela maioria das datas —
+não só a primeira, pra não se confundir com uma linha isolada de outro
+mês, tipo "SALDO ANTERIOR" do fim do mês anterior). O total mostra
+quantos títulos ficaram de fora por vencimento de outro mês. Também são
+excluídos títulos com Vencimento no ano 2000 (marcador do Protheus pra
+imposto retido/recolhido automaticamente, ex.: ISS retido na fonte — não
+é um pagamento avulso que sai do banco como débito à parte). A tabela de
+resultado mostra o Vencimento de cada título, junto com a Data Baixa.
+Três critérios de cruzamento, nessa ordem — cada um só tenta pros
+títulos que o anterior não resolveu:
 
 1. **Nº Documento + valor** — procura, no texto do lançamento, o número
    da nota citado (ex.: "COBRANCA NF 5858 ..." reconhece "5858"; aceita os
