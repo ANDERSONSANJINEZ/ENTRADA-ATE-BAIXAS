@@ -257,11 +257,22 @@ function lerAba_(nome) {
   var ultimaLinha = sh.getLastRow();
   if (ultimaLinha < 2) return [];
   var valores = sh.getRange(2, 1, ultimaLinha - 1, HEADERS.length).getValues();
-  return valores.map(function (linha) {
-    var obj = {};
-    HEADERS.forEach(function (h, i) { obj[h] = linha[i]; });
-    return obj;
-  });
+  var idCol = HEADERS.indexOf('ID');
+  return valores
+    // Ignora linha sem ID: toda linha de verdade (ERP ou Manual) sempre
+    // ganha um ID (Utilities.getUuid()) na hora em que é criada — uma
+    // linha em branco só existe por sobra na planilha (ex.: linha extra
+    // que ficou "fantasma" depois de algum ajuste manual direto no Sheets).
+    // Sem este filtro, essas linhas em branco eram lidas como um
+    // lançamento de verdade com tudo vazio/zerado, e — como todas batem na
+    // mesma chave de duplicidade ("" | "0.00" | "") — apareciam juntas como
+    // "Duplicado a revisar" com R$ 0,00 no Dashboard.
+    .filter(function (linha) { return linha[idCol] !== '' && linha[idCol] != null; })
+    .map(function (linha) {
+      var obj = {};
+      HEADERS.forEach(function (h, i) { obj[h] = linha[i]; });
+      return obj;
+    });
 }
 
 function chaveDuplicidade_(item) {
