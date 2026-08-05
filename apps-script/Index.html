@@ -747,6 +747,25 @@
   </div>
 </div>
 
+<!-- Link de anexo (documento/comprovante) — no lugar do prompt() nativo:
+     mesmo motivo do modal-senha acima (diálogos nativos pouco confiáveis
+     dentro do iframe do Apps Script). O título e o placeholder mudam
+     conforme o tipo (documento/comprovante), definidos por pedirLinkAnexo(). -->
+<div class="modal-overlay" id="modal-anexo" onclick="if (event.target === this) resolverLinkAnexo(null)">
+  <div class="modal-caixa" style="max-width:480px;">
+    <div class="modal-cabecalho">
+      <h2 id="modal-anexo-titulo">Link do documento</h2>
+    </div>
+    <input id="input-anexo" type="text" placeholder="Cole o link do Google Drive ou de onde o arquivo estiver salvo"
+      style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid var(--borda); border-radius:6px; font-size:14px; margin-bottom:18px;"
+      onkeydown="if (event.key === 'Enter') resolverLinkAnexoConfirmar(); if (event.key === 'Escape') resolverLinkAnexo(null);">
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn secundario" onclick="resolverLinkAnexo(null)">Cancelar</button>
+      <button class="btn" onclick="resolverLinkAnexoConfirmar()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Pop-up de "Novo lançamento manual", acionado pelo botão logo abaixo da
      planilha "Todos os lançamentos" — mesmos campos, na mesma ordem, do
      formulário que ficava fixo na tela. -->
@@ -960,6 +979,33 @@ function alternarVisibilidadeSenha() {
 }
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('modal-senha').classList.contains('aberto')) resolverSenha(null);
+});
+
+// Substitui window.prompt() nativo pra pedir o link de anexo (documento/
+// comprovante) — mesmo motivo do modal-senha acima: dentro do iframe
+// "sandboxed" do Apps Script, prompt() já se mostrou pouco confiável (às
+// vezes nem chega a aparecer, cancelando a ação sem nenhum aviso — dava a
+// impressão de "a tela não atualiza" quando na verdade nada tinha sido
+// salvo). Mesmo contrato que prompt() tinha: devolve uma Promise com o
+// texto digitado, ou null se cancelado.
+let resolverLinkAnexoAtual = null;
+function pedirLinkAnexo(rotulo, valorAtual) {
+  document.getElementById('modal-anexo-titulo').textContent = `Link do ${rotulo}`;
+  const input = document.getElementById('input-anexo');
+  input.value = valorAtual || '';
+  document.getElementById('modal-anexo').classList.add('aberto');
+  setTimeout(() => { input.focus(); input.select(); }, 50);
+  return new Promise((resolve) => { resolverLinkAnexoAtual = resolve; });
+}
+function resolverLinkAnexo(valor) {
+  document.getElementById('modal-anexo').classList.remove('aberto');
+  if (resolverLinkAnexoAtual) { resolverLinkAnexoAtual(valor); resolverLinkAnexoAtual = null; }
+}
+function resolverLinkAnexoConfirmar() {
+  resolverLinkAnexo(document.getElementById('input-anexo').value);
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('modal-anexo').classList.contains('aberto')) resolverLinkAnexo(null);
 });
 
 // ---------- Detalhamento de uma linha (Lançamentos), na ordem da planilha ----------
@@ -2859,7 +2905,7 @@ async function definirOuAbrirAnexo(id, origem, tipo, linkAtual) {
     else toast(`Nenhum link de ${rotulo} cadastrado para este lançamento.`);
     return;
   }
-  const novoLink = prompt(`Link do ${rotulo} (cole o link do Google Drive ou de onde o arquivo estiver salvo):`, linkAtual || '');
+  const novoLink = await pedirLinkAnexo(rotulo, linkAtual);
   if (novoLink == null) return; // cancelado
   const limpo = novoLink.trim();
   if (limpo === (linkAtual || '')) {
