@@ -5,7 +5,7 @@ calcula o status "Duplicado – revisar" quando um lançamento manual e um do
 ERP têm o mesmo Código Fornecedor + Valor + Vencimento.
 
 A mesma implantação do Apps Script **serve a tela do app** (`Index.html`)
-— visitar a URL gerada no passo 9 abaixo, num navegador qualquer, já abre
+— visitar a URL gerada no passo 8 abaixo, num navegador qualquer, já abre
 o app funcionando. Tudo roda na nuvem: não há arquivo local para baixar ou
 abrir.
 
@@ -20,37 +20,31 @@ abrir.
    "Arquivos", escolha **HTML**, nomeie exatamente **Index** (sem
    extensão — o Apps Script adiciona `.html` sozinho) e cole o conteúdo do
    arquivo `apps-script/Index.html` deste repositório.
-5. Habilite o serviço avançado do Drive (necessário para o botão "Buscar
-   arquivo mais recente do Drive" converter o .xlsx em planilha e lê-lo):
-   no menu lateral esquerdo, clique no **+** ao lado de "Serviços",
-   selecione **Drive API** e clique em Adicionar.
-6. Confirme que sua conta Google tem acesso de visualização à pasta do
-   Drive `17 CONTAS A PAGAR` (ela aparece em "Compartilhados comigo") —
-   é a mesma conta que vai fazer a implantação como "Eu" no passo 8.
-7. Salve o projeto (ícone de disquete).
-8. Clique em **Implantar → Nova implantação**.
+5. Salve o projeto (ícone de disquete).
+6. Clique em **Implantar → Nova implantação**.
    - Tipo: **App da Web**.
    - Executar como: **Eu (seu e-mail)**.
    - Quem pode acessar: **Qualquer pessoa** (necessário para a tela web
      conseguir chamar o backend sem login adicional).
-9. Na primeira execução, o Google vai pedir para autorizar o acesso ao
-   Drive/Planilhas — autorize (é a sua própria conta agindo em seu nome).
-10. Copie a **URL do app da Web** gerada (termina em `/exec`) — **essa é a
-    URL para usar o app**. Salve como favorito no navegador/celular.
+7. Na primeira execução, o Google vai pedir para autorizar o acesso às
+   Planilhas — autorize (é a sua própria conta agindo em seu nome).
+8. Copie a **URL do app da Web** gerada (termina em `/exec`) — **essa é a
+   URL para usar o app**. Salve como favorito no navegador/celular.
 
 As abas `ERP` e `Manual` são criadas automaticamente na primeira chamada.
 
 ## Como usar
 
-Abra a URL do passo 10 direto no navegador — computador, celular, tablet,
+Abra a URL do passo 8 direto no navegador — computador, celular, tablet,
 de qualquer lugar. Não precisa configurar nada nem copiar arquivo.
 
 ## Acesso leitura/edição (uma senha por pessoa)
 
 Por padrão, qualquer pessoa que abrir a URL do app vê tudo (dashboard,
-lançamentos, exportações) mas **não consegue editar** — a aba **Importar**,
-o formulário de lançamento manual e o botão de excluir duplicados ficam
-escondidos. Para habilitar a edição, a pessoa clica em **🔓 Habilitar
+lançamentos, exportações) mas **não consegue editar** — o envio do arquivo
+de títulos (baixas) na aba **Atualizar Dados**, o formulário de lançamento
+manual e o botão de excluir duplicados ficam escondidos (a Conciliação
+Bancária, na mesma aba, continua disponível só para visualização). Para habilitar a edição, a pessoa clica em **🔓 Habilitar
 edição** (topo direito) e digita a sua senha; se for válida, o app já
 mostra "bem-vindo(a), <nome>" e o navegador guarda a sessão (localStorage)
 até clicar em **🔒 Voltar para leitura**.
@@ -111,15 +105,21 @@ de fornecedores excluídos), edite o objeto `PERFIS_RESTRITOS` no início do
 pela planilha (diferente da aba **Usuários**, que é só pra senha de
 edição). Cada chave do objeto vira o valor de `?usuario=` no link.
 
-## Importação automática da pasta do Drive
+## Atualizar Dados (upload manual)
 
-Na aba **Importar** da tela, o botão "🔄 Buscar arquivo mais recente do
-Drive" chama a ação `importarDoDrive`: o backend procura, na pasta
-`17 CONTAS A PAGAR` (ID `1sVlF29VGWDzHelgBGIeFvVK3OCpMjGmD`), o arquivo
-`AAAA.MM.DD.xlsx` com a data mais recente no nome, converte para Google
-Sheets temporariamente para ler os dados, e apaga a cópia temporária em
-seguida. Não é preciso baixar/selecionar o arquivo manualmente — a opção
-de importar por upload continua disponível como alternativa.
+A aba **Atualizar Dados** centraliza os dois uploads manuais do app, lado a
+lado:
+
+- **Títulos (baixas)** — envie o export do Protheus em `.xlsx`, com
+  qualquer nome de arquivo (o nome não precisa mais seguir o padrão
+  `AAAA.MM.DD.xlsx`; se o nome bater com esse padrão, a data base ainda é
+  detectada automaticamente, senão ela fica marcada como "não
+  identificada").
+- **Extrato bancário** — envie o extrato do banco em `.xlsx`, também com
+  qualquer nome, para a Conciliação Bancária (ver seção abaixo).
+
+Não há mais busca automática numa pasta do Drive — os dois arquivos são
+sempre enviados manualmente por quem estiver com a edição habilitada.
 
 ## Anexos (documentos e comprovantes) por lançamento
 
@@ -204,8 +204,9 @@ o horário direto na tela de Gatilhos, se tiver usado a segunda forma).
 
 ## Conciliação Bancária
 
-Na aba **Conciliação Bancária**, envie o extrato do banco (.xlsx ou .csv) —
-o app tenta reconhecer sozinho as colunas de Data, Valor e Histórico pelo
+Na aba **Atualizar Dados**, no painel "Extrato bancário", envie o extrato
+do banco em `.xlsx` — o app tenta reconhecer sozinho as colunas de Data,
+Valor e Histórico pelo
 nome do cabeçalho (aceita variações como "Data Movimento", "Valor (R$)"
 etc.). Cada título já **baixado** na planilha é cruzado com o extrato por
 valor idêntico (tolerância de 1 centavo) e data — igual (Conciliado) ou até
@@ -226,8 +227,9 @@ cada vez que um arquivo é enviado.
 
 ## Atualizações do código
 
-Sempre que `apps-script/Code.gs` for alterado neste repositório, repita os
-passos 3–6 (nova implantação) para publicar a versão mais recente — a URL
+Sempre que `apps-script/Code.gs` for alterado neste repositório, cole o
+conteúdo novo no editor e implante de novo (passos 3, 4 e 6 acima) para
+publicar a versão mais recente — a URL
 de implantação muda a cada "Nova implantação"; se preferir manter a mesma
 URL, use **Gerenciar implantações → editar (ícone de lápis) → Nova
 versão** em vez de criar uma implantação nova.

@@ -54,29 +54,12 @@ function obterPerfilRestrito_(e) {
 }
 
 var PROP_DATA_BASE = 'dataBaseImportacao';
-// Pasta do Drive onde o export diário do Protheus é salvo:
-// Compartilhados comigo / 4 - CE 007_ADMINISTRATIVO / 4.11 - FINANCEIRO / 17 CONTAS A PAGAR
-// Nome do arquivo esperado: AAAA.MM.DD.xlsx (ex.: 2026.07.30.xlsx)
-var DRIVE_FOLDER_ID = '1sVlF29VGWDzHelgBGIeFvVK3OCpMjGmD';
-var NOME_ARQUIVO_RE = /^(\d{4})\.(\d{2})\.(\d{2})\.xlsx$/i;
-
-var SRC = {
-  tipo: 'B', dt_emissao: 'C', no_titulo: 'D', form_pagto: 'E', fornecedor: 'F',
-  nome_fornece: 'G', vencimento: 'H', vencto_real: 'I', vlr_titulo: 'J', parcela: 'K',
-  dt_baixa: 'L', historico: 'M', aprovacao: 'S', usuario: 'AJ', remessa: 'AW',
-};
 
 function getDataBase_() {
   return PropertiesService.getScriptProperties().getProperty(PROP_DATA_BASE);
 }
 function setDataBase_(valor) {
   if (valor) PropertiesService.getScriptProperties().setProperty(PROP_DATA_BASE, valor);
-}
-
-function colIdx_(letra) {
-  var idx = 0;
-  for (var i = 0; i < letra.length; i++) idx = idx * 26 + (letra.charCodeAt(i) - 64);
-  return idx - 1;
 }
 
 function removerZerosEsquerda_(v) {
@@ -90,83 +73,6 @@ function removerZerosEsquerda_(v) {
 function dataParaISO_(v) {
   if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
   return v;
-}
-
-// Encontra, na pasta do Drive, o arquivo AAAA.MM.DD.xlsx com a data mais recente no nome.
-// Usa a API avançada do Drive (Files.list) em vez de DriveApp.getFiles(): depois de
-// meses de export diário a pasta acumulou centenas de arquivos, e percorrer
-// um por um (DriveApp) ficou lento o bastante pra estourar o limite de
-// execução do Apps Script — a tela nem chegava a receber resposta e mostrava
-// "Failed to fetch" (erro de rede genérico do navegador, sem nenhuma
-// mensagem específica, porque a chamada nunca terminou). Files.list já
-// devolve os arquivos ordenados pelo nome (que é a própria data, AAAA.MM.DD)
-// direto do servidor do Drive, então não precisa mais ler a pasta inteira.
-function encontrarArquivoMaisRecenteNoDrive_() {
-  var resposta = Drive.Files.list({
-    q: "'" + DRIVE_FOLDER_ID + "' in parents and trashed = false and name contains '.xlsx'",
-    orderBy: 'name desc',
-    pageSize: 25,
-    fields: 'files(id,name)',
-    // A pasta "17 CONTAS A PAGAR" fica dentro de uma estrutura compartilhada
-    // (Compartilhados comigo / 4 - CE 007_ADMINISTRATIVO / ...). Sem estas
-    // duas flags, Files.list silenciosamente IGNORA arquivos fora do "Meu
-    // Drive" do executor — devolve lista vazia (sem erro nenhum), fazendo
-    // parecer que nenhum arquivo bate no padrão mesmo quando ele existe.
-    supportsAllDrives: true,
-    includeItemsFromAllDrives: true,
-  });
-  var arquivos = resposta.files || [];
-  for (var i = 0; i < arquivos.length; i++) {
-    var m = arquivos[i].name.match(NOME_ARQUIVO_RE);
-    if (m) {
-      return { file: DriveApp.getFileById(arquivos[i].id), dataBase: m[1] + '-' + m[2] + '-' + m[3] };
-    }
-  }
-  return null;
-}
-
-// Converte o .xlsx (via Drive API avançada) para Google Sheets temporário,
-// lê todas as linhas/colunas e apaga o arquivo temporário em seguida.
-function lerLinhasDoXlsx_(driveFile) {
-  var recurso = { name: 'tmp_import_' + Utilities.getUuid(), mimeType: MimeType.GOOGLE_SHEETS };
-  var convertido = Drive.Files.create(recurso, driveFile.getBlob(), { fields: 'id' });
-  try {
-    var ss = SpreadsheetApp.openById(convertido.id);
-    return ss.getSheets()[0].getDataRange().getValues();
-  } finally {
-    Drive.Files.remove(convertido.id);
-  }
-}
-
-// Espelha o mapeamento de colunas usado no import manual (web/index.html):
-// linha 2 do Excel = cabeçalho, dados a partir da linha 3.
-function parseLinhasProtheus_(dados) {
-  var idx = {};
-  Object.keys(SRC).forEach(function (k) { idx[k] = colIdx_(SRC[k]); });
-  var itens = [];
-  for (var r = 2; r < dados.length; r++) {
-    var linha = dados[r];
-    var tipo = linha[idx.tipo];
-    if (tipo === '' || tipo === null || tipo === undefined) continue;
-    itens.push({
-      'Tipo': tipo,
-      'Data Emissão': dataParaISO_(linha[idx.dt_emissao]),
-      'Nº Documento': removerZerosEsquerda_(linha[idx.no_titulo]),
-      'Vencimento Real': dataParaISO_(linha[idx.vencto_real]),
-      'Forma Pagamento': linha[idx.form_pagto],
-      'Código Fornecedor': removerZerosEsquerda_(linha[idx.fornecedor]),
-      'Parcela': linha[idx.parcela],
-      'Data Baixa': dataParaISO_(linha[idx.dt_baixa]),
-      'Vencimento': dataParaISO_(linha[idx.vencimento]),
-      'R$ Valor': linha[idx.vlr_titulo],
-      'Usuário Inclusor': linha[idx.usuario],
-      'Razão Social': linha[idx.nome_fornece],
-      'Aprovação Remessa': linha[idx.aprovacao],
-      'Remessa': removerZerosEsquerda_(linha[idx.remessa]),
-      'Histórico': linha[idx.historico],
-    });
-  }
-  return itens;
 }
 
 function getSheet_(nome) {
@@ -572,20 +478,6 @@ function api_importar(payload) {
   return api_carregar();
 }
 
-function api_importarDoDrive(payload) {
-  var nomeUsuario = validarAcessoEdicao_(payload);
-  var achado = encontrarArquivoMaisRecenteNoDrive_();
-  if (!achado) throw new Error('Nenhum arquivo AAAA.MM.DD.xlsx encontrado na pasta do Drive.');
-  var dadosPlanilha = lerLinhasDoXlsx_(achado.file);
-  var itensDrive = parseLinhasProtheus_(dadosPlanilha);
-  substituirErp_(itensDrive, achado.dataBase);
-  registrarLog_(nomeUsuario, 'Importar (Drive)', itensDrive.length + ' título(s) de "' + achado.file.getName() + '"');
-  var resultado = api_carregar();
-  resultado.arquivoUsado = achado.file.getName();
-  resultado.quantidadeImportada = itensDrive.length;
-  return resultado;
-}
-
 function api_adicionarManual(payload) {
   var nomeUsuario = validarAcessoEdicao_(payload);
   // Lê ERP/Manual uma única vez e reaproveita tanto para a conferência de
@@ -749,7 +641,6 @@ function doPost(e) {
   try {
     var resultado;
     if (acao === 'importar') resultado = api_importar(payload);
-    else if (acao === 'importarDoDrive') resultado = api_importarDoDrive(payload);
     else if (acao === 'adicionarManual') resultado = api_adicionarManual(payload);
     else if (acao === 'editarManual') resultado = api_editarManual(payload);
     else if (acao === 'removerManual') resultado = api_removerManual(payload);
@@ -882,7 +773,7 @@ function enviarAlertaDiario() {
   linhas.push('');
 
   if (baseDesatualizada) {
-    linhas.push('⚠ A base de dados está desatualizada há ' + diasDefasagem + ' dia(s) — importe um arquivo mais recente da pasta do Drive.');
+    linhas.push('⚠ A base de dados está desatualizada há ' + diasDefasagem + ' dia(s) — importe um arquivo mais recente na aba "Atualizar Dados".');
     linhas.push('');
   }
 

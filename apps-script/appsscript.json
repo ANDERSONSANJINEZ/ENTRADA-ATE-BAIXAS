@@ -1,14 +1,5 @@
 {
   "timeZone": "America/Fortaleza",
-  "dependencies": {
-    "enabledAdvancedServices": [
-      {
-        "userSymbol": "Drive",
-        "version": "v3",
-        "serviceId": "drive"
-      }
-    ]
-  },
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
   "webapp": {

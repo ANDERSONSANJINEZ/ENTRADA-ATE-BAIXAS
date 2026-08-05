@@ -330,9 +330,8 @@
   <button data-aba="lancamentos">Lançamentos</button>
   <button data-aba="detalhe-aporte">Detalhe por Aporte</button>
   <button data-aba="analise">Análise</button>
-  <button data-aba="conciliacao">Conciliação Bancária</button>
   <button data-aba="historico">Histórico</button>
-  <button data-aba="importar" id="nav-importar">Importar</button>
+  <button data-aba="atualizar" id="nav-atualizar">Atualizar Dados</button>
 </nav>
 </div>
 
@@ -531,49 +530,6 @@
     </div>
   </section>
 
-  <section id="aba-conciliacao" class="aba">
-    <div class="painel">
-      <h2>Conciliação Bancária</h2>
-      <p style="font-size:13px;color:var(--cinza)">
-        Envie o extrato bancário (.xlsx ou .csv) pra cruzar com os títulos já
-        baixados na planilha. O arquivo precisa ter colunas de Data, Valor e
-        Histórico/Descrição — os nomes exatos variam de banco pra banco, o
-        app tenta reconhecer automaticamente. Casamento por valor idêntico e
-        data igual (ou próxima, em até 5 dias) — tudo é calculado aqui na
-        tela, o extrato não é salvo em lugar nenhum.
-      </p>
-      <div id="dropzone-extrato">Arraste o extrato aqui ou clique para selecionar
-        <input type="file" id="arquivo-extrato" accept=".xlsx,.csv" style="display:none">
-      </div>
-      <div id="resumo-conciliacao"></div>
-      <div id="painel-resultado-conciliacao" style="display:none;">
-        <div class="cabecalho-painel">
-          <h2 style="font-size:14px;">Resultado da conciliação</h2>
-          <button class="btn secundario small" onclick="exportarConciliacao()">⬇ Exportar Excel</button>
-        </div>
-        <div id="total-conciliacao" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
-        <div class="filtros">
-          <select id="filtro-conciliacao">
-            <option value="">Situação: todas</option>
-            <option value="Conciliado">Conciliado</option>
-            <option value="Divergência de data">Divergência de data</option>
-            <option value="Sem correspondência no extrato">Sem correspondência no extrato</option>
-            <option value="Sem título correspondente">Sem título correspondente (extrato)</option>
-          </select>
-        </div>
-        <div class="tabela-scroll">
-          <table id="tabela-conciliacao">
-            <thead><tr>
-              <th>Situação</th><th>Fornecedor</th><th>Nº Doc.</th><th>Data Baixa</th>
-              <th>Valor Título</th><th>Data Extrato</th><th>Valor Extrato</th><th>Histórico Extrato</th>
-            </tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </section>
-
   <section id="aba-historico" class="aba">
     <div class="painel">
       <div class="cabecalho-painel">
@@ -598,23 +554,64 @@
     </div>
   </section>
 
-  <section id="aba-importar" class="aba">
-    <div class="painel">
-      <h2>Importar export do TOTVS Protheus</h2>
-      <p style="font-size:13px;color:var(--cinza)">
-        Os títulos importados substituem a última importação salva; os
-        lançamentos manuais não são afetados — apenas recomparados para
-        sinalizar duplicidade.
-      </p>
-      <button class="btn" id="btn-importar-drive">🔄 Buscar arquivo mais recente do Drive</button>
-      <p style="font-size:12px;color:var(--cinza); margin-top:6px;">
-        Busca direto na pasta "17 CONTAS A PAGAR" o arquivo AAAA.MM.DD.xlsx mais recente.
-      </p>
-      <p style="font-size:13px;color:var(--cinza); margin-top:18px;">Ou selecione manualmente:</p>
-      <div id="dropzone">Arraste o arquivo .xlsx aqui ou clique para selecionar
-        <input type="file" id="arquivo-erp" accept=".xlsx" style="display:none">
+  <section id="aba-atualizar" class="aba">
+    <div class="grid-2">
+      <div class="painel" id="painel-atualizar-baixas">
+        <h2>Títulos (baixas) — TOTVS Protheus</h2>
+        <p style="font-size:13px;color:var(--cinza)">
+          Envie o export do Protheus em .xlsx (qualquer nome de arquivo). Os
+          títulos importados substituem a última importação salva; os
+          lançamentos manuais não são afetados — apenas recomparados para
+          sinalizar duplicidade.
+        </p>
+        <div id="dropzone">Arraste o arquivo .xlsx aqui ou clique para selecionar
+          <input type="file" id="arquivo-erp" accept=".xlsx" style="display:none">
+        </div>
+        <div id="resumo-importacao"></div>
       </div>
-      <div id="resumo-importacao"></div>
+
+      <div class="painel">
+        <h2>Extrato bancário</h2>
+        <p style="font-size:13px;color:var(--cinza)">
+          Envie o extrato bancário em .xlsx (qualquer nome de arquivo) pra
+          cruzar com os títulos já baixados na planilha. O arquivo precisa
+          ter colunas de Data, Valor e Histórico/Descrição — os nomes exatos
+          variam de banco pra banco, o app tenta reconhecer automaticamente.
+          Casamento por valor idêntico e data igual (ou próxima, em até 5
+          dias) — tudo é calculado aqui na tela, o extrato não é salvo em
+          lugar nenhum.
+        </p>
+        <div id="dropzone-extrato">Arraste o extrato aqui ou clique para selecionar
+          <input type="file" id="arquivo-extrato" accept=".xlsx" style="display:none">
+        </div>
+        <div id="resumo-conciliacao"></div>
+      </div>
+    </div>
+
+    <div class="painel" id="painel-resultado-conciliacao" style="display:none;">
+      <div class="cabecalho-painel">
+        <h2 style="font-size:14px;">Resultado da conciliação</h2>
+        <button class="btn secundario small" onclick="exportarConciliacao()">⬇ Exportar Excel</button>
+      </div>
+      <div id="total-conciliacao" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
+      <div class="filtros">
+        <select id="filtro-conciliacao">
+          <option value="">Situação: todas</option>
+          <option value="Conciliado">Conciliado</option>
+          <option value="Divergência de data">Divergência de data</option>
+          <option value="Sem correspondência no extrato">Sem correspondência no extrato</option>
+          <option value="Sem título correspondente">Sem título correspondente (extrato)</option>
+        </select>
+      </div>
+      <div class="tabela-scroll">
+        <table id="tabela-conciliacao">
+          <thead><tr>
+            <th>Situação</th><th>Fornecedor</th><th>Nº Doc.</th><th>Data Baixa</th>
+            <th>Valor Título</th><th>Data Extrato</th><th>Valor Extrato</th><th>Histórico Extrato</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
   </section>
 
@@ -3400,18 +3397,6 @@ dropzone.addEventListener('drop', (e) => {
   if (e.dataTransfer.files[0]) processarArquivo(e.dataTransfer.files[0]);
 });
 
-document.getElementById('btn-importar-drive').addEventListener('click', async () => {
-  const resumo = document.getElementById('resumo-importacao');
-  resumo.innerHTML = '<div class="aviso">Buscando o arquivo mais recente na pasta do Drive…</div>';
-  try {
-    const dados = await postarAcao('importarDoDrive', {});
-    resumo.innerHTML = `<div class="aviso">${dados.quantidadeImportada} títulos importados de "${dados.arquivoUsado}".</div>`;
-    toast('Importação do Drive concluída.');
-  } catch (e) {
-    resumo.innerHTML = `<div class="aviso">Falha ao importar do Drive: ${e.message}</div>`;
-  }
-});
-
 // ---------- Modo somente leitura / edição ----------
 // Diferente do antigo modo=leitura (só escondia botões), a senha de edição
 // é validada de verdade no servidor — ver validarAcessoEdicao_/
@@ -3464,7 +3449,12 @@ function prefillUsuarioInclusor() {
 }
 
 function atualizarUiModoLeitura() {
-  document.getElementById('nav-importar').style.display = MODO_LEITURA ? 'none' : '';
+  // Diferente do antigo "Importar" (aba inteira só de edição), a nova aba
+  // "Atualizar Dados" também abriga a Conciliação Bancária, que continua
+  // disponível em modo leitura (só a visualização — salvar o resultado no
+  // histórico da planilha continua exigindo senha, ver salvarConciliacaoNaPlanilha)
+  // — por isso aqui escondemos só o painel de baixas, não a aba inteira.
+  document.getElementById('painel-atualizar-baixas').style.display = MODO_LEITURA ? 'none' : '';
   document.getElementById('btn-abrir-lancamento-manual').style.display = MODO_LEITURA ? 'none' : '';
   if (MODO_LEITURA) fecharModalLancamentoManual(); // voltar pra leitura com o pop-up aberto não deveria deixar editar
   const btnRemoverDuplicados = document.getElementById('btn-remover-duplicados');
@@ -3481,10 +3471,6 @@ function atualizarUiModoLeitura() {
     btnAcesso.textContent = MODO_LEITURA ? '🔓 Habilitar edição' : '🔒 Voltar para leitura';
     btnAcesso.title = FORCAR_LEITURA_URL ? 'Link aberto em modo leitura' : '';
     btnAcesso.onclick = MODO_LEITURA ? habilitarEdicao : desabilitarEdicao;
-  }
-  // Se a aba Importar estava ativa e foi escondida, volta para o Dashboard.
-  if (MODO_LEITURA && document.getElementById('nav-importar').classList.contains('ativo')) {
-    document.querySelector('nav button[data-aba="dashboard"]').click();
   }
   renderizarLancamentos(); // atualiza os botões "Remover" nas linhas
 }
