@@ -43,9 +43,10 @@ de qualquer lugar. Não precisa configurar nada nem copiar arquivo.
 Por padrão, qualquer pessoa que abrir a URL do app vê tudo (dashboard,
 lançamentos, exportações) mas **não consegue editar** — o envio do arquivo
 de títulos (baixas) na aba **Atualizar Dados**, o formulário de lançamento
-manual e o botão de excluir duplicados ficam escondidos (a Conciliação
-Bancária, na mesma aba, continua disponível só para visualização). Para habilitar a edição, a pessoa clica em **🔓 Habilitar
-edição** (topo direito) e digita a sua senha; se for válida, o app já
+manual e o botão de excluir duplicados ficam escondidos (a aba **Conciliação
+Bancária** continua disponível só para visualização). Para habilitar a
+edição, a pessoa clica em **🔓 Habilitar edição** (topo direito) e digita a
+sua senha; se for válida, o app já
 mostra "bem-vindo(a), <nome>" e o navegador guarda a sessão (localStorage)
 até clicar em **🔒 Voltar para leitura**.
 
@@ -105,21 +106,17 @@ de fornecedores excluídos), edite o objeto `PERFIS_RESTRITOS` no início do
 pela planilha (diferente da aba **Usuários**, que é só pra senha de
 edição). Cada chave do objeto vira o valor de `?usuario=` no link.
 
-## Atualizar Dados (upload manual)
+## Atualizar Dados (upload manual dos títulos/baixas)
 
-A aba **Atualizar Dados** centraliza os dois uploads manuais do app, lado a
-lado:
+Na aba **Atualizar Dados**, envie o export do Protheus em `.xlsx`, com
+qualquer nome de arquivo (o nome não precisa mais seguir o padrão
+`AAAA.MM.DD.xlsx`; se o nome bater com esse padrão, a data base ainda é
+detectada automaticamente, senão ela fica marcada como "não identificada").
+Não há mais busca automática numa pasta do Drive — o arquivo é sempre
+enviado manualmente por quem estiver com a edição habilitada.
 
-- **Títulos (baixas)** — envie o export do Protheus em `.xlsx`, com
-  qualquer nome de arquivo (o nome não precisa mais seguir o padrão
-  `AAAA.MM.DD.xlsx`; se o nome bater com esse padrão, a data base ainda é
-  detectada automaticamente, senão ela fica marcada como "não
-  identificada").
-- **Extrato bancário** — envie o extrato do banco em `.xlsx`, também com
-  qualquer nome, para a Conciliação Bancária (ver seção abaixo).
-
-Não há mais busca automática numa pasta do Drive — os dois arquivos são
-sempre enviados manualmente por quem estiver com a edição habilitada.
+O upload do extrato bancário fica numa aba separada — ver **Conciliação
+Bancária** abaixo.
 
 ## Anexos (documentos e comprovantes) por lançamento
 
@@ -204,9 +201,8 @@ o horário direto na tela de Gatilhos, se tiver usado a segunda forma).
 
 ## Conciliação Bancária
 
-Na aba **Atualizar Dados**, no painel "Extrato bancário", envie o extrato
-do banco em `.xlsx` — o app tenta reconhecer sozinho as colunas de Data,
-Valor e Histórico pelo
+Na aba **Conciliação Bancária**, envie o extrato do banco em `.xlsx` — o
+app tenta reconhecer sozinho as colunas de Data, Valor e Histórico pelo
 nome do cabeçalho (aceita variações como "Data Movimento", "Valor (R$)"
 etc.). Cada título já **baixado** na planilha é cruzado com o extrato por
 valor idêntico (tolerância de 1 centavo) e data — igual (Conciliado) ou até
