@@ -3195,7 +3195,7 @@ document.getElementById('busca-historico').addEventListener('input', renderizarH
 // entra em jogo aqui um crédito do banco — créditos (aportes das
 // consorciadas, rentabilidade etc.) são tratados à parte, ver
 // analisarCreditos_ mais abaixo.
-let ultimoResultadoConciliacao = { resultado: [], semTitulo: [] };
+let ultimoResultadoConciliacao = { resultado: [], semTitulo: [], foraDoPeriodo: 0 };
 let ultimoResultadoCreditos = { linhas: [], totalCreditos: 0, totalDebitos: 0 };
 
 function normalizarTexto_(s) {
@@ -3362,8 +3362,25 @@ function conciliarExtrato(itensExtrato) {
   // etc.) nunca "pagam" um título, então nem entram nessa lista — eles têm
   // a própria análise em analisarCreditos_.
   const itensDebito = itensExtrato.filter((i) => i.tipo === 'debito');
-  const baixados = state.erp.concat(state.manual.filter((m) => m.Status !== 'Duplicado – revisar'))
+  // Um extrato normalmente cobre só um período curto (ex.: um mês) — sem
+  // isso, títulos baixados MUITO antes ou depois do período do extrato
+  // (que nunca poderiam aparecer nele) inundavam "Sem correspondência no
+  // extrato" com ruído (ex.: um título baixado em setembro/2025 jamais vai
+  // aparecer num extrato de julho/2026). Por isso só entram na comparação
+  // os títulos com Data Baixa dentro do período coberto pelo extrato, com
+  // a mesma folga de 5 dias usada pra considerar "Divergência de data".
+  const datasExtrato = itensDebito.map((i) => diaCalendario(i.data)).filter((d) => d != null);
+  const TOLERANCIA_DIAS_MS = 5 * 86400000;
+  const periodoMin = datasExtrato.length ? Math.min(...datasExtrato) - TOLERANCIA_DIAS_MS : null;
+  const periodoMax = datasExtrato.length ? Math.max(...datasExtrato) + TOLERANCIA_DIAS_MS : null;
+  const todosBaixados = state.erp.concat(state.manual.filter((m) => m.Status !== 'Duplicado – revisar'))
     .filter((i) => i['Data Baixa']);
+  const baixados = todosBaixados.filter((i) => {
+    if (periodoMin == null) return true; // extrato sem nenhum débito com data — não filtra por período
+    const d = diaCalendario(paraData(i['Data Baixa']));
+    return d != null && d >= periodoMin && d <= periodoMax;
+  });
+  const foraDoPeriodo = todosBaixados.length - baixados.length;
   const usados = new Set();
   const resultado = baixados.map((titulo) => {
     const dataBaixa = diaCalendario(paraData(titulo['Data Baixa']));
@@ -3383,7 +3400,7 @@ function conciliarExtrato(itensExtrato) {
     return { titulo, mov: null, status: 'Sem correspondência no extrato' };
   });
   const semTitulo = itensDebito.filter((_, idx) => !usados.has(idx));
-  return { resultado, semTitulo };
+  return { resultado, semTitulo, foraDoPeriodo };
 }
 
 // ---------- Créditos recebidos (aportes das consorciadas e rendimentos) ----------
@@ -3533,8 +3550,10 @@ function renderizarConciliacao() {
   const conciliados = linhasResultado.filter((l) => l.situacao === 'Conciliado').length;
   const divergentes = linhasResultado.filter((l) => l.situacao === 'Divergência de data').length;
   const semExtrato = linhasResultado.filter((l) => l.situacao === 'Sem correspondência no extrato').length;
+  const foraDoPeriodo = ultimoResultadoConciliacao.foraDoPeriodo || 0;
   document.getElementById('total-conciliacao').textContent =
-    `${conciliados} conciliado(s) · ${divergentes} com divergência de data · ${semExtrato} sem correspondência no extrato · ${linhasSemTitulo.length} lançamento(s) do extrato sem título`;
+    `${conciliados} conciliado(s) · ${divergentes} com divergência de data · ${semExtrato} sem correspondência no extrato · ${linhasSemTitulo.length} lançamento(s) do extrato sem título` +
+    (foraDoPeriodo ? ` · ${foraDoPeriodo} título(s) baixado(s) fora do período do extrato (não entraram na comparação)` : '');
 }
 document.getElementById('filtro-conciliacao').addEventListener('input', renderizarConciliacao);
 
