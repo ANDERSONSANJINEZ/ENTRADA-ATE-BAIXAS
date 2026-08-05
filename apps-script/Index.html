@@ -1360,7 +1360,10 @@ function calcularAporte(vencimentoISO) {
   const semanas = Math.floor(diffDias / 7);
   const aporte = APORTE_OFFSET + semanas;
   if (aporte < 1) return '';
-  return ('00' + aporte).slice(-2);
+  // Só completa com zero à esquerda pra ficar com 2 dígitos (ex.: "05"),
+  // nunca corta dígitos de números maiores — cortar (como fazia o antigo
+  // slice(-2)) faria o aporte 100 virar "00" e colidir com o aporte 0.
+  return String(aporte).padStart(2, '0');
 }
 // Período (semana) correspondente a um número de aporte — inverso de calcularAporte.
 function periodoDoAporte(aporteStr) {
@@ -3081,17 +3084,20 @@ function dataParaISO(v) {
 // coluna AW do Protheus (não confiável) por este script, fornecido pelo
 // Anderson. Vale pra qualquer dado futuro que precise de Remessa: sempre
 // calcular por aqui, nunca ler de uma coluna do arquivo importado.
-// Tradução da fórmula original (sintaxe Quickbase), com UM ajuste: a
-// referência ("semana 0") não é mais uma data fixa escrita no código — isso
-// ficaria desatualizado com o tempo — e sim o Vencimento mais antigo
-// encontrado no PRÓPRIO arquivo sendo importado (dataRefMs, calculado uma
-// vez por importação logo abaixo, em parseArquivoProtheus). Como cada
-// importação substitui a aba ERP inteira (ver substituirErp_ no Code.gs),
-// isso não gera inconsistência entre importações — cada uma recalcula sua
-// própria referência a partir dos dados que ela mesma trouxe.
+// Baseada na fórmula original (sintaxe Quickbase), com DOIS ajustes pedidos
+// pelo Anderson: (1) a referência ("semana 0") não é mais uma data fixa
+// escrita no código — isso ficaria desatualizado com o tempo — e sim o
+// Vencimento mais antigo encontrado no PRÓPRIO arquivo sendo importado
+// (dataRefMs, calculado uma vez por importação logo abaixo, em
+// parseArquivoProtheus — como cada importação substitui a aba ERP inteira,
+// ver substituirErp_ no Code.gs, isso não gera inconsistência entre
+// importações diferentes); (2) a quantidade de dígitos não é mais fixa em
+// 2 — só completa com zero à esquerda os números menores (ex.: "05"), sem
+// cortar dígitos dos maiores (a fórmula original, com RIGHT(...,2)),
+// cortaria e faria a remessa 100 colidir com a remessa 0.
 //   IF(ISBLANK([VENCIMENTO]), "",
-//     RIGHT("00" & (IF(23 + FLOOR(TOTALHOURS(DATE([VENCIMENTO]) - DATE([REFERÊNCIA])) / 168) < 1,
-//       "", 23 + FLOOR(TOTALHOURS(DATE([VENCIMENTO]) - DATE([REFERÊNCIA])) / 168))), 2))
+//     PAD_ESQUERDA_2("" & (IF(23 + FLOOR(TOTALHOURS(DATE([VENCIMENTO]) - DATE([REFERÊNCIA])) / 168) < 1,
+//       0, 23 + FLOOR(TOTALHOURS(DATE([VENCIMENTO]) - DATE([REFERÊNCIA])) / 168))))
 function calcularRemessa(vencimentoISO, dataRefMs) {
   if (!vencimentoISO || dataRefMs == null) return '';
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(vencimentoISO));
@@ -3099,8 +3105,11 @@ function calcularRemessa(vencimentoISO, dataRefMs) {
   const dataVencMs = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
   const totalHoras = (dataVencMs - dataRefMs) / (1000 * 60 * 60);
   const bruto = 23 + Math.floor(totalHoras / 168);
-  const comZeros = '00' + (bruto < 1 ? '' : String(bruto));
-  return comZeros.slice(-2);
+  if (bruto < 1) return '00';
+  // Só completa com zero à esquerda pra ficar com 2 dígitos (ex.: "05"),
+  // nunca corta dígitos de números maiores — cortar faria a remessa 100
+  // virar "00" e colidir com a remessa 0 (mesmo cuidado de calcularAporte).
+  return String(bruto).padStart(2, '0');
 }
 
 // Converte uma data "yyyy-MM-dd" pra milissegundos UTC (meia-noite), ou
