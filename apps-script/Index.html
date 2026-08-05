@@ -2724,7 +2724,7 @@ function celulaLancamento_(chave, i) {
     case 'vencimento': return `<td>${fmtData(i['Vencimento'])}</td>`;
     case 'vencreal': return `<td>${fmtData(i['Vencimento Real'])}</td>`;
     case 'valor':
-      return `<td${TABELA_LANCAMENTOS_SIMPLIFICADA ? ' class="col-valor"' : ''} title="${escaparHtml(fmtMoeda(i['R$ Valor']))}">${TABELA_LANCAMENTOS_SIMPLIFICADA ? htmlMoedaAlinhada(i['R$ Valor']) : fmtMoeda(i['R$ Valor'])}</td>`;
+      return `<td class="col-valor" title="${escaparHtml(fmtMoeda(i['R$ Valor']))}">${htmlMoedaAlinhada(i['R$ Valor'])}</td>`;
     case 'parcela': return `<td>${i['Parcela'] || ''}</td>`;
     case 'baixa': return `<td>${fmtData(i['Data Baixa'])}</td>`;
     case 'historico': return `<td class="col-historico">${i['Histórico'] || ''}</td>`;
