@@ -2909,7 +2909,15 @@ async function removerManual(id) {
 async function removerManualDoModalDetalhe(id) {
   const removido = await executarRemocaoManual_(id);
   if (!removido) return;
-  ultimoItensModalDetalhe = ultimoItensModalDetalhe.filter((i) => i.ID !== id);
+  // Reconstrói a lista do modal a partir do state (fonte da verdade) em
+  // vez de só filtrar o ID recém-removido: se a resposta desta ação
+  // chegou "atrasada" — outra ação mais recente já tinha respondido antes
+  // dela (ver requisicaoAtual em postarAcao) — o state não foi atualizado
+  // por esta resposta, e um filtro direto deixaria o modal mostrando uma
+  // linha a menos do que o resto da tela (dashboard/tabelas), uma
+  // inconsistência visível que só sumia com F5.
+  const idsAtuais = new Set(state.erp.concat(state.manual).map((i) => i.ID));
+  ultimoItensModalDetalhe = ultimoItensModalDetalhe.filter((i) => idsAtuais.has(i.ID));
   renderizarModalDetalhe();
 }
 
