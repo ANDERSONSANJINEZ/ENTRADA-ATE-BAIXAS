@@ -155,6 +155,12 @@
   #tabela-lancamentos td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #tabela-lancamentos td.col-historico, #tabela-lancamentos td.col-razao { white-space: normal; word-break: break-word; text-overflow: clip; }
   #tabela-lancamentos td.col-anexos, #tabela-lancamentos td.col-acao { overflow: visible; text-overflow: clip; }
+  /* Sem isto, misturar display:flex (ver td.col-valor logo abaixo) com o
+     overflow:hidden + text-overflow:ellipsis do td genérico acima confunde
+     o Chrome: como ellipsis não vale pra caixa flex, ele desenha um
+     retângulo de recorte visível em volta do valor em vez de simplesmente
+     ignorar a regra. */
+  #tabela-lancamentos td.col-valor { overflow: visible; text-overflow: clip; }
   /* Alça de redimensionar colunas (estilo planilha) — ver
      tornarColunasRedimensionaveis(); fica colada na borda direita do
      cabeçalho, sem atrapalhar o clique de ordenação. */
@@ -750,6 +756,10 @@
     <div class="modal-cabecalho">
       <h2 id="modal-anexo-titulo">Link do documento</h2>
     </div>
+    <!-- Preenchido por buscarSugestoesAnexo() quando o pop-up abre sem link
+         ainda cadastrado — nunca grava nada sozinho, só sugere; clicar numa
+         sugestão preenche o campo abaixo, e ainda precisa de "Confirmar". -->
+    <div id="anexo-sugestoes" style="margin-bottom:14px; font-size:13px;"></div>
     <input id="input-anexo" type="text" placeholder="Cole o link do Google Drive ou de onde o arquivo estiver salvo"
       style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid var(--borda); border-radius:6px; font-size:14px; margin-bottom:18px;"
       onkeydown="if (event.key === 'Enter') resolverLinkAnexoConfirmar(); if (event.key === 'Escape') resolverLinkAnexo(null);">
@@ -983,12 +993,18 @@ document.addEventListener('keydown', (e) => {
 // salvo). Mesmo contrato que prompt() tinha: devolve uma Promise com o
 // texto digitado, ou null se cancelado.
 let resolverLinkAnexoAtual = null;
-function pedirLinkAnexo(rotulo, valorAtual) {
+function pedirLinkAnexo(rotulo, valorAtual, item, tipo) {
   document.getElementById('modal-anexo-titulo').textContent = `Link do ${rotulo}`;
   const input = document.getElementById('input-anexo');
   input.value = valorAtual || '';
+  document.getElementById('anexo-sugestoes').innerHTML = '';
   document.getElementById('modal-anexo').classList.add('aberto');
   setTimeout(() => { input.focus(); input.select(); }, 50);
+  // Só busca sugestão pra quem ainda não tem link (achar um pra revisar já
+  // cadastrado não faz sentido) — nunca preenche/salva sozinho, só oferece
+  // botões que colam o link no campo (ver selecionarSugestaoAnexo);
+  // "Confirmar" continua obrigatório pra gravar qualquer coisa.
+  if (!valorAtual && item) buscarSugestoesAnexo(item, tipo);
   return new Promise((resolve) => { resolverLinkAnexoAtual = resolve; });
 }
 function resolverLinkAnexo(valor) {
@@ -997,6 +1013,41 @@ function resolverLinkAnexo(valor) {
 }
 function resolverLinkAnexoConfirmar() {
   resolverLinkAnexo(document.getElementById('input-anexo').value);
+}
+
+// Busca no Drive (ver api_buscarAnexoDrive no Code.gs) por um arquivo cujo
+// nome bata com o Tipo/Nº Documento/Fornecedor deste título, e mostra os
+// resultados como botões dentro do pop-up de anexo — clicar num deles só
+// cola o link no campo de texto, nunca grava nada sozinho. Guarda de
+// "geração" (numeroBuscaAnexoAtual) pra não deixar uma resposta atrasada
+// (ex.: usuário fechou este pop-up e abriu o de outra linha antes dela
+// voltar) pintar a sugestão errada em cima do pop-up errado.
+let numeroBuscaAnexoAtual = 0;
+async function buscarSugestoesAnexo(item, tipo) {
+  const minhaBusca = ++numeroBuscaAnexoAtual;
+  const caixa = document.getElementById('anexo-sugestoes');
+  caixa.innerHTML = '<span style="color:var(--cinza)">Buscando no Drive…</span>';
+  let dados;
+  try {
+    dados = await chamarServidor('buscarAnexoDrive', {
+      nDocumento: item['Nº Documento'], codigoFornecedor: item['Código Fornecedor'], razaoSocial: item['Razão Social'],
+      tipoDocumento: item['Tipo'], tipo,
+    });
+  } catch (erro) {
+    if (minhaBusca === numeroBuscaAnexoAtual) caixa.innerHTML = '';
+    return; // busca é só um extra — erro aqui não deve atrapalhar o cadastro manual
+  }
+  if (minhaBusca !== numeroBuscaAnexoAtual) return; // pop-up já mudou de linha
+  const candidatos = (dados && dados.candidatos) || [];
+  if (!candidatos.length) { caixa.innerHTML = ''; return; }
+  caixa.innerHTML = '<div style="color:var(--cinza); margin-bottom:6px;">Encontrado(s) no Drive — clique pra usar:</div>' +
+    candidatos.map((c) => `<button type="button" class="btn secundario small" style="display:block; width:100%; text-align:left; margin-bottom:4px; white-space:normal;" onclick="selecionarSugestaoAnexo('${escaparAtributo(c.url)}')" title="Abrir em outra aba pra conferir antes de usar">📄 ${escaparHtml(c.nome)}</button>`).join('');
+}
+function selecionarSugestaoAnexo(url) {
+  const input = document.getElementById('input-anexo');
+  input.value = url;
+  input.focus();
+  window.open(url, '_blank'); // abre pra conferir se é o arquivo certo antes de clicar Confirmar
 }
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('modal-anexo').classList.contains('aberto')) resolverLinkAnexo(null);
@@ -2890,15 +2941,13 @@ async function removerDuplicados() {
   toast(`${dados.quantidadeRemovida ?? qtde} lançamento(s) duplicado(s) removido(s).`);
 }
 
-// Busca no Drive (pastas de documentos/comprovantes) o(s) arquivo(s) cujo
-// nome contenha o Nº Documento informado, refinando pelo fornecedor quando
-// há mais de um resultado. Não usa postarAcao pois a resposta não traz
-// erp/manual — chama chamarServidor direto para não sobrescrever o state.
-// Link de anexo (documento/comprovante) cadastrado manualmente — a busca
-// automática no Drive foi removida por não encontrar os arquivos de forma
-// confiável. Clicar sempre abre um campo pré-preenchido com o link atual
-// (vazio se ainda não tiver um): editar e confirmar salva o novo link;
-// confirmar sem mudar nada só abre o link em outra aba; cancelar não faz nada.
+// Link de anexo (documento/comprovante) — sempre abre um pop-up com campo
+// pré-preenchido com o link atual (vazio se ainda não tiver um): editar e
+// confirmar salva o novo link; confirmar sem mudar nada só abre o link em
+// outra aba; cancelar não faz nada. Se ainda não houver link, o próprio
+// pop-up já tenta sugerir um candidato buscando no Drive por nome de
+// arquivo (ver pedirLinkAnexo/buscarSugestoesAnexo) — mas isso é só uma
+// sugestão pra agilizar; quem sempre decide se usa é a pessoa.
 async function definirOuAbrirAnexo(id, origem, tipo, linkAtual) {
   const rotulo = tipo === 'comprovante' ? 'comprovante' : 'documento';
   // Em modo leitura só é permitido abrir um link já cadastrado — nunca
@@ -2908,7 +2957,8 @@ async function definirOuAbrirAnexo(id, origem, tipo, linkAtual) {
     else toast(`Nenhum link de ${rotulo} cadastrado para este lançamento.`);
     return;
   }
-  const novoLink = await pedirLinkAnexo(rotulo, linkAtual);
+  const item = state.erp.concat(state.manual).find((i) => i.ID === id);
+  const novoLink = await pedirLinkAnexo(rotulo, linkAtual, item, tipo);
   if (novoLink == null) return; // cancelado
   const limpo = novoLink.trim();
   if (limpo === (linkAtual || '')) {

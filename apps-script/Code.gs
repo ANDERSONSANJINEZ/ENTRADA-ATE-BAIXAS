@@ -587,6 +587,92 @@ function api_definirAnexo(payload) {
   throw new Error('Lançamento não encontrado (pode ter sido removido ou reimportado).');
 }
 
+// Pastas do Drive onde os documentos/comprovantes recebidos (e-mail,
+// WhatsApp etc.) são organizados manualmente — as mesmas duas pastas usadas
+// pela rotina de importação de notas (ver skill controle-financeiro-pdf-import):
+// "03 DOC FISCAL FATURA E RECIBO" e "CE-007 - ANALISE DE NOTAS -> GILBERTO".
+// IDs fixos (não por nome) pra não depender de busca por texto, que falha
+// se a pasta for renomeada — se algum dia mudarem de pasta, é só trocar o
+// ID aqui.
+var PASTAS_BUSCA_ANEXO = [
+  '1srFnPfX6BCMYEShfDlF6H7nSiJD4aeef',
+  '18nuIj4SsAEqPJ7jOxlUe8JzJ8TCNcueL',
+];
+
+function normalizarTextoBusca_(s) {
+  return String(s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // tira acento (Ç, ã, é...)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .trim();
+}
+
+// Desce até 3 níveis de subpasta (as pastas reais têm 1-2 níveis; o limite é
+// só uma trava de segurança pra nunca varrer o Drive inteiro se alguém um
+// dia apontar PASTAS_BUSCA_ANEXO pra uma pasta errada). Só PDF: é o único
+// formato usado nessas pastas.
+function listarArquivosRecursivo_(pasta, profundidade, resultado) {
+  if (profundidade > 3) return;
+  var arquivos = pasta.getFilesByType(MimeType.PDF);
+  while (arquivos.hasNext()) resultado.push(arquivos.next());
+  var subpastas = pasta.getFolders();
+  while (subpastas.hasNext()) listarArquivosRecursivo_(subpastas.next(), profundidade + 1, resultado);
+}
+
+// Busca no Drive um documento/comprovante pra um título — usada pelo botão
+// "Buscar no Drive" do pop-up de anexo (só sugere; quem decide se aplica é
+// sempre a pessoa, nunca grava nada sozinho). Os arquivos dessas pastas
+// seguem o padrão de nome "TIPO Nº_DOCUMENTO FORNECEDOR ...pdf" (ex.: "NF
+// 351 RENOVE DISTRIBUIDORA DE MATERIAS.pdf") — exige o Nº Documento bater
+// como palavra inteira no nome E (o Código Fornecedor aparecer no nome OU
+// pelo menos uma palavra de 4+ letras da Razão Social aparecer também),
+// pra não sugerir qualquer arquivo que só por acaso tenha o mesmo número.
+// (Uma versão antiga desse recurso, bem menos rigorosa, foi removida por
+// não encontrar os arquivos de forma confiável — ver git log.)
+// Prefixos observados nas pastas pra arquivo de comprovante de pagamento
+// (diferente do Tipo do título em si — NF/FAT/BOL/etc — que é o documento).
+var PREFIXOS_COMPROVANTE = ['COMPROVANTE', 'REC'];
+
+function api_buscarAnexoDrive(payload) {
+  validarAcessoEdicao_(payload);
+  var nDocAlvo = normalizarTextoBusca_(removerZerosEsquerda_(String(payload.nDocumento || '')));
+  if (!nDocAlvo) return { candidatos: [] };
+  var codigoAlvo = normalizarTextoBusca_(removerZerosEsquerda_(String(payload.codigoFornecedor || '')));
+  var palavrasFornecedor = normalizarTextoBusca_(payload.razaoSocial).split(' ')
+    .filter(function (p) { return p.length >= 4; });
+  var tipoTitulo = normalizarTextoBusca_(payload.tipoDocumento); // Tipo do título (NF, FAT, BOL...)
+  var buscandoComprovante = payload.tipo === 'comprovante';
+
+  var todosArquivos = [];
+  PASTAS_BUSCA_ANEXO.forEach(function (id) {
+    try {
+      listarArquivosRecursivo_(DriveApp.getFolderById(id), 0, todosArquivos);
+    } catch (e) { /* pasta não encontrada/sem acesso — ignora e segue com as outras */ }
+  });
+
+  var candidatos = todosArquivos.map(function (arquivo) {
+    var nome = arquivo.getName();
+    var nomeNorm = normalizarTextoBusca_(nome);
+    var tokens = nomeNorm.split(' ');
+    if (tokens.indexOf(nDocAlvo) === -1) return null; // Nº Documento tem que bater como token inteiro
+    var pontuacao = 1;
+    if (codigoAlvo && nomeNorm.indexOf(codigoAlvo) !== -1) pontuacao += 2;
+    pontuacao += palavrasFornecedor.filter(function (p) { return nomeNorm.indexOf(p) !== -1; }).length;
+    if (pontuacao < 2) return null; // só nº bater não basta — exige código OU nome do fornecedor também
+    // Prioriza o arquivo do tipo certo pro campo que está sendo preenchido
+    // (documento x comprovante) — sem excluir o outro tipo, só ordenando
+    // melhor, já que às vezes só um dos dois foi de fato salvo no Drive.
+    var primeiroToken = tokens[0];
+    var ehComprovante = PREFIXOS_COMPROVANTE.indexOf(primeiroToken) !== -1;
+    if (buscandoComprovante && ehComprovante) pontuacao += 1;
+    if (!buscandoComprovante && tipoTitulo && primeiroToken === tipoTitulo) pontuacao += 1;
+    return { nome: nome, url: arquivo.getUrl(), pontuacao: pontuacao };
+  }).filter(function (c) { return c; });
+
+  candidatos.sort(function (a, b) { return b.pontuacao - a.pontuacao; });
+  return { candidatos: candidatos.slice(0, 5) };
+}
+
 // Campos que o modal de detalhamento pode alterar num lançamento MANUAL —
 // tudo, exceto ID/Origem/Status (Status é sempre recalculado depois, nunca
 // escrito direto pelo cliente). Só existe pra Manual: um título de ERP é
@@ -657,6 +743,7 @@ function doPost(e) {
     else if (acao === 'removerManual') resultado = api_removerManual(payload);
     else if (acao === 'removerDuplicados') resultado = api_removerDuplicados(payload);
     else if (acao === 'definirAnexo') resultado = api_definirAnexo(payload);
+    else if (acao === 'buscarAnexoDrive') resultado = api_buscarAnexoDrive(payload);
     else if (acao === 'validarEdicao') resultado = api_validarEdicao(payload);
     else if (acao === 'carregarLog') resultado = api_carregarLog(payload);
     else if (acao === 'salvarConciliacao') resultado = api_salvarConciliacao(payload);
