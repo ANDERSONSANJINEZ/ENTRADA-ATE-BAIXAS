@@ -356,7 +356,7 @@ function doGet(e) {
   template.abasPermitidasRestrito = perfil ? JSON.stringify(perfil.abas) : 'null';
   template.tabelaLancamentosSimplificada = !!(perfil && perfil.tabelaLancamentosSimplificada);
   return template.evaluate()
-    .setTitle('Entrada até Baixas — Financeiro Protheus')
+    .setTitle('Controle Financeiro')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
