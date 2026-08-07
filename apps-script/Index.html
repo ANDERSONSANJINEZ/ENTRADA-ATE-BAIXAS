@@ -232,7 +232,16 @@
      então os dígitos ficam alinhados entre linhas independente do
      tamanho do valor (diferente do texto "R$ x,xx" corrido, que
      desalinha os dígitos quando os valores têm tamanhos diferentes). */
-  #tabela-detalhe-aporte td.col-valor, #modal-detalhe-tabela td.col-valor, #tabela-lancamentos td.col-valor { display: flex; justify-content: space-between; align-items: center; }
+  /* NÃO usar display:flex direto no <td> (era o que causava o valor
+     "flutuando" fora do lugar em linhas mais altas — ex.: Histórico
+     quebrando em várias linhas em "Todos os lançamentos"): um <td> com
+     display:flex deixa de se comportar como célula de tabela e não estica
+     mais junto com a altura real da linha, só com a altura do próprio
+     conteúdo. O flex fica no <div class="valor-flex"> interno (gerado por
+     htmlMoedaAlinhada), que aí sim consegue herdar 100% da altura de um
+     <td> comum. */
+  #tabela-detalhe-aporte td.col-valor, #modal-detalhe-tabela td.col-valor, #tabela-lancamentos td.col-valor { padding: 0; }
+  .valor-flex { display: flex; justify-content: space-between; align-items: center; height: 100%; box-sizing: border-box; padding: 7px 8px; }
   /* Linha clicável pra abrir o anexo (documento/comprovante) do título —
      mesmo comportamento do modal-detalhe genérico. */
   #tabela-detalhe-aporte tbody tr { cursor: pointer; }
@@ -1345,7 +1354,9 @@ function fmtMoeda(v) { return 'R$ ' + paraNumero(v).toLocaleString('pt-BR', { mi
 // dígitos desalinhados entre linhas com valores de tamanhos diferentes.
 function htmlMoedaAlinhada(v) {
   const numero = paraNumero(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `<span class="rs">R$</span><span class="valor-num">${numero}</span>`;
+  // O flex fica no .valor-flex (ver CSS), não no <td> em si — veja o
+  // comentário na regra CSS de .valor-flex pro motivo.
+  return `<div class="valor-flex"><span class="rs">R$</span><span class="valor-num">${numero}</span></div>`;
 }
 // Todas as datas do app são "somente data" (sem hora). Formatamos sempre a
 // partir dos componentes UTC do Date — nunca com toLocaleDateString/getters
