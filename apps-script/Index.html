@@ -1432,9 +1432,10 @@ function fmtData(v) {
   return `${dia}/${mes}/${d.getUTCFullYear()}`;
 }
 // O Protheus às vezes embute no próprio Histórico o mesmo "Tipo Nº
-// Documento" que já aparece na coluna N/Doc. ao lado, e também a fração de
-// parcela (ex.: histórico "3/3 - NF 367 - TABUA MISTA..." quando N/Doc. já
-// é "NF 367" e Parcela já é "3") — tira essas repetições da descrição
+// Documento" que já aparece na coluna N/Doc. ao lado, a fração de parcela
+// (ex.: histórico "3/3 - NF 367 - TABUA MISTA..." quando N/Doc. já é "NF
+// 367" e Parcela já é "3") e o código do centro de custo grudado no fim
+// (ex.: ".../CE-007") — tira essas repetições/ruído da descrição
 // exibida/exportada em Detalhe por Aporte, já que a parcela volta a
 // aparecer sozinha no final ("PARC.: 3"). Não faz nada quando o histórico
 // não repete essas informações (a maioria dos casos), só limpa hífens
@@ -1450,6 +1451,7 @@ function limparNumeroDocDoHistorico_(historico, nDoc, parcela) {
     const escapadaParcela = String(parcela).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     h = h.replace(new RegExp('\\b0*' + escapadaParcela + '\\s*/\\s*\\d+\\b'), '');
   }
+  h = h.replace(/\/\s*CE-\d+\b/gi, '');
   return h.replace(/\s*-\s*-\s*/g, ' - ').replace(/^\s*-\s*/, '').replace(/\s*-\s*$/, '').trim();
 }
 // Descrição exibida/exportada em Detalhe por Aporte — função única usada
