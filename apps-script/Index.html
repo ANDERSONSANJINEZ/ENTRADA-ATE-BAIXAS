@@ -827,6 +827,7 @@
             <option value="NFAG">NFAG</option><option value="ND">ND</option>
             <option value="NF3E">NF3E</option><option value="DACTE">DACTE</option>
             <option value="BOL">BOL</option><option value="FAT">FAT</option>
+            <option value="REC">REC</option>
             <option value="FOL">FOL</option><option value="FGTS">FGTS</option>
             <option value="DARF">DARF</option><option value="DAM">DAM</option>
           </select>
@@ -1095,7 +1096,7 @@ async function editarObservacao(id, origem, valorAtual) {
 // (essa foi arrumada pra leitura rápida); aqui o objetivo é espelhar a
 // planilha de verdade, pra comparar e achar erro de importação/digitação.
 const CAMPOS_DETALHE_LINHA = [
-  { campo: 'Tipo', rotulo: 'Tipo', tipo: 'select', opcoes: ['NF', 'NFS', 'NFAG', 'ND', 'NF3E', 'DACTE', 'BOL', 'FAT', 'FOL', 'FGTS', 'DARF', 'DAM'] },
+  { campo: 'Tipo', rotulo: 'Tipo', tipo: 'select', opcoes: ['NF', 'NFS', 'NFAG', 'ND', 'NF3E', 'DACTE', 'BOL', 'FAT', 'REC', 'FOL', 'FGTS', 'DARF', 'DAM'] },
   { campo: 'Data Emissão', rotulo: 'Data Emissão', tipo: 'data' },
   { campo: 'Nº Documento', rotulo: 'Nº Documento' },
   { campo: 'Vencimento Real', rotulo: 'Vencimento Real', tipo: 'data' },
@@ -3789,10 +3790,11 @@ async function processarExtrato(file) {
 // citados (ex.: "PAGTO ELETRON COBRANCA NF 5858 G M B DE FREITAS" -> "5858";
 // "COBRANCA NFS 1328 LOQUICENTER" -> "1328") — reconhece os mesmos
 // prefixos de Tipo usados no lançamento manual (NF, NFS, NFAG, ND, NF3E,
-// DACTE, BOL, FAT, FOL, FGTS, DARF, DAM). O "Dcto." do extrato é só uma
-// referência interna do banco (não bate com o Nº Documento do título), por
-// isso o número certo tem que vir do texto do lançamento mesmo.
-const RE_NDOC_LANCAMENTO = /\b(?:NFS?e?|NFAG|ND|NF3E|DACTE|BOL|FAT|FOL|FGTS|DARF|DAM)\.?\s*(\d+)\b/gi;
+// DACTE, BOL, FAT, REC, FOL, FGTS, DARF, DAM). O "Dcto." do extrato é só
+// uma referência interna do banco (não bate com o Nº Documento do
+// título), por isso o número certo tem que vir do texto do lançamento
+// mesmo.
+const RE_NDOC_LANCAMENTO = /\b(?:NFS?e?|NFAG|ND|NF3E|DACTE|BOL|FAT|REC|FOL|FGTS|DARF|DAM)\.?\s*(\d+)\b/gi;
 function extrairNumerosDocumento_(historico) {
   const h = String(historico || '');
   const numeros = new Set();
