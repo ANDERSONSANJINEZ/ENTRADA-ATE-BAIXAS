@@ -653,13 +653,29 @@ function api_buscarAnexoDrive(payload) {
   var nDocAlvo = normalizarTextoBusca_(nDocOriginal);
   if (!nDocAlvo) return { candidatos: [] };
   var codigoAlvo = normalizarTextoBusca_(removerZerosEsquerda_(String(payload.codigoFornecedor || '')));
+  // Sem Código Fornecedor pra combinar na busca, um Nº Documento bem curto
+  // (1-2 caracteres) sozinho bateria com uma fração enorme do Drive — nem
+  // tenta, pra não travar sem achar nada de útil mesmo.
+  if (!codigoAlvo && nDocAlvo.length < 3) return { candidatos: [] };
   var palavrasFornecedor = normalizarTextoBusca_(payload.razaoSocial).split(' ')
     .filter(function (p) { return p.length >= 4; });
   var tipoTitulo = normalizarTextoBusca_(payload.tipoDocumento); // Tipo do título (NF, FAT, BOL...)
   var buscandoComprovante = payload.tipo === 'comprovante';
 
-  var termoEscapado = nDocOriginal.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  var query = "mimeType = 'application/pdf' and trashed = false and title contains '" + termoEscapado + "'";
+  // Combina Nº Documento + Código Fornecedor na busca sempre que o código
+  // estiver disponível (é o caso normal) — os dois juntos aparecem em TODO
+  // nome de arquivo dessas pastas (confirmado pelo Anderson: "NFS 1 LDA
+  // ENGENHARIA 64781522"), então isso deixa a busca bem mais seletiva.
+  // Sem o código, um Nº Documento curto e comum sozinho (ex.: "1", "2")
+  // bate com uma fração enorme do Drive inteiro (qualquer nome com esse
+  // dígito em algum lugar — data, quantidade etc.) e a busca nunca
+  // terminava de forma perceptível.
+  var escapar_ = function (v) { return String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+  var query = "mimeType = 'application/pdf' and trashed = false and title contains '" + escapar_(nDocOriginal) + "'";
+  var codigoFornecedorOriginal = String(payload.codigoFornecedor || '').trim();
+  if (codigoFornecedorOriginal) {
+    query += " and title contains '" + escapar_(codigoFornecedorOriginal) + "'";
+  }
   var resultadosBrutos;
   try {
     resultadosBrutos = DriveApp.searchFiles(query);
