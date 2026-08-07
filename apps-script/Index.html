@@ -1047,6 +1047,10 @@ async function buscarSugestoesAnexo(item, tipo) {
     return; // busca é só um extra — erro aqui não deve atrapalhar o cadastro manual
   }
   if (minhaBusca !== numeroBuscaAnexoAtual) return; // pop-up já mudou de linha
+  // Erro em TODAS as pastas de busca (ex.: acesso ao Drive ainda não
+  // autorizado pro projeto) — mostra pra não parecer só "não achou nada"
+  // sem pista nenhuma do motivo (ver api_buscarAnexoDrive no Code.gs).
+  if (dados && dados.erro) { caixa.innerHTML = `<span style="color:var(--vermelho)">${escaparHtml(dados.erro)}</span>`; return; }
   const candidatos = (dados && dados.candidatos) || [];
   if (!candidatos.length) { caixa.innerHTML = ''; return; }
   caixa.innerHTML = '<div style="color:var(--cinza); margin-bottom:6px;">Encontrado(s) no Drive — clique pra usar:</div>' +

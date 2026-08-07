@@ -595,9 +595,17 @@ function api_definirAnexo(payload) {
 // se a pasta for renomeada — se algum dia mudarem de pasta, é só trocar o
 // ID aqui.
 var PASTAS_BUSCA_ANEXO = [
-  '1srFnPfX6BCMYEShfDlF6H7nSiJD4aeef',
-  '18nuIj4SsAEqPJ7jOxlUe8JzJ8TCNcueL',
+  '1srFnPfX6BCMYEShfDlF6H7nSiJD4aeef', // 03 DOC FISCAL FATURA E RECIBO (documentos — NF, FAT, BOL...)
+  '18nuIj4SsAEqPJ7jOxlUe8JzJ8TCNcueL', // CE-007 - ANALISE DE NOTAS -> GILBERTO (documentos)
+  '1leuDOfqLFDxdg3PECZ6aij2eIkPGKwq6', // 16 COMPROVANTE PAGTO, organizada por ano/mês (comprovantes de pagamento —
+  // é ONDE de fato ficam os comprovantes; a 1ª tentativa desse recurso só
+  // buscava nas duas pastas de documento acima, por isso nunca achava
+  // comprovante nenhum — indicada pelo Anderson depois de conferir.)
 ];
+// Nome de subpasta pra pular na busca (só desperdiça tempo, nunca tem nota/
+// comprovante de fornecedor) — comparação sem acento/maiúscula, ver
+// normalizarTextoBusca_.
+var PASTAS_IGNORADAS_NA_BUSCA = ['TEMP'];
 
 function normalizarTextoBusca_(s) {
   return String(s || '')
@@ -616,7 +624,11 @@ function listarArquivosRecursivo_(pasta, profundidade, resultado) {
   var arquivos = pasta.getFilesByType(MimeType.PDF);
   while (arquivos.hasNext()) resultado.push(arquivos.next());
   var subpastas = pasta.getFolders();
-  while (subpastas.hasNext()) listarArquivosRecursivo_(subpastas.next(), profundidade + 1, resultado);
+  while (subpastas.hasNext()) {
+    var subpasta = subpastas.next();
+    if (PASTAS_IGNORADAS_NA_BUSCA.indexOf(normalizarTextoBusca_(subpasta.getName())) !== -1) continue;
+    listarArquivosRecursivo_(subpasta, profundidade + 1, resultado);
+  }
 }
 
 // Busca no Drive um documento/comprovante pra um título — usada pelo botão
@@ -644,10 +656,13 @@ function api_buscarAnexoDrive(payload) {
   var buscandoComprovante = payload.tipo === 'comprovante';
 
   var todosArquivos = [];
+  var pastasComErro = [];
   PASTAS_BUSCA_ANEXO.forEach(function (id) {
     try {
       listarArquivosRecursivo_(DriveApp.getFolderById(id), 0, todosArquivos);
-    } catch (e) { /* pasta não encontrada/sem acesso — ignora e segue com as outras */ }
+    } catch (e) {
+      pastasComErro.push(id + ': ' + e.message); // uma pasta falhando não impede buscar nas outras
+    }
   });
 
   var candidatos = todosArquivos.map(function (arquivo) {
@@ -670,7 +685,18 @@ function api_buscarAnexoDrive(payload) {
   }).filter(function (c) { return c; });
 
   candidatos.sort(function (a, b) { return b.pontuacao - a.pontuacao; });
-  return { candidatos: candidatos.slice(0, 5) };
+  var resposta = { candidatos: candidatos.slice(0, 5) };
+  // Só avisa se TODAS as pastas falharam — uma sozinha falhando não é grave
+  // (ainda sobram as outras pra buscar). Isso existe pra não repetir o
+  // problema de "não achou nada" sem dar nenhuma pista do motivo: se isso
+  // aparecer, o mais provável é o projeto do Apps Script ainda não ter sido
+  // reautorizado pra acessar o Drive (primeira vez que este código roda) —
+  // abra o editor do Apps Script, rode qualquer função uma vez na mão e
+  // aceite a permissão de Drive quando for pedida.
+  if (pastasComErro.length === PASTAS_BUSCA_ANEXO.length) {
+    resposta.erro = 'Não foi possível acessar nenhuma das pastas de busca (' + pastasComErro.join(' | ') + ').';
+  }
+  return resposta;
 }
 
 // Campos que o modal de detalhamento pode alterar num lançamento MANUAL —
