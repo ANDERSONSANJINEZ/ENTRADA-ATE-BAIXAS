@@ -1454,14 +1454,24 @@ function limparNumeroDocDoHistorico_(historico, nDoc, parcela) {
   h = h.replace(/\/\s*CE-\d+\b/gi, '');
   return h.replace(/\s*-\s*-\s*/g, ' - ').replace(/^\s*-\s*/, '').replace(/\s*-\s*$/, '').trim();
 }
+// Acha o total de parcelas na mesma fração "N/M" que limparNumeroDocDoHistorico_
+// tira do Histórico (ex.: "3/3", "2/4"), pra exibir "PARC.: 3/4" em vez de só
+// "PARC.: 3" — a parcela sozinha não diz quantas existem no total.
+function extrairTotalParcelas_(historico, parcela) {
+  if (!historico || !parcela) return null;
+  const escapadaParcela = String(parcela).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = historico.match(new RegExp('\\b0*' + escapadaParcela + '\\s*/\\s*(\\d+)\\b'));
+  return m ? m[1] : null;
+}
 // Descrição exibida/exportada em Detalhe por Aporte — função única usada
 // tanto pela tela quanto pela exportação Excel (e pelo extrator de
 // ordenação da coluna Descrição), pra nunca ficarem divergentes.
 function montarDescricaoAporte_(i) {
   const nDoc = `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim();
+  const totalParcelas = extrairTotalParcelas_(i['Histórico'], i['Parcela']);
   const partes = [i['Razão Social'], limparNumeroDocDoHistorico_(i['Histórico'], nDoc, i['Parcela'])].filter(Boolean);
   let descricao = partes.join(' - ');
-  if (i['Parcela']) descricao += ` - PARC.: ${i['Parcela']}`;
+  if (i['Parcela']) descricao += ` - PARC.: ${i['Parcela']}${totalParcelas ? '/' + totalParcelas : ''}`;
   return descricao;
 }
 // Timestamp (ms) do "dia calendário" em UTC, usado para comparar datas sem
