@@ -246,6 +246,7 @@
      mesmo comportamento do modal-detalhe genérico. */
   #tabela-detalhe-aporte tbody tr { cursor: pointer; }
   #tabela-detalhe-aporte tbody tr:hover { background: var(--azul-claro); }
+  #tabela-detalhe-aporte thead th { text-align: center; }
   .filtros { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
   .filtros input, .filtros select { padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; font-size: 13px; }
   .btn { background: var(--azul); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
@@ -533,10 +534,13 @@
         <h2>Detalhe por Aporte</h2>
         <button class="btn secundario small" onclick="exportarXlsx('detalheAporte')">⬇ Exportar Excel</button>
       </div>
-      <select id="select-aporte-detalhe" class="busca-tabela" style="max-width:420px;">
-        <option value="">Selecione um aporte…</option>
-      </select>
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:0;">
+        <select id="select-aporte-detalhe" class="busca-tabela" style="max-width:420px; margin-bottom:0;">
+          <option value="">Selecione um aporte…</option>
+        </select>
+        <input id="busca-detalhe-aporte" class="busca-tabela" placeholder="Buscar em todas as colunas…" style="max-width:320px; margin-bottom:0;">
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; margin-top:10px; flex-wrap:wrap;">
         <div id="total-detalhe-aporte" style="font-size:13px; color:var(--cinza);"></div>
         <div style="font-size:12px; color:var(--cinza);">Clique no título de uma coluna pra ordenar (clique de novo pra inverter)</div>
       </div>
@@ -1080,6 +1084,24 @@ function renderizarModalLinha() {
   const corpo = document.getElementById('modal-linha-corpo');
   corpo.innerHTML = CAMPOS_DETALHE_LINHA.map((c) => {
     const valorBruto = item[c.campo];
+    // Link Documento/Comprovante usam o mesmo botão de anexo de "Todos os
+    // lançamentos" (clicar já busca no Drive, salva e abre — ver
+    // definirOuAbrirAnexo) em vez de um campo de texto/link estático —
+    // funciona tanto pra ERP quanto Manual, e independe do modo de edição
+    // deste pop-up (é uma ação própria, não um campo do formulário).
+    if (c.campo === 'Link Documento' || c.campo === 'Link Comprovante') {
+      const tipoAnexo = c.campo === 'Link Comprovante' ? 'comprovante' : 'documento';
+      const linkAtual = valorBruto || '';
+      const classeAnexo = tipoAnexo === 'comprovante'
+        ? `anexo-comp ${linkAtual ? 'anexo-definido-verde' : ''}`
+        : `anexo-doc ${linkAtual ? 'anexo-definido' : ''}`;
+      const rotuloBotao = tipoAnexo === 'comprovante' ? '🧾 Comprovante' : '📄 Documento';
+      const botao = `<button type="button" class="btn secundario small ${classeAnexo}" onclick="definirOuAbrirAnexo('${escaparAtributo(item.ID)}','${item.Origem}','${tipoAnexo}','${escaparAtributo(linkAtual)}')">${rotuloBotao}</button>`;
+      return `<div class="campo-detalhe">
+        <div class="rotulo-campo">${c.rotulo}</div>
+        <div class="valor-campo">${botao}</div>
+      </div>`;
+    }
     const podeEditar = editando && ehManual && !MODO_LEITURA && !c.somenteLeitura;
     let valorHtml;
     if (podeEditar) {
@@ -3160,7 +3182,14 @@ function renderizarDetalheAporte() {
     ultimoDetalheAporte = [];
     return;
   }
-  const itens = ultimoItensAnalise.filter((i) => calcularAporte(i['Vencimento']) === aporte);
+  let itens = ultimoItensAnalise.filter((i) => calcularAporte(i['Vencimento']) === aporte);
+  const busca = (document.getElementById('busca-detalhe-aporte').value || '').trim().toLowerCase();
+  if (busca) {
+    itens = itens.filter((i) => contemBusca([
+      fmtData(i['Data Emissão']), i.Tipo, i['Nº Documento'], `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(),
+      montarDescricaoAporte_(i), fmtData(i['Vencimento']), fmtMoeda(i['R$ Valor']),
+    ], busca));
+  }
   // Padrão na 1ª vez que esta tabela é ordenada na sessão (ninguém clicou
   // num cabeçalho ainda): Venc., mais antigo primeiro — igual ao
   // comportamento fixo que este recurso substitui.
@@ -3187,6 +3216,7 @@ function renderizarDetalheAporte() {
   atualizarSetasOrdenacao('tabela-detalhe-aporte');
 }
 document.getElementById('select-aporte-detalhe').addEventListener('change', renderizarDetalheAporte);
+document.getElementById('busca-detalhe-aporte').addEventListener('input', renderizarDetalheAporte);
 
 // ---------- Análise (achados analíticos, calculados ao vivo) ----------
 let ultimoDadosAnalise = [];
