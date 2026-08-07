@@ -1431,17 +1431,23 @@ function fmtData(v) {
   return `${dia}/${mes}/${d.getUTCFullYear()}`;
 }
 // O Protheus às vezes embute no próprio Histórico o mesmo "Tipo Nº
-// Documento" que já aparece na coluna N/Doc. ao lado (ex.: histórico
-// "MADEIREIRA CASTELO - 3/3 - NF 367 - TABUA MISTA..." quando N/Doc. já é
-// "NF 367") — tira essa repetição da descrição exibida/exportada em
-// Detalhe por Aporte. Não faz nada quando o histórico não repete o
-// número (a maioria dos casos), só limpa hífens soltos que sobrarem.
-function limparNumeroDocDoHistorico_(historico, nDoc) {
+// Documento" que já aparece na coluna N/Doc. ao lado, e também a fração de
+// parcela (ex.: histórico "3/3 - NF 367 - TABUA MISTA..." quando N/Doc. já
+// é "NF 367" e Parcela já é "3") — tira essas repetições da descrição
+// exibida/exportada em Detalhe por Aporte, já que a parcela volta a
+// aparecer sozinha no final ("PARC.: 3"). Não faz nada quando o histórico
+// não repete essas informações (a maioria dos casos), só limpa hífens
+// soltos que sobrarem.
+function limparNumeroDocDoHistorico_(historico, nDoc, parcela) {
   if (!historico) return historico || '';
   let h = historico;
   if (nDoc) {
     const escapado = nDoc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     h = h.replace(new RegExp(escapado, 'i'), '');
+  }
+  if (parcela) {
+    const escapadaParcela = String(parcela).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    h = h.replace(new RegExp('\\b0*' + escapadaParcela + '\\s*/\\s*\\d+\\b'), '');
   }
   return h.replace(/\s*-\s*-\s*/g, ' - ').replace(/^\s*-\s*/, '').replace(/\s*-\s*$/, '').trim();
 }
@@ -1450,7 +1456,7 @@ function limparNumeroDocDoHistorico_(historico, nDoc) {
 // ordenação da coluna Descrição), pra nunca ficarem divergentes.
 function montarDescricaoAporte_(i) {
   const nDoc = `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim();
-  const partes = [i['Razão Social'], limparNumeroDocDoHistorico_(i['Histórico'], nDoc)].filter(Boolean);
+  const partes = [i['Razão Social'], limparNumeroDocDoHistorico_(i['Histórico'], nDoc, i['Parcela'])].filter(Boolean);
   let descricao = partes.join(' - ');
   if (i['Parcela']) descricao += ` - PARC.: ${i['Parcela']}`;
   return descricao;
