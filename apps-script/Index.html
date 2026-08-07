@@ -1664,9 +1664,18 @@ function combinadoParaAnalise() {
   return erpFiltrado().concat(manualFiltrado().filter(m => m.Status !== 'Duplicado – revisar'));
 }
 
+// Quebra a busca em termos (por espaço) e exige que TODOS apareçam em
+// algum lugar do texto, em qualquer ordem — "LDA 6478" e "6478 LDA" acham
+// o mesmo resultado, e dá pra digitar quantos termos quiser.
+function correspondeBusca(texto, busca) {
+  if (!busca) return true;
+  const alvo = String(texto == null ? '' : texto).toLowerCase();
+  return busca.toLowerCase().split(/\s+/).filter(Boolean).every(termo => alvo.includes(termo));
+}
+
 function contemBusca(valores, busca) {
   if (!busca) return true;
-  return valores.some(v => String(v == null ? '' : v).toLowerCase().includes(busca));
+  return correspondeBusca(valores.map(v => String(v == null ? '' : v)).join(' ␟ '), busca);
 }
 
 // Mesmo formato de totalizador em todas as planilhas da tela: "N
@@ -2658,7 +2667,7 @@ function textoBuscavel(i) {
     i['Data Baixa'], fmtData(i['Data Baixa']),
     i['R$ Valor'], fmtMoeda(i['R$ Valor']),
     i['Usuário Inclusor'], i['Razão Social'],
-    i['Aprovação Remessa'], i['Remessa'], i['Histórico'],
+    i['Aprovação Remessa'], i['Remessa'], i['Histórico'], i['Observação'],
   ].map(v => String(v == null ? '' : v).toLowerCase()).join(' ␟ ');
 }
 
@@ -2908,7 +2917,7 @@ function renderizarLancamentos() {
   if (fOrigem) itens = itens.filter(i => i.Origem === fOrigem);
   if (fStatus) itens = itens.filter(i => i.Status === fStatus);
   if (fAporte) itens = itens.filter(i => i.Aporte === fAporte);
-  if (busca) itens = itens.filter(i => textoBuscavel(i).includes(busca));
+  if (busca) itens = itens.filter(i => correspondeBusca(textoBuscavel(i), busca));
 
   itens.sort((a, b) => (paraData(b['Vencimento']) || 0) - (paraData(a['Vencimento']) || 0));
   itens = aplicarOrdenacao('tabela-lancamentos', itens, extratoresLancamentosEmOrdem());
