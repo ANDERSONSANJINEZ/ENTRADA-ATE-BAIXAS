@@ -597,15 +597,8 @@ function api_definirAnexo(payload) {
 var PASTAS_BUSCA_ANEXO = [
   '1srFnPfX6BCMYEShfDlF6H7nSiJD4aeef', // 03 DOC FISCAL FATURA E RECIBO (documentos — NF, FAT, BOL...)
   '18nuIj4SsAEqPJ7jOxlUe8JzJ8TCNcueL', // CE-007 - ANALISE DE NOTAS -> GILBERTO (documentos)
-  '1leuDOfqLFDxdg3PECZ6aij2eIkPGKwq6', // 16 COMPROVANTE PAGTO, organizada por ano/mês (comprovantes de pagamento —
-  // é ONDE de fato ficam os comprovantes; a 1ª tentativa desse recurso só
-  // buscava nas duas pastas de documento acima, por isso nunca achava
-  // comprovante nenhum — indicada pelo Anderson depois de conferir.)
+  '1leuDOfqLFDxdg3PECZ6aij2eIkPGKwq6', // 16 COMPROVANTE PAGTO, organizada por ano/mês (comprovantes de pagamento)
 ];
-// Nome de subpasta pra pular na busca (só desperdiça tempo, nunca tem nota/
-// comprovante de fornecedor) — comparação sem acento/maiúscula, ver
-// normalizarTextoBusca_.
-var PASTAS_IGNORADAS_NA_BUSCA = ['TEMP'];
 
 function normalizarTextoBusca_(s) {
   return String(s || '')
@@ -615,20 +608,22 @@ function normalizarTextoBusca_(s) {
     .trim();
 }
 
-// Desce até 3 níveis de subpasta (as pastas reais têm 1-2 níveis; o limite é
-// só uma trava de segurança pra nunca varrer o Drive inteiro se alguém um
-// dia apontar PASTAS_BUSCA_ANEXO pra uma pasta errada). Só PDF: é o único
-// formato usado nessas pastas.
-function listarArquivosRecursivo_(pasta, profundidade, resultado) {
-  if (profundidade > 3) return;
-  var arquivos = pasta.getFilesByType(MimeType.PDF);
-  while (arquivos.hasNext()) resultado.push(arquivos.next());
-  var subpastas = pasta.getFolders();
-  while (subpastas.hasNext()) {
-    var subpasta = subpastas.next();
-    if (PASTAS_IGNORADAS_NA_BUSCA.indexOf(normalizarTextoBusca_(subpasta.getName())) !== -1) continue;
-    listarArquivosRecursivo_(subpasta, profundidade + 1, resultado);
+// Confere se um arquivo está DENTRO de uma das pastas em PASTAS_BUSCA_ANEXO
+// (em qualquer nível — ex.: 16 COMPROVANTE PAGTO/2026/07 2026/arquivo.pdf),
+// subindo pela cadeia de pastas-pai até achar uma bater ou esgotar os
+// níveis (a estrutura real tem no máximo 2-3 níveis; 6 é só uma folga de
+// segurança). Só considera o 1º pai de cada nível — arquivo com mais de
+// uma pasta-pai é raríssimo nessa estrutura organizada por ano/mês.
+function arquivoDentroDasPastasAlvo_(arquivo) {
+  var atual = arquivo;
+  for (var nivel = 0; nivel < 6; nivel++) {
+    var pais = atual.getParents();
+    if (!pais.hasNext()) return false;
+    var pai = pais.next();
+    if (PASTAS_BUSCA_ANEXO.indexOf(pai.getId()) !== -1) return true;
+    atual = pai;
   }
+  return false;
 }
 
 // Busca no Drive um documento/comprovante pra um título — usada pelo botão
@@ -639,15 +634,23 @@ function listarArquivosRecursivo_(pasta, profundidade, resultado) {
 // como palavra inteira no nome E (o Código Fornecedor aparecer no nome OU
 // pelo menos uma palavra de 4+ letras da Razão Social aparecer também),
 // pra não sugerir qualquer arquivo que só por acaso tenha o mesmo número.
-// (Uma versão antiga desse recurso, bem menos rigorosa, foi removida por
-// não encontrar os arquivos de forma confiável — ver git log.)
-// Prefixos observados nas pastas pra arquivo de comprovante de pagamento
-// (diferente do Tipo do título em si — NF/FAT/BOL/etc — que é o documento).
+//
+// Usa DriveApp.searchFiles() (o índice de busca do Drive) em vez de varrer
+// pasta por pasta — a 1ª versão fazia isso manualmente (getFolders/
+// getFilesByType recursivo) e ficava lenta/travada demais pra ser usável:
+// "16 COMPROVANTE PAGTO" sozinha tem dezenas de subpastas por ano/mês, cada
+// uma com muitos arquivos. A busca aqui é ampla (Drive inteiro, pelo nome
+// conter o Nº Documento) só pra achar candidatos rápido; o filtro de
+// pontuação abaixo, MAIS a conferência de que o arquivo realmente está
+// dentro de uma das pastas conhecidas (arquivoDentroDasPastasAlvo_), é que
+// garante que só aparece o que é de verdade um documento/comprovante desse
+// título — nunca mostra nada de fora dessas pastas.
 var PREFIXOS_COMPROVANTE = ['COMPROVANTE', 'REC'];
 
 function api_buscarAnexoDrive(payload) {
   validarAcessoEdicao_(payload);
-  var nDocAlvo = normalizarTextoBusca_(removerZerosEsquerda_(String(payload.nDocumento || '')));
+  var nDocOriginal = removerZerosEsquerda_(String(payload.nDocumento || '')).trim();
+  var nDocAlvo = normalizarTextoBusca_(nDocOriginal);
   if (!nDocAlvo) return { candidatos: [] };
   var codigoAlvo = normalizarTextoBusca_(removerZerosEsquerda_(String(payload.codigoFornecedor || '')));
   var palavrasFornecedor = normalizarTextoBusca_(payload.razaoSocial).split(' ')
@@ -655,25 +658,33 @@ function api_buscarAnexoDrive(payload) {
   var tipoTitulo = normalizarTextoBusca_(payload.tipoDocumento); // Tipo do título (NF, FAT, BOL...)
   var buscandoComprovante = payload.tipo === 'comprovante';
 
-  var todosArquivos = [];
-  var pastasComErro = [];
-  PASTAS_BUSCA_ANEXO.forEach(function (id) {
-    try {
-      listarArquivosRecursivo_(DriveApp.getFolderById(id), 0, todosArquivos);
-    } catch (e) {
-      pastasComErro.push(id + ': ' + e.message); // uma pasta falhando não impede buscar nas outras
-    }
-  });
+  var termoEscapado = nDocOriginal.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var query = "mimeType = 'application/pdf' and trashed = false and title contains '" + termoEscapado + "'";
+  var resultadosBrutos;
+  try {
+    resultadosBrutos = DriveApp.searchFiles(query);
+  } catch (e) {
+    return { candidatos: [], erro: 'Não foi possível buscar no Drive: ' + e.message };
+  }
 
-  var candidatos = todosArquivos.map(function (arquivo) {
+  var candidatos = [];
+  var verificados = 0;
+  // Trava de segurança pra nunca processar um número absurdo de resultados
+  // (ex.: um Nº Documento bem curto e genérico batendo com meio Drive) —
+  // suficiente pra qualquer busca real: o filtro de pontuação abaixo já é
+  // rigoroso, então os candidatos de verdade aparecem bem antes disso.
+  while (resultadosBrutos.hasNext() && verificados < 300) {
+    var arquivo = resultadosBrutos.next();
+    verificados++;
+    if (!arquivoDentroDasPastasAlvo_(arquivo)) continue;
     var nome = arquivo.getName();
     var nomeNorm = normalizarTextoBusca_(nome);
     var tokens = nomeNorm.split(' ');
-    if (tokens.indexOf(nDocAlvo) === -1) return null; // Nº Documento tem que bater como token inteiro
+    if (tokens.indexOf(nDocAlvo) === -1) continue; // Nº Documento tem que bater como palavra inteira
     var pontuacao = 1;
     if (codigoAlvo && nomeNorm.indexOf(codigoAlvo) !== -1) pontuacao += 2;
     pontuacao += palavrasFornecedor.filter(function (p) { return nomeNorm.indexOf(p) !== -1; }).length;
-    if (pontuacao < 2) return null; // só nº bater não basta — exige código OU nome do fornecedor também
+    if (pontuacao < 2) continue; // só nº bater não basta — exige código OU nome do fornecedor também
     // Prioriza o arquivo do tipo certo pro campo que está sendo preenchido
     // (documento x comprovante) — sem excluir o outro tipo, só ordenando
     // melhor, já que às vezes só um dos dois foi de fato salvo no Drive.
@@ -681,22 +692,11 @@ function api_buscarAnexoDrive(payload) {
     var ehComprovante = PREFIXOS_COMPROVANTE.indexOf(primeiroToken) !== -1;
     if (buscandoComprovante && ehComprovante) pontuacao += 1;
     if (!buscandoComprovante && tipoTitulo && primeiroToken === tipoTitulo) pontuacao += 1;
-    return { nome: nome, url: arquivo.getUrl(), pontuacao: pontuacao };
-  }).filter(function (c) { return c; });
+    candidatos.push({ nome: nome, url: arquivo.getUrl(), pontuacao: pontuacao });
+  }
 
   candidatos.sort(function (a, b) { return b.pontuacao - a.pontuacao; });
-  var resposta = { candidatos: candidatos.slice(0, 5) };
-  // Só avisa se TODAS as pastas falharam — uma sozinha falhando não é grave
-  // (ainda sobram as outras pra buscar). Isso existe pra não repetir o
-  // problema de "não achou nada" sem dar nenhuma pista do motivo: se isso
-  // aparecer, o mais provável é o projeto do Apps Script ainda não ter sido
-  // reautorizado pra acessar o Drive (primeira vez que este código roda) —
-  // abra o editor do Apps Script, rode qualquer função uma vez na mão e
-  // aceite a permissão de Drive quando for pedida.
-  if (pastasComErro.length === PASTAS_BUSCA_ANEXO.length) {
-    resposta.erro = 'Não foi possível acessar nenhuma das pastas de busca (' + pastasComErro.join(' | ') + ').';
-  }
-  return resposta;
+  return { candidatos: candidatos.slice(0, 5) };
 }
 
 // Campos que o modal de detalhamento pode alterar num lançamento MANUAL —
