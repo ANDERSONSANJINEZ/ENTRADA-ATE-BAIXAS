@@ -19,7 +19,7 @@ var HEADERS = [
   'Forma Pagamento', 'Código Fornecedor', 'Parcela', 'Data Baixa',
   'Vencimento', 'R$ Valor', 'Usuário Inclusor', 'Razão Social',
   'Aprovação Remessa', 'Remessa', 'Histórico', 'Origem', 'Status',
-  'Link Documento', 'Link Comprovante', 'Chave Pix'
+  'Link Documento', 'Link Comprovante', 'Chave Pix', 'Observação'
 ];
 
 // Perfis de acesso restrito por link próprio: ?usuario=<chave> na URL do
@@ -373,21 +373,23 @@ function chaveAnexo_(item) {
 function substituirErp_(itens, dataBase) {
   var sh = getSheet_('ERP');
 
-  // Antes de apagar tudo, guarda os links de anexo já cadastrados
-  // manualmente, pra não perdê-los na reimportação diária (o ERP inteiro é
-  // substituído a cada import, então sem isso todo link se perderia).
+  // Antes de apagar tudo, guarda os links de anexo e a Observação já
+  // cadastrados manualmente, pra não perder na reimportação diária (o ERP
+  // inteiro é substituído a cada import, então sem isso tudo isso se
+  // perderia).
   var linksAnteriores = {};
   var ultimaLinhaAntiga = sh.getLastRow();
   if (ultimaLinhaAntiga > 1) {
     var colDoc = HEADERS.indexOf('Link Documento');
     var colComp = HEADERS.indexOf('Link Comprovante');
+    var colObs = HEADERS.indexOf('Observação');
     var dadosAntigos = sh.getRange(2, 1, ultimaLinhaAntiga - 1, HEADERS.length).getValues();
     dadosAntigos.forEach(function (linha) {
-      var linkDoc = linha[colDoc], linkComp = linha[colComp];
-      if (!linkDoc && !linkComp) return;
+      var linkDoc = linha[colDoc], linkComp = linha[colComp], observacao = linha[colObs];
+      if (!linkDoc && !linkComp && !observacao) return;
       var obj = {};
       HEADERS.forEach(function (h, i) { obj[h] = linha[i]; });
-      linksAnteriores[chaveAnexo_(obj)] = { doc: linkDoc, comp: linkComp };
+      linksAnteriores[chaveAnexo_(obj)] = { doc: linkDoc, comp: linkComp, obs: observacao };
     });
   }
 
@@ -402,6 +404,7 @@ function substituirErp_(itens, dataBase) {
       if (h === 'Status') return 'OK';
       if (h === 'Link Documento') return (preservado && preservado.doc) || '';
       if (h === 'Link Comprovante') return (preservado && preservado.comp) || '';
+      if (h === 'Observação') return (preservado && preservado.obs) || '';
       return item[h] != null ? item[h] : '';
     });
   });
@@ -587,6 +590,32 @@ function api_definirAnexo(payload) {
   throw new Error('Lançamento não encontrado (pode ter sido removido ou reimportado).');
 }
 
+// Observação livre por lançamento — mesma lógica de api_definirAnexo (só
+// grava 1 coluna, funciona pra ERP e Manual) mas pra texto livre em vez de
+// link. Sobrevive a reimportação do ERP (ver substituirErp_).
+function api_definirObservacao(payload) {
+  var nomeUsuario = validarAcessoEdicao_(payload);
+  var origem = payload.origem === 'Manual' ? 'Manual' : 'ERP';
+  var colIdx = HEADERS.indexOf('Observação') + 1;
+  var idCol = HEADERS.indexOf('ID') + 1;
+  var docCol = HEADERS.indexOf('Nº Documento') + 1;
+  var razaoCol = HEADERS.indexOf('Razão Social') + 1;
+
+  var sh = getSheet_(origem);
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha < 2) throw new Error('Lançamento não encontrado.');
+  var dados = sh.getRange(2, 1, ultimaLinha - 1, HEADERS.length).getValues();
+  for (var i = 0; i < dados.length; i++) {
+    if (dados[i][idCol - 1] === payload.id) {
+      sh.getRange(i + 2, colIdx).setValue(String(payload.valor || ''));
+      registrarLog_(nomeUsuario, 'Definir observação',
+        (dados[i][razaoCol - 1] || '') + ' Nº ' + (dados[i][docCol - 1] || '') + (payload.valor ? ': ' + payload.valor : ' (removida)'));
+      return api_carregar();
+    }
+  }
+  throw new Error('Lançamento não encontrado (pode ter sido removido ou reimportado).');
+}
+
 // Pastas do Drive onde os documentos/comprovantes recebidos (e-mail,
 // WhatsApp etc.) são organizados manualmente — as mesmas duas pastas usadas
 // pela rotina de importação de notas (ver skill controle-financeiro-pdf-import):
@@ -647,33 +676,53 @@ function arquivoDentroDasPastasAlvo_(arquivo) {
 // título — nunca mostra nada de fora dessas pastas.
 var PREFIXOS_COMPROVANTE = ['COMPROVANTE', 'REC'];
 
+// Código Fornecedor no Protheus é sempre um número de 8 ou 9 dígitos (com
+// zero(s) à esquerda quando precisa) — mas o app guarda esse código já SEM
+// esses zeros (removerZerosEsquerda_, aplicado na importação — ver
+// parseArquivoProtheus no Index.html), enquanto o nome do arquivo no Drive
+// tem o código como o Protheus mostra de verdade, COM os zeros. Pra achar
+// de qualquer jeito, testa as duas larguras possíveis (8 e 9) em vez de só
+// o código sem zeros — devolve 1 ou 2 strings, sempre com 8 ou 9 dígitos.
+function paddingsFornecedor_(codigo) {
+  var digitos = String(codigo || '').replace(/\D/g, '');
+  if (!digitos) return [];
+  var resultado = [];
+  [8, 9].forEach(function (largura) {
+    if (digitos.length > largura) return;
+    var comZeros = ('000000000' + digitos).slice(-largura);
+    if (resultado.indexOf(comZeros) === -1) resultado.push(comZeros);
+  });
+  if (!resultado.length) resultado.push(digitos); // código com mais de 9 dígitos — caso raro, usa como está
+  return resultado;
+}
+
 function api_buscarAnexoDrive(payload) {
   validarAcessoEdicao_(payload);
   var nDocOriginal = removerZerosEsquerda_(String(payload.nDocumento || '')).trim();
   var nDocAlvo = normalizarTextoBusca_(nDocOriginal);
   if (!nDocAlvo) return { candidatos: [] };
-  var codigoAlvo = normalizarTextoBusca_(removerZerosEsquerda_(String(payload.codigoFornecedor || '')));
+  var codigosFornecedor = paddingsFornecedor_(payload.codigoFornecedor); // ex.: ["64781522"] ou ["00005678","000005678"]
   // Sem Código Fornecedor pra combinar na busca, um Nº Documento bem curto
   // (1-2 caracteres) sozinho bateria com uma fração enorme do Drive — nem
   // tenta, pra não travar sem achar nada de útil mesmo.
-  if (!codigoAlvo && nDocAlvo.length < 3) return { candidatos: [] };
+  if (!codigosFornecedor.length && nDocAlvo.length < 3) return { candidatos: [] };
   var palavrasFornecedor = normalizarTextoBusca_(payload.razaoSocial).split(' ')
     .filter(function (p) { return p.length >= 4; });
   var buscandoComprovante = payload.tipo === 'comprovante';
 
-  // Combina Nº Documento + Código Fornecedor na busca sempre que o código
-  // estiver disponível (é o caso normal) — os dois juntos aparecem em TODO
-  // nome de arquivo dessas pastas (confirmado pelo Anderson: "NFS 1 LDA
-  // ENGENHARIA 64781522"), então isso deixa a busca bem mais seletiva.
-  // Sem o código, um Nº Documento curto e comum sozinho (ex.: "1", "2")
-  // bate com uma fração enorme do Drive inteiro (qualquer nome com esse
-  // dígito em algum lugar — data, quantidade etc.) e a busca nunca
-  // terminava de forma perceptível.
+  // Combina Nº Documento + Código Fornecedor (nas duas larguras possíveis,
+  // 8 e 9 dígitos) na busca sempre que o código estiver disponível (é o
+  // caso normal) — os dois juntos aparecem em TODO nome de arquivo dessas
+  // pastas (confirmado pelo Anderson: "NFS 1 LDA ENGENHARIA 64781522"),
+  // então isso deixa a busca bem mais seletiva. Sem o código, um Nº
+  // Documento curto e comum sozinho (ex.: "1", "2") bate com uma fração
+  // enorme do Drive inteiro (qualquer nome com esse dígito em algum lugar
+  // — data, quantidade etc.) e a busca nunca terminava de forma
+  // perceptível.
   var escapar_ = function (v) { return String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
   var query = "mimeType = 'application/pdf' and trashed = false and title contains '" + escapar_(nDocOriginal) + "'";
-  var codigoFornecedorOriginal = String(payload.codigoFornecedor || '').trim();
-  if (codigoFornecedorOriginal) {
-    query += " and title contains '" + escapar_(codigoFornecedorOriginal) + "'";
+  if (codigosFornecedor.length) {
+    query += ' and (' + codigosFornecedor.map(function (c) { return "title contains '" + escapar_(c) + "'"; }).join(' or ') + ')';
   }
   var resultadosBrutos;
   try {
@@ -695,9 +744,14 @@ function api_buscarAnexoDrive(payload) {
     var nome = arquivo.getName();
     var nomeNorm = normalizarTextoBusca_(nome);
     var tokens = nomeNorm.split(' ');
-    if (tokens.indexOf(nDocAlvo) === -1) continue; // Nº Documento tem que bater como palavra inteira
+    // Nº Documento sempre vem logo depois do Tipo/COMPROVANTE (tokens[0]) —
+    // posição exata, não só "em algum lugar do nome" — pra não confundir
+    // com o mesmo número aparecendo em outra parte do nome por coincidência
+    // (ex.: dentro do próprio Código Fornecedor).
+    if (tokens[1] !== nDocAlvo) continue;
     var pontuacao = 1;
-    if (codigoAlvo && nomeNorm.indexOf(codigoAlvo) !== -1) pontuacao += 2;
+    var codigoBate = codigosFornecedor.some(function (c) { return nomeNorm.indexOf(c) !== -1; });
+    if (codigoBate) pontuacao += 2;
     pontuacao += palavrasFornecedor.filter(function (p) { return nomeNorm.indexOf(p) !== -1; }).length;
     if (pontuacao < 2) continue; // só nº bater não basta — exige código OU nome do fornecedor também
     // Cada botão só pode sugerir o arquivo do tipo certo pra ele — nunca os
@@ -789,6 +843,7 @@ function doPost(e) {
     else if (acao === 'removerDuplicados') resultado = api_removerDuplicados(payload);
     else if (acao === 'definirAnexo') resultado = api_definirAnexo(payload);
     else if (acao === 'buscarAnexoDrive') resultado = api_buscarAnexoDrive(payload);
+    else if (acao === 'definirObservacao') resultado = api_definirObservacao(payload);
     else if (acao === 'validarEdicao') resultado = api_validarEdicao(payload);
     else if (acao === 'carregarLog') resultado = api_carregarLog(payload);
     else if (acao === 'salvarConciliacao') resultado = api_salvarConciliacao(payload);
