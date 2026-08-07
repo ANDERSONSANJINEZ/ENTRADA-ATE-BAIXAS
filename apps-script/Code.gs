@@ -659,7 +659,6 @@ function api_buscarAnexoDrive(payload) {
   if (!codigoAlvo && nDocAlvo.length < 3) return { candidatos: [] };
   var palavrasFornecedor = normalizarTextoBusca_(payload.razaoSocial).split(' ')
     .filter(function (p) { return p.length >= 4; });
-  var tipoTitulo = normalizarTextoBusca_(payload.tipoDocumento); // Tipo do título (NF, FAT, BOL...)
   var buscandoComprovante = payload.tipo === 'comprovante';
 
   // Combina Nº Documento + Código Fornecedor na busca sempre que o código
@@ -701,13 +700,17 @@ function api_buscarAnexoDrive(payload) {
     if (codigoAlvo && nomeNorm.indexOf(codigoAlvo) !== -1) pontuacao += 2;
     pontuacao += palavrasFornecedor.filter(function (p) { return nomeNorm.indexOf(p) !== -1; }).length;
     if (pontuacao < 2) continue; // só nº bater não basta — exige código OU nome do fornecedor também
-    // Prioriza o arquivo do tipo certo pro campo que está sendo preenchido
-    // (documento x comprovante) — sem excluir o outro tipo, só ordenando
-    // melhor, já que às vezes só um dos dois foi de fato salvo no Drive.
+    // Cada botão só pode sugerir o arquivo do tipo certo pra ele — nunca os
+    // dois juntos (documento e comprovante são coisas diferentes, mesmo
+    // quando os dois existem pro mesmo título): comprovante só aceita
+    // arquivo que comece com um dos PREFIXOS_COMPROVANTE; documento só
+    // aceita o que NÃO comece com um deles (a 1ª palavra vira o Tipo do
+    // título — NF, FAT, BOL... — então checar "não é comprovante" cobre
+    // qualquer Tipo, sem precisar bater exatamente com o Tipo salvo nessa
+    // linha, que pode variar).
     var primeiroToken = tokens[0];
     var ehComprovante = PREFIXOS_COMPROVANTE.indexOf(primeiroToken) !== -1;
-    if (buscandoComprovante && ehComprovante) pontuacao += 1;
-    if (!buscandoComprovante && tipoTitulo && primeiroToken === tipoTitulo) pontuacao += 1;
+    if (buscandoComprovante !== ehComprovante) continue;
     candidatos.push({ nome: nome, url: arquivo.getUrl(), pontuacao: pontuacao });
   }
 

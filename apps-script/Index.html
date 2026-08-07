@@ -1053,7 +1053,15 @@ async function buscarSugestoesAnexo(item, tipo) {
   if (dados && dados.erro) { caixa.innerHTML = `<span style="color:var(--vermelho)">${escaparHtml(dados.erro)}</span>`; return; }
   const candidatos = (dados && dados.candidatos) || [];
   if (!candidatos.length) { caixa.innerHTML = ''; return; }
-  caixa.innerHTML = '<div style="color:var(--cinza); margin-bottom:6px;">Encontrado(s) no Drive — clique pra usar:</div>' +
+  // Já cola o melhor candidato (1º, o servidor devolve ordenado por
+  // pontuação) direto no campo — sem precisar clicar em nada — já que
+  // "Confirmar" continua obrigatório pra gravar; só está pronto pra
+  // conferir/confirmar mais rápido. Só faz isso se o campo ainda estiver
+  // vazio (não sobrescreve nada que a pessoa já tenha digitado enquanto a
+  // busca corria).
+  const input = document.getElementById('input-anexo');
+  if (!input.value) input.value = candidatos[0].url;
+  caixa.innerHTML = '<div style="color:var(--cinza); margin-bottom:6px;">Encontrado(s) no Drive (já colado no campo abaixo) — clique pra trocar:</div>' +
     candidatos.map((c) => `<button type="button" class="btn secundario small" style="display:block; width:100%; text-align:left; margin-bottom:4px; white-space:normal;" onclick="selecionarSugestaoAnexo('${escaparAtributo(c.url)}')" title="Abrir em outra aba pra conferir antes de usar">📄 ${escaparHtml(c.nome)}</button>`).join('');
 }
 function selecionarSugestaoAnexo(url) {
