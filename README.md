@@ -40,6 +40,12 @@ Funcionalidades:
 - Filtro de período (Data Inicial/Final) no cabeçalho, aplicado globalmente
   ao Dashboard e à aba Lançamentos.
 - Busca única por aba e exportação em CSV em todas as tabelas/painéis.
+- Aba **Atualizar Dados** → **Separar comprovantes bancários**: recebe até
+  três lotes de PDF do banco (boletos, contas e Pix — um comprovante por
+  página cada), separa cada página num PDF individual nomeado pela
+  Descrição encontrada nela, e devolve um `.zip` organizado por tipo.
+  Processamento inteiro no navegador (sem passar pela planilha nem pelo
+  servidor Apps Script).
 
 ## Uso do dia a dia
 
