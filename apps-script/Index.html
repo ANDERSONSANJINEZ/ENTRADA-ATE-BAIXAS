@@ -371,7 +371,7 @@
 <nav>
   <button class="ativo" data-aba="dashboard">Dashboard</button>
   <button data-aba="lancamentos">Lançamentos</button>
-  <button data-aba="detalhe-aporte">Detalhe por Aporte</button>
+  <button data-aba="detalhe-aporte">Aporte</button>
   <button data-aba="analise">Análise</button>
   <button data-aba="conciliacao">Conciliação</button>
   <button data-aba="historico">Histórico</button>
@@ -537,7 +537,7 @@
   <section id="aba-detalhe-aporte" class="aba">
     <div class="painel">
       <div class="cabecalho-painel">
-        <h2>Detalhe por Aporte</h2>
+        <h2>Aporte</h2>
         <button class="btn secundario small" onclick="exportarXlsx('detalheAporte')">⬇ Exportar Excel</button>
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:0;">
@@ -2000,6 +2000,133 @@ async function baixarXlsx(nomeArquivo, cabecalhos, linhas, opcoes) {
   toast('Exportado: ' + nomeArquivo);
 }
 
+const DIAS_SEMANA_PT_ = ['DOMINGO', 'SEGUNDA', 'TERCA', 'QUARTA', 'QUINTA', 'SEXTA', 'SABADO'];
+const FORMATO_MOEDA_XLSX_ = '"R$" #,##0.00;-"R$" #,##0.00';
+const BORDA_FINA_ = { style: 'thin', color: { argb: 'FF1E2430' } };
+const BORDA_GROSSA_ = { style: 'medium', color: { argb: 'FF1E2430' } };
+
+// Exportação "oficial" do Aporte — reproduz o modelo de planilha que o
+// financeiro já usa (RESUMO DE PAGAMENTOS ... APORTE Nº X), com os títulos
+// agrupados por dia útil de vencimento e, ao final de cada dia útil, uma
+// linha-resumo com o valor somado e o % do total daquele dia (colunas F/G/H
+// à direita da tabela). Os títulos com vencimento em sábado/domingo entram
+// no resumo do PRÓXIMO dia útil — o banco não processa pagamento em fim de
+// semana, então esses títulos são efetivamente pagos junto. É uma função
+// própria (não reaproveita baixarXlsx) porque tem título, cabeçalho fixo na
+// linha 4, fórmulas de soma/percentual e uma linha de total no fim.
+async function baixarXlsxAporte_(numeroAporte, itens) {
+  const n = parseInt(numeroAporte, 10);
+  const livro = new ExcelJS.Workbook();
+  const planilha = livro.addWorksheet(`APORTE ${n}`.slice(0, 31));
+
+  const periodo = periodoDoAporte(numeroAporte).replace(' – ', ' A ');
+  const tituloCel = planilha.getCell('C2');
+  tituloCel.value = `RESUMO DE PAGAMENTOS CONSORCIO VLT AEROCASTELÃO - APORTE Nº ${n} PERÍODO ${periodo}`;
+  tituloCel.font = { bold: true, size: 13 };
+
+  const PRIMEIRA_LINHA = 5;
+  const linhaCabecalho = planilha.getRow(4);
+  ['DATA', 'N/F', 'DESCRIÇÃO', 'VENC.', 'VALOR'].forEach((texto, idx) => {
+    const celula = linhaCabecalho.getCell(idx + 1);
+    celula.value = texto;
+    celula.font = { bold: true };
+    celula.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD8D8D8' } };
+    celula.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    celula.border = { top: BORDA_FINA_, bottom: BORDA_FINA_, left: BORDA_FINA_, right: BORDA_FINA_ };
+  });
+  linhaCabecalho.height = 24;
+
+  // 1ª passada: escreve as linhas de dado e já anota, por grupo (mesmo
+  // Vencimento, já que `itens` vem ordenado por Vencimento), a linha final
+  // e o dia da semana — usado na 2ª passada pra fechar os subtotais.
+  const grupos = []; // { fimLinha, diaSemana }
+  let vencAnteriorTexto = null;
+  let vencAnteriorRaw = null;
+  let linhaAtual = PRIMEIRA_LINHA;
+  itens.forEach((item) => {
+    const vencTexto = fmtData(item['Vencimento']);
+    const inicioDeGrupo = linhaAtual === PRIMEIRA_LINHA || vencAnteriorTexto !== vencTexto;
+    if (inicioDeGrupo && vencAnteriorTexto !== null) grupos.push({ fimLinha: linhaAtual - 1, diaSemana: paraData(vencAnteriorRaw).getUTCDay() });
+
+    const linha = planilha.getRow(linhaAtual);
+    linha.getCell(1).value = fmtData(item['Data Emissão']);
+    linha.getCell(2).value = `${item.Tipo || ''} ${item['Nº Documento'] || ''}`.trim();
+    linha.getCell(3).value = montarDescricaoAporte_(item);
+    linha.getCell(4).value = vencTexto;
+    linha.getCell(5).value = paraNumero(item['R$ Valor']);
+    linha.getCell(5).numFmt = FORMATO_MOEDA_XLSX_;
+    linha.getCell(1).alignment = { horizontal: 'center', vertical: 'center' };
+    linha.getCell(2).alignment = { horizontal: 'center', vertical: 'center' };
+    linha.getCell(3).alignment = { vertical: 'center' };
+    linha.getCell(4).alignment = { horizontal: 'center', vertical: 'center' };
+    linha.getCell(5).alignment = { vertical: 'center' };
+    for (let c = 1; c <= 5; c++) {
+      linha.getCell(c).border = {
+        top: inicioDeGrupo ? BORDA_GROSSA_ : BORDA_FINA_,
+        bottom: BORDA_FINA_, left: BORDA_FINA_, right: BORDA_FINA_,
+      };
+    }
+
+    vencAnteriorTexto = vencTexto;
+    vencAnteriorRaw = item['Vencimento'];
+    linhaAtual++;
+  });
+  const ultimaLinha = linhaAtual - 1;
+  if (ultimaLinha >= PRIMEIRA_LINHA) grupos.push({ fimLinha: ultimaLinha, diaSemana: paraData(vencAnteriorRaw).getUTCDay() });
+
+  // 2ª passada: fecha o subtotal de cada dia ÚTIL (seg-sex). Um grupo cujo
+  // vencimento cai no fim de semana não fecha subtotal — fica "em aberto"
+  // e o próximo dia útil absorve tudo desde o último fechamento.
+  const totalRow = ultimaLinha + 1;
+  let inicioAberto = PRIMEIRA_LINHA;
+  grupos.forEach((g) => {
+    if (g.diaSemana < 1 || g.diaSemana > 5) return; // fim de semana: não fecha
+    const linha = planilha.getRow(g.fimLinha);
+    const celF = linha.getCell(6), celG = linha.getCell(7), celH = linha.getCell(8);
+    celF.value = { formula: `SUM(E${inicioAberto}:E${g.fimLinha})` };
+    celF.numFmt = FORMATO_MOEDA_XLSX_;
+    celF.font = { bold: true, color: { argb: 'FF0070C0' } };
+    celG.value = { formula: `F${g.fimLinha}/$E$${totalRow}` };
+    celG.numFmt = '0.0%';
+    celG.font = { bold: true };
+    celG.alignment = { horizontal: 'right', vertical: 'center' };
+    celH.value = DIAS_SEMANA_PT_[g.diaSemana];
+    celH.font = { bold: true, color: { argb: 'FF0070C0' } };
+    celH.alignment = { horizontal: 'center', vertical: 'center' };
+    inicioAberto = g.fimLinha + 1;
+  });
+
+  if (ultimaLinha >= PRIMEIRA_LINHA) {
+    const linhaTotal = planilha.getRow(totalRow);
+    const celC = linhaTotal.getCell(3), celE = linhaTotal.getCell(5);
+    celC.value = 'VALOR TOTAL';
+    celE.value = { formula: `SUM(E${PRIMEIRA_LINHA}:E${ultimaLinha})` };
+    celE.numFmt = FORMATO_MOEDA_XLSX_;
+    [celC, celE].forEach((c) => {
+      c.font = { bold: true };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+      c.alignment = { horizontal: 'center', vertical: 'center' };
+    });
+  }
+
+  planilha.columns = [
+    { width: 12 }, { width: 17 }, { width: 90 }, { width: 14 }, { width: 16 }, { width: 16 }, { width: 9 }, { width: 10 },
+  ];
+  planilha.views = [{ state: 'frozen', ySplit: 4 }];
+
+  const buffer = await livro.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `APORTE_${n}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  toast('Exportado: APORTE_' + n + '.xlsx');
+}
+
 // Exporta os dados exatamente como estão na tela (com os filtros/ordenação
 // aplicados no momento).
 function exportarXlsx(qual) {
@@ -2036,23 +2163,14 @@ function exportarXlsx(qual) {
     const linhas = ultimoDadosPagosAbc.map(([nome, mes, valor]) => [nome, mes, fmtMoeda(valor)]);
     baixarXlsx('pagos_curva_abc.xlsx', ['Fornecedor', 'Mês', 'Valor Pago'], linhas);
   } else if (qual === 'detalheAporte') {
-    // Mesma marcação de grupo (troca de Vencimento) usada na tela via
-    // tr.separador-grupo — replicada aqui como borda superior mais grossa.
-    let vencAnterior = null;
-    const linhasComSeparador = new Set();
-    const linhas = ultimoDetalheAporte.map((i, idx) => {
-      const vencAtual = fmtData(i['Vencimento']);
-      if (vencAnterior !== null && vencAnterior !== vencAtual) linhasComSeparador.add(idx);
-      vencAnterior = vencAtual;
-      return [
-        fmtData(i['Data Emissão']),
-        `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(),
-        montarDescricaoAporte_(i),
-        vencAtual,
-        fmtMoeda(i['R$ Valor']),
-      ];
-    });
-    baixarXlsx('detalhe_aporte.xlsx', ['Data', 'N/Doc.', 'Descrição', 'Venc.', 'Valor'], linhas, { linhasComSeparador });
+    const numeroAporte = document.getElementById('select-aporte-detalhe').value;
+    if (!numeroAporte) { toast('Selecione um aporte antes de exportar.'); return; }
+    // A exportação segue sempre por Vencimento (mais antigo primeiro),
+    // independente da ordenação escolhida na tela — o agrupamento por dia
+    // útil (ver baixarXlsxAporte_) exige que os títulos do mesmo
+    // Vencimento fiquem em linhas seguidas.
+    const itens = ultimoDetalheAporte.slice().sort((a, b) => (paraData(a['Vencimento']) || 0) - (paraData(b['Vencimento']) || 0));
+    baixarXlsxAporte_(numeroAporte, itens);
   } else if (qual === 'analise') {
     baixarXlsx('analise.xlsx', ['Indicador', 'Valor'], ultimoDadosAnalise);
   } else if (qual === 'historico') {
