@@ -622,8 +622,12 @@ function api_definirObservacao(payload) {
 // Categoria do fornecedor definida manualmente — usada pela tela só quando
 // o "de-para" fixo por Código Fornecedor (mantido no front-end) não conhece
 // o fornecedor E o texto do Histórico também não dá pra usar como
-// aproximação. Mesma lógica de api_definirObservacao. Sobrevive a
-// reimportação do ERP (ver substituirErp_).
+// aproximação. Mesma lógica de api_definirObservacao, mas com um passo a
+// mais: ao gravar uma categoria (não ao remover), propaga o mesmo valor
+// pros demais títulos EM ABERTO (sem Data Baixa) do mesmo Código
+// Fornecedor — no ERP e no Manual — pra não obrigar a digitar de novo em
+// cada linha do mesmo fornecedor. Sobrevive a reimportação do ERP (ver
+// substituirErp_).
 function api_definirCategoria(payload) {
   var nomeUsuario = validarAcessoEdicao_(payload);
   var origem = payload.origem === 'Manual' ? 'Manual' : 'ERP';
@@ -631,20 +635,48 @@ function api_definirCategoria(payload) {
   var idCol = HEADERS.indexOf('ID') + 1;
   var docCol = HEADERS.indexOf('Nº Documento') + 1;
   var razaoCol = HEADERS.indexOf('Razão Social') + 1;
+  var fornCol = HEADERS.indexOf('Código Fornecedor') + 1;
+  var baixaCol = HEADERS.indexOf('Data Baixa') + 1;
 
   var sh = getSheet_(origem);
   var ultimaLinha = sh.getLastRow();
   if (ultimaLinha < 2) throw new Error('Lançamento não encontrado.');
   var dados = sh.getRange(2, 1, ultimaLinha - 1, HEADERS.length).getValues();
+  var linhaAlvo = -1;
   for (var i = 0; i < dados.length; i++) {
-    if (dados[i][idCol - 1] === payload.id) {
-      sh.getRange(i + 2, colIdx).setValue(String(payload.valor || ''));
-      registrarLog_(nomeUsuario, 'Definir categoria',
-        (dados[i][razaoCol - 1] || '') + ' Nº ' + (dados[i][docCol - 1] || '') + (payload.valor ? ': ' + payload.valor : ' (removida)'));
-      return api_carregar();
+    if (dados[i][idCol - 1] === payload.id) { linhaAlvo = i; break; }
+  }
+  if (linhaAlvo === -1) throw new Error('Lançamento não encontrado (pode ter sido removido ou reimportado).');
+
+  var valor = String(payload.valor || '');
+  sh.getRange(linhaAlvo + 2, colIdx).setValue(valor);
+
+  var qtdPropagada = 0;
+  if (valor) {
+    var fornecedorAlvo = removerZerosEsquerda_(String(dados[linhaAlvo][fornCol - 1] || '').trim());
+    if (fornecedorAlvo) {
+      ['ERP', 'Manual'].forEach(function (abaOrigem) {
+        var mesmaAba = abaOrigem === origem;
+        var shOrigem = mesmaAba ? sh : getSheet_(abaOrigem);
+        var ultimaLinhaOrigem = shOrigem.getLastRow();
+        if (ultimaLinhaOrigem < 2) return;
+        var dadosOrigem = mesmaAba ? dados : shOrigem.getRange(2, 1, ultimaLinhaOrigem - 1, HEADERS.length).getValues();
+        for (var j = 0; j < dadosOrigem.length; j++) {
+          if (mesmaAba && j === linhaAlvo) continue; // já gravado acima
+          if (dadosOrigem[j][baixaCol - 1]) continue; // só propaga pra título EM ABERTO
+          var fornecedorLinha = removerZerosEsquerda_(String(dadosOrigem[j][fornCol - 1] || '').trim());
+          if (fornecedorLinha !== fornecedorAlvo) continue;
+          shOrigem.getRange(j + 2, colIdx).setValue(valor);
+          qtdPropagada++;
+        }
+      });
     }
   }
-  throw new Error('Lançamento não encontrado (pode ter sido removido ou reimportado).');
+
+  registrarLog_(nomeUsuario, 'Definir categoria',
+    (dados[linhaAlvo][razaoCol - 1] || '') + ' Nº ' + (dados[linhaAlvo][docCol - 1] || '') + (valor ? ': ' + valor : ' (removida)') +
+    (qtdPropagada ? ' — aplicada também a mais ' + qtdPropagada + ' título(s) em aberto do mesmo fornecedor' : ''));
+  return api_carregar();
 }
 
 // Pastas do Drive onde os documentos/comprovantes recebidos (e-mail,
