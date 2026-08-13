@@ -429,31 +429,6 @@
         <canvas id="chart-categoria-custo"></canvas>
       </div>
     </div>
-    <div class="painel">
-      <div class="cabecalho-painel">
-        <h2>Curva ABC dos fornecedores</h2>
-        <button class="btn secundario small" onclick="restaurarSelecaoPadraoAbc()" title="Volta a mostrar os 5 fornecedores de maior valor no período">↺ Padrão (5 maiores)</button>
-        <button class="btn secundario small" onclick="exportarXlsx('pagosAbc')">⬇ Exportar Excel</button>
-      </div>
-      <div id="pagos-abc-vazio" style="font-size:13px; color:var(--cinza); display:none;">Nenhum título baixado (pago) no período pra estes fornecedores.</div>
-      <div id="pagos-abc-chart-wrap" style="height:380px; width:100%;">
-        <canvas id="chart-pagos-abc"></canvas>
-      </div>
-    </div>
-    <div class="painel">
-      <div class="cabecalho-painel">
-        <h2>Curva ABC de fornecedores</h2>
-        <button class="btn secundario small" onclick="limparSelecaoAbcGrafico()" title="Desmarca todos os fornecedores do gráfico 'Curva ABC dos fornecedores'">☐ Limpar seleção</button>
-        <button class="btn secundario small" onclick="exportarXlsx('abc')">⬇ Exportar Excel</button>
-      </div>
-      <div id="total-abc" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
-      <div class="tabela-scroll">
-        <table id="tabela-abc">
-          <thead><tr><th title="Marque pra aparecer no gráfico &quot;Curva ABC dos fornecedores&quot;">Gráfico</th><th>Fornecedor</th><th>Razão Social</th><th>Qtde</th><th>Valor Total</th><th>% do Total</th><th>% Acum.</th><th>Classe</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
     <div class="grid-2">
       <div class="painel">
         <div class="cabecalho-painel">
@@ -479,6 +454,31 @@
             <tbody></tbody>
           </table>
         </div>
+      </div>
+    </div>
+    <div class="painel">
+      <div class="cabecalho-painel">
+        <h2>Curva ABC dos fornecedores</h2>
+        <button class="btn secundario small" onclick="restaurarSelecaoPadraoAbc()" title="Volta a mostrar os 5 fornecedores de maior valor no período">↺ Padrão (5 maiores)</button>
+        <button class="btn secundario small" onclick="exportarXlsx('pagosAbc')">⬇ Exportar Excel</button>
+      </div>
+      <div id="pagos-abc-vazio" style="font-size:13px; color:var(--cinza); display:none;">Nenhum título baixado (pago) no período pra estes fornecedores.</div>
+      <div id="pagos-abc-chart-wrap" style="height:380px; width:100%;">
+        <canvas id="chart-pagos-abc"></canvas>
+      </div>
+    </div>
+    <div class="painel">
+      <div class="cabecalho-painel">
+        <h2>Curva ABC de fornecedores</h2>
+        <button class="btn secundario small" onclick="limparSelecaoAbcGrafico()" title="Desmarca todos os fornecedores do gráfico 'Curva ABC dos fornecedores'">☐ Limpar seleção</button>
+        <button class="btn secundario small" onclick="exportarXlsx('abc')">⬇ Exportar Excel</button>
+      </div>
+      <div id="total-abc" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
+      <div class="tabela-scroll">
+        <table id="tabela-abc">
+          <thead><tr><th title="Marque pra aparecer no gráfico &quot;Curva ABC dos fornecedores&quot;">Gráfico</th><th>Fornecedor</th><th>Razão Social</th><th>Qtde</th><th>Valor Total</th><th>% do Total</th><th>% Acum.</th><th>Classe</th></tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
     <div class="painel">
