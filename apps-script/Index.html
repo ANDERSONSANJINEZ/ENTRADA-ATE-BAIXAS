@@ -274,6 +274,7 @@
   .dropzone-comprovante { border: 2px dashed var(--borda); border-radius: 10px; padding: 24px 12px; text-align: center; color: var(--cinza); cursor: pointer; font-size: 13px; margin-bottom: 16px; }
   .dropzone-comprovante.sobre { border-color: var(--azul); background: var(--azul-claro); }
   .dropzone-comprovante.preenchido { border-color: #16a34a; color: #15803d; }
+  .dropzone-comprovante.desativado { cursor: not-allowed; opacity: .55; }
   #dropzone, #dropzone-extrato { border: 2px dashed var(--borda); border-radius: 10px; padding: 40px; text-align: center; color: var(--cinza); margin-bottom: 16px; cursor: pointer; }
   #dropzone.sobre, #dropzone-extrato.sobre { border-color: var(--azul); background: var(--azul-claro); }
   .badge-alerta { background: #fee2e2; color: var(--vermelho); }
@@ -5050,7 +5051,31 @@ dropzoneExtrato.addEventListener('drop', (e) => {
 // pelo servidor Apps Script, então não tem limite de 6 minutos de execução
 // nem precisa de nenhuma permissão extra no Drive. Mesma lógica de
 // extração de Descrição do script Python que substituiu.
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+// Quais das 3 bibliotecas do CDN (pdfjs-dist/pdf-lib/jszip) não carregaram
+// — usa typeof (nunca lança) porque, se o <script> do CDN falhar (rede
+// bloqueada, CDN fora do ar, ad-blocker), a variável global correspondente
+// simplesmente não existe; referenciá-la direto, sem o typeof, geraria um
+// ReferenceError. Chamada tanto no carregamento da página (função abaixo)
+// quanto de novo dentro de separarComprovantesBancarios(), como segunda
+// trava — cada chamador decide sozinho o que fazer com a lista.
+function bibliotecasComprovanteFaltando_() {
+  const faltando = [];
+  if (typeof pdfjsLib === 'undefined') faltando.push('pdfjs-dist');
+  if (typeof PDFLib === 'undefined') faltando.push('pdf-lib');
+  if (typeof JSZip === 'undefined') faltando.push('jszip');
+  return faltando;
+}
+
+// Essa linha roda solta, fora de qualquer função, no carregamento da
+// página — sem a proteção do typeof acima, se pdfjs-dist não tivesse
+// carregado ela ia lançar um ReferenceError bem no meio do <script>
+// inline, o que pararia TUDO que vem depois dela no arquivo (o app
+// inteiro), não só esta seção. Com a proteção, só esta seção fica
+// indisponível (ver avisarSeBibliotecasComprovanteFalharam mais abaixo).
+if (typeof pdfjsLib !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+}
 
 let arquivosComprovantesSelecionados = [];
 
@@ -5164,10 +5189,39 @@ function configurarDropzoneComprovantes() {
 }
 configurarDropzoneComprovantes();
 
+// Avisa (e desativa só esta seção) se alguma das 3 bibliotecas do CDN não
+// carregou — em vez de deixar a pessoa descobrir isso só ao clicar em
+// "Separar e baixar .zip" (ou, sem a proteção acima, travar o app inteiro
+// sem explicação nenhuma).
+(function avisarSeBibliotecasComprovanteFalharam() {
+  const faltando = bibliotecasComprovanteFaltando_();
+  if (!faltando.length) return;
+  const dz = document.getElementById('dropzone-comprovantes');
+  const input = document.getElementById('arquivo-comprovantes'); // pega a referência ANTES de mexer no texto do dz — dz.textContent apagaria esse <input>, que é filho dele no HTML
+  dz.onclick = null;
+  dz.style.pointerEvents = 'none'; // bloqueia clique E arrastar-soltar (os listeners de 'drop' continuam registrados, mas pointer-events:none impede o elemento de ser um alvo válido)
+  dz.classList.add('desativado');
+  dz.firstChild.textContent = 'Indisponível — veja o aviso abaixo '; // só o texto solto antes do <input>, não o innerHTML inteiro
+  input.disabled = true;
+  document.getElementById('btn-separar-comprovantes').disabled = true;
+  document.getElementById('resumo-comprovantes').innerHTML =
+    `<div class="aviso">Não foi possível carregar ${faltando.join(', ')} (rede bloqueada ou CDN indisponível) — "Separar comprovantes bancários" ficou indisponível nesta sessão, mas o resto do app continua funcionando normalmente. Recarregue a página pra tentar de novo.</div>`;
+  toast('Falha ao carregar bibliotecas de PDF — "Separar comprovantes bancários" ficou indisponível (aba Atualizar Dados).', 8000);
+})();
+
 async function separarComprovantesBancarios() {
   const statusEl = document.getElementById('status-separar-comprovantes');
   const resumoEl = document.getElementById('resumo-comprovantes');
   const btn = document.getElementById('btn-separar-comprovantes');
+
+  // Segunda trava, redundante com o botão desativado acima — cobre o caso
+  // (não deveria acontecer, mas é barato garantir) de a função ser chamada
+  // por outro caminho que não seja o clique no botão.
+  const faltando = bibliotecasComprovanteFaltando_();
+  if (faltando.length) {
+    resumoEl.innerHTML = `<div class="aviso">Não foi possível carregar ${faltando.join(', ')} — não é possível separar comprovantes agora. Recarregue a página.</div>`;
+    return;
+  }
 
   if (!arquivosComprovantesSelecionados.length) {
     resumoEl.innerHTML = '<div class="aviso">Selecione ao menos um arquivo PDF.</div>';
