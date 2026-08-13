@@ -19,7 +19,7 @@ var HEADERS = [
   'Forma Pagamento', 'Código Fornecedor', 'Parcela', 'Data Baixa',
   'Vencimento', 'R$ Valor', 'Usuário Inclusor', 'Razão Social',
   'Aprovação Remessa', 'Remessa', 'Histórico', 'Origem', 'Status',
-  'Link Documento', 'Link Comprovante', 'Chave Pix', 'Observação'
+  'Link Documento', 'Link Comprovante', 'Chave Pix', 'Observação', 'Categoria'
 ];
 
 // Perfis de acesso restrito por link próprio: ?usuario=<chave> na URL do
@@ -373,9 +373,10 @@ function chaveAnexo_(item) {
 function substituirErp_(itens, dataBase) {
   var sh = getSheet_('ERP');
 
-  // Antes de apagar tudo, guarda os links de anexo e a Observação já
-  // cadastrados manualmente, pra não perder na reimportação diária (o ERP
-  // inteiro é substituído a cada import, então sem isso tudo isso se
+  // Antes de apagar tudo, guarda os links de anexo, a Observação e a
+  // Categoria (definida manualmente quando o "de-para" fixo não conhece o
+  // fornecedor) já cadastrados, pra não perder na reimportação diária (o
+  // ERP inteiro é substituído a cada import, então sem isso tudo isso se
   // perderia).
   var linksAnteriores = {};
   var ultimaLinhaAntiga = sh.getLastRow();
@@ -383,13 +384,14 @@ function substituirErp_(itens, dataBase) {
     var colDoc = HEADERS.indexOf('Link Documento');
     var colComp = HEADERS.indexOf('Link Comprovante');
     var colObs = HEADERS.indexOf('Observação');
+    var colCat = HEADERS.indexOf('Categoria');
     var dadosAntigos = sh.getRange(2, 1, ultimaLinhaAntiga - 1, HEADERS.length).getValues();
     dadosAntigos.forEach(function (linha) {
-      var linkDoc = linha[colDoc], linkComp = linha[colComp], observacao = linha[colObs];
-      if (!linkDoc && !linkComp && !observacao) return;
+      var linkDoc = linha[colDoc], linkComp = linha[colComp], observacao = linha[colObs], categoria = linha[colCat];
+      if (!linkDoc && !linkComp && !observacao && !categoria) return;
       var obj = {};
       HEADERS.forEach(function (h, i) { obj[h] = linha[i]; });
-      linksAnteriores[chaveAnexo_(obj)] = { doc: linkDoc, comp: linkComp, obs: observacao };
+      linksAnteriores[chaveAnexo_(obj)] = { doc: linkDoc, comp: linkComp, obs: observacao, cat: categoria };
     });
   }
 
@@ -405,6 +407,7 @@ function substituirErp_(itens, dataBase) {
       if (h === 'Link Documento') return (preservado && preservado.doc) || '';
       if (h === 'Link Comprovante') return (preservado && preservado.comp) || '';
       if (h === 'Observação') return (preservado && preservado.obs) || '';
+      if (h === 'Categoria') return (preservado && preservado.cat) || '';
       return item[h] != null ? item[h] : '';
     });
   });
@@ -609,6 +612,34 @@ function api_definirObservacao(payload) {
     if (dados[i][idCol - 1] === payload.id) {
       sh.getRange(i + 2, colIdx).setValue(String(payload.valor || ''));
       registrarLog_(nomeUsuario, 'Definir observação',
+        (dados[i][razaoCol - 1] || '') + ' Nº ' + (dados[i][docCol - 1] || '') + (payload.valor ? ': ' + payload.valor : ' (removida)'));
+      return api_carregar();
+    }
+  }
+  throw new Error('Lançamento não encontrado (pode ter sido removido ou reimportado).');
+}
+
+// Categoria do fornecedor definida manualmente — usada pela tela só quando
+// o "de-para" fixo por Código Fornecedor (mantido no front-end) não conhece
+// o fornecedor E o texto do Histórico também não dá pra usar como
+// aproximação. Mesma lógica de api_definirObservacao. Sobrevive a
+// reimportação do ERP (ver substituirErp_).
+function api_definirCategoria(payload) {
+  var nomeUsuario = validarAcessoEdicao_(payload);
+  var origem = payload.origem === 'Manual' ? 'Manual' : 'ERP';
+  var colIdx = HEADERS.indexOf('Categoria') + 1;
+  var idCol = HEADERS.indexOf('ID') + 1;
+  var docCol = HEADERS.indexOf('Nº Documento') + 1;
+  var razaoCol = HEADERS.indexOf('Razão Social') + 1;
+
+  var sh = getSheet_(origem);
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha < 2) throw new Error('Lançamento não encontrado.');
+  var dados = sh.getRange(2, 1, ultimaLinha - 1, HEADERS.length).getValues();
+  for (var i = 0; i < dados.length; i++) {
+    if (dados[i][idCol - 1] === payload.id) {
+      sh.getRange(i + 2, colIdx).setValue(String(payload.valor || ''));
+      registrarLog_(nomeUsuario, 'Definir categoria',
         (dados[i][razaoCol - 1] || '') + ' Nº ' + (dados[i][docCol - 1] || '') + (payload.valor ? ': ' + payload.valor : ' (removida)'));
       return api_carregar();
     }
@@ -844,6 +875,7 @@ function doPost(e) {
     else if (acao === 'definirAnexo') resultado = api_definirAnexo(payload);
     else if (acao === 'buscarAnexoDrive') resultado = api_buscarAnexoDrive(payload);
     else if (acao === 'definirObservacao') resultado = api_definirObservacao(payload);
+    else if (acao === 'definirCategoria') resultado = api_definirCategoria(payload);
     else if (acao === 'validarEdicao') resultado = api_validarEdicao(payload);
     else if (acao === 'carregarLog') resultado = api_carregarLog(payload);
     else if (acao === 'salvarConciliacao') resultado = api_salvarConciliacao(payload);

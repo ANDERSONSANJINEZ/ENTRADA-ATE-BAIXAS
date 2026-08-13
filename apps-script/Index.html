@@ -150,6 +150,9 @@
   #tabela-lancamentos th.coluna-alvo-drop { background: #dbe7f3; }
   #tabela-lancamentos td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #tabela-lancamentos td.col-historico, #tabela-lancamentos td.col-razao, #tabela-lancamentos td.col-categoria { white-space: normal; word-break: break-word; text-overflow: clip; }
+  #tabela-lancamentos td.col-categoria.editavel { cursor: pointer; }
+  #tabela-lancamentos td.col-categoria.editavel:hover { background: var(--azul-claro); }
+  #tabela-lancamentos td.col-categoria .categoria-vazia { color: var(--cinza); font-style: italic; }
   #tabela-lancamentos td.col-anexos, #tabela-lancamentos td.col-acao { overflow: visible; text-overflow: clip; }
   /* Sem isto, misturar display:flex (ver td.col-valor logo abaixo) com o
      overflow:hidden + text-overflow:ellipsis do td genérico acima confunde
@@ -308,9 +311,11 @@
     z-index: 500; align-items: center; justify-content: center; padding: 20px;
   }
   .modal-overlay.aberto { display: flex; }
-  /* modal-anexo/modal-observacao podem ser abertos por dentro do modal-linha (que já está "aberto");
-     como .modal-overlay compartilha z-index, precisam de um z-index maior para renderizar por cima. */
-  #modal-anexo, #modal-observacao { z-index: 600; }
+  /* modal-anexo/modal-observacao/modal-categoria podem ser abertos por
+     dentro do modal-linha (que já está "aberto"); como .modal-overlay
+     compartilha z-index, precisam de um z-index maior para renderizar por
+     cima. */
+  #modal-anexo, #modal-observacao, #modal-categoria { z-index: 600; }
   .modal-caixa { background: #fff; border-radius: 10px; padding: 20px; max-width: 1100px; width: 100%; max-height: 88vh; display: flex; flex-direction: column; }
   .modal-cabecalho { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
   .modal-cabecalho h2 { margin: 0; font-size: 16px; color: var(--azul); flex: 1; }
@@ -785,6 +790,26 @@
   </div>
 </div>
 
+<!-- Categoria do fornecedor (coluna "Categoria" de Todos os lançamentos) —
+     só aparece editável quando o fornecedor não está no "de-para" fixo
+     (ver CATEGORIA_POR_FORNECEDOR_/categoriaEhFixa_); nesse caso a tela já
+     tenta uma aproximação a partir do Histórico antes de pedir pra
+     preencher na mão. -->
+<div class="modal-overlay" id="modal-categoria" onclick="if (event.target === this) resolverCategoria(null)">
+  <div class="modal-caixa" style="max-width:480px;">
+    <div class="modal-cabecalho">
+      <h2>Categoria do fornecedor</h2>
+    </div>
+    <input id="input-categoria" type="text" placeholder="Ex.: EPIs, PRESTAÇÃO DE SERVIÇO, MATERIAL ELÉTRICO…"
+      style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid var(--borda); border-radius:6px; font-size:14px; margin-bottom:18px;"
+      onkeydown="if (event.key === 'Enter') resolverCategoriaConfirmar(); if (event.key === 'Escape') resolverCategoria(null);">
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn secundario" onclick="resolverCategoria(null)">Cancelar</button>
+      <button class="btn" onclick="resolverCategoriaConfirmar()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Pop-up de "Novo lançamento manual", acionado pelo botão logo abaixo da
      planilha "Todos os lançamentos" — mesmos campos, na mesma ordem, do
      formulário que ficava fixo na tela. -->
@@ -1072,6 +1097,44 @@ async function editarObservacao(id, origem, valorAtual) {
   }
 }
 
+// Categoria manual (coluna "Categoria") — mesmo padrão de pop-up/gravação
+// de Observação acima, só que essa célula só é clicável quando o
+// fornecedor não está no "de-para" fixo (ver categoriaEhFixa_): a
+// categoria de um fornecedor já conhecido não deve ser sobrescrita aqui.
+let resolverCategoriaAtual = null;
+function pedirCategoria(valorAtual) {
+  const input = document.getElementById('input-categoria');
+  input.value = valorAtual || '';
+  document.getElementById('modal-categoria').classList.add('aberto');
+  setTimeout(() => { input.focus(); input.select(); }, 50);
+  return new Promise((resolve) => { resolverCategoriaAtual = resolve; });
+}
+function resolverCategoria(valor) {
+  document.getElementById('modal-categoria').classList.remove('aberto');
+  if (resolverCategoriaAtual) { resolverCategoriaAtual(valor); resolverCategoriaAtual = null; }
+}
+function resolverCategoriaConfirmar() {
+  resolverCategoria(document.getElementById('input-categoria').value);
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('modal-categoria').classList.contains('aberto')) resolverCategoria(null);
+});
+
+async function editarCategoria(id, origem, valorAtual) {
+  if (MODO_LEITURA) return;
+  const novoValor = await pedirCategoria(valorAtual);
+  if (novoValor == null) return; // cancelado
+  const limpo = novoValor.trim();
+  if (limpo === (valorAtual || '')) return; // nada mudou
+  try {
+    await postarAcao('definirCategoria', { id, origem, valor: limpo });
+    atualizarModalLinhaSeAberto_(id);
+    toast(limpo ? 'Categoria salva.' : 'Categoria removida.');
+  } catch (erro) {
+    // erro já mostrado via toast dentro de postarAcao
+  }
+}
+
 // ---------- Detalhamento de uma linha (Lançamentos), na ordem da planilha ----------
 // Ordem EXATA das colunas do Google Sheets (ver HEADERS em Code.gs) — de
 // propósito diferente da ordem da tabela "Todos os lançamentos" na tela
@@ -1099,6 +1162,7 @@ const CAMPOS_DETALHE_LINHA = [
   { campo: 'Link Comprovante', rotulo: 'Link Comprovante', tipo: 'link' },
   { campo: 'Chave Pix', rotulo: 'Chave Pix' },
   { campo: 'Observação', rotulo: 'Observação', tipo: 'observacao' },
+  { campo: 'Categoria', rotulo: 'Categoria', tipo: 'categoria' },
 ];
 let linhaDetalheAtual = null; // { item, editando }
 
@@ -1162,6 +1226,27 @@ function renderizarModalLinha() {
       return `<div class="campo-detalhe">
         <div class="rotulo-campo">${c.rotulo}</div>
         <div class="valor-campo">${botao}</div>
+      </div>`;
+    }
+    // Categoria: mesmo padrão de botão-que-abre-pop-up da Observação acima,
+    // mas só quando o fornecedor NÃO está no "de-para" fixo (ver
+    // categoriaEhFixa_) — a categoria de um fornecedor já cadastrado é só
+    // exibida, não editável por aqui.
+    if (c.campo === 'Categoria') {
+      const cat = categoriaFornecedor_(item);
+      let valorCampo;
+      if (categoriaEhFixa_(item)) {
+        valorCampo = escaparHtml(cat);
+      } else if (MODO_LEITURA) {
+        valorCampo = cat ? escaparHtml(cat) : '—';
+      } else {
+        const manual = item['Categoria'] || '';
+        const rotuloBotao = manual ? '✎ Editar categoria' : '+ Adicionar categoria';
+        valorCampo = `<button type="button" class="btn secundario small" onclick="editarCategoria('${escaparAtributo(item.ID)}','${item.Origem}','${escaparAtributo(manual)}')">${rotuloBotao}</button>${cat ? `<div style="margin-top:6px;">${escaparHtml(cat)}</div>` : ''}`;
+      }
+      return `<div class="campo-detalhe">
+        <div class="rotulo-campo">${c.rotulo}</div>
+        <div class="valor-campo">${valorCampo}</div>
       </div>`;
     }
     const podeEditar = editando && ehManual && !MODO_LEITURA && !c.somenteLeitura;
@@ -2810,7 +2895,7 @@ function textoBuscavel(i) {
     i['Data Baixa'], fmtData(i['Data Baixa']),
     i['R$ Valor'], fmtMoeda(i['R$ Valor']),
     i['Usuário Inclusor'], i['Razão Social'],
-    i['Aprovação Remessa'], i['Remessa'], i['Histórico'], i['Observação'],
+    i['Aprovação Remessa'], i['Remessa'], i['Histórico'], i['Observação'], categoriaFornecedor_(i),
   ].map(v => String(v == null ? '' : v).toLowerCase()).join(' ␟ ');
 }
 
@@ -3116,13 +3201,50 @@ const CATEGORIA_POR_FORNECEDOR_ = {
   "VALE TRANSPORTE": "VALE-TRANSPORTE (INTERNO)",
   "PREVISAO LOCACAO IMOVEIS": "ALUGUEL DE IMÓVEL (INTERNO)",
 };
-// Acha a categoria pelo Código Fornecedor já sem zeros à esquerda (mesma
-// normalização feita na importação — ver removerZerosEsquerda_ no
-// Code.gs), pra bater com as chaves do mapa acima independente de como o
-// código foi digitado/importado.
+// Chave pra bater com CATEGORIA_POR_FORNECEDOR_: Código Fornecedor sem
+// zeros à esquerda (mesma normalização feita na importação — ver
+// removerZerosEsquerda_ no Code.gs), independente de como foi digitado.
+function chaveCategoriaFornecedor_(i) {
+  return String(i['Código Fornecedor'] == null ? '' : i['Código Fornecedor']).trim().replace(/^0+(?=\d)/, '');
+}
+// true quando o fornecedor está no "de-para" fixo — nesse caso a célula
+// não é editável (a categoria vem de um cadastro conferido, não deve ser
+// sobrescrita linha a linha).
+function categoriaEhFixa_(i) {
+  return !!CATEGORIA_POR_FORNECEDOR_[chaveCategoriaFornecedor_(i)];
+}
+// Aproximação de categoria a partir do próprio Histórico do lançamento,
+// usada só quando o fornecedor não está no "de-para" fixo — mesma limpeza
+// de ruído (Nº Documento com qualquer prefixo conhecido, fração de
+// parcela solta, sufixo /CE-XXX) já usada em limparNumeroDocDoHistorico_
+// (Detalhe por Aporte), mas sem depender da coluna Parcela bater.
+function categoriaDoHistorico_(i) {
+  const hist = i['Histórico'];
+  if (!hist) return '';
+  let h = String(hist);
+  const nDoc = `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim();
+  if (nDoc) {
+    const escapado = nDoc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    h = h.replace(new RegExp(escapado, 'i'), '');
+  }
+  if (i['Nº Documento']) {
+    const escapadoNum = String(i['Nº Documento']).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    h = h.replace(new RegExp('\\b(?:' + PREFIXOS_TIPO_DOC_REGEX_ + ')\\.?\\s*' + escapadoNum + '\\b', 'gi'), '');
+  }
+  h = h.replace(/^\s*\d+\s*\/\s*\d+\s*[-–]?\s*/, '');
+  h = h.replace(/\/\s*CE-\d+\b/gi, '');
+  return h.replace(/\s*-\s*-\s*/g, ' - ').replace(/^\s*-\s*/, '').replace(/\s*-\s*$/, '').trim();
+}
+// Categoria exibida na coluna "Categoria" de Todos os lançamentos —
+// prioridade: (1) "de-para" fixo por Código Fornecedor, (2) categoria
+// definida manualmente pra esse lançamento (ver api_definirCategoria),
+// (3) aproximação a partir do Histórico, (4) vazia (fica disponível pra
+// preencher na mão — ver editarCategoria).
 function categoriaFornecedor_(i) {
-  const cod = String(i['Código Fornecedor'] == null ? '' : i['Código Fornecedor']).trim().replace(/^0+(?=\d)/, '');
-  return CATEGORIA_POR_FORNECEDOR_[cod] || '';
+  const fixa = CATEGORIA_POR_FORNECEDOR_[chaveCategoriaFornecedor_(i)];
+  if (fixa) return fixa;
+  if (i['Categoria']) return i['Categoria'];
+  return categoriaDoHistorico_(i);
 }
 
 // Definição de cada coluna de "Todos os lançamentos" — uma única fonte de
@@ -3296,7 +3418,11 @@ function celulaLancamento_(chave, i) {
     case 'parcela': return `<td>${i['Parcela'] || ''}</td>`;
     case 'categoria': {
       const cat = categoriaFornecedor_(i);
-      return `<td class="col-categoria" title="${escaparHtml(cat)}">${cat ? escaparHtml(cat) : ''}</td>`;
+      if (categoriaEhFixa_(i)) {
+        return `<td class="col-categoria" title="${escaparHtml(cat)}">${escaparHtml(cat)}</td>`;
+      }
+      const conteudo = cat ? escaparHtml(cat) : '<span class="categoria-vazia">Adicionar categoria…</span>';
+      return `<td class="col-categoria editavel" title="Clique para editar a categoria" onclick="event.stopPropagation(); editarCategoria('${escaparAtributo(i.ID)}','${i.Origem}','${escaparAtributo(i['Categoria'] || '')}')">${conteudo}</td>`;
     }
     case 'baixa': return `<td>${fmtData(i['Data Baixa'])}</td>`;
     case 'historico': return `<td class="col-historico">${i['Histórico'] || ''}</td>`;
