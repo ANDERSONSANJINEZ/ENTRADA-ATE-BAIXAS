@@ -104,8 +104,8 @@
      vira scroll horizontal — o padrão normal pra tabela larga no celular. */
   #tabela-lancamentos { table-layout: fixed; min-width: 1100px; }
   /* Versão simplificada (ver TABELA_LANCAMENTOS_SIMPLIFICADA/PERFIS_RESTRITOS)
-     — some com as colunas Origem/Status/Aporte/Usuário/Remessa e a largura
-     delas é redistribuída entre as que sobraram, ocupando a tela toda.
+     — some com as colunas Origem/Aporte/Remessa e a largura delas é
+     redistribuída entre as que sobraram, ocupando a tela toda.
      Descoberto por tentativa: display:none (no <col> OU nas células th/td)
      não redistribui a largura direito em table-layout:fixed no Chrome —
      sobra um vão vazio, ou pior, embaralha a largura das colunas vizinhas.
@@ -120,14 +120,10 @@
      versão completa (aqui o objetivo é o oposto). */
   #tabela-lancamentos.simplificada { min-width: 0; }
   #tabela-lancamentos.simplificada col.col-origem,
-  #tabela-lancamentos.simplificada col.col-status,
   #tabela-lancamentos.simplificada col.col-aporte,
-  #tabela-lancamentos.simplificada col.col-usuario,
   #tabela-lancamentos.simplificada col.col-remessa { visibility: collapse; }
   #tabela-lancamentos.simplificada th.col-origem, #tabela-lancamentos.simplificada td.col-origem,
-  #tabela-lancamentos.simplificada th.col-status, #tabela-lancamentos.simplificada td.col-status,
   #tabela-lancamentos.simplificada th.col-aporte, #tabela-lancamentos.simplificada td.col-aporte,
-  #tabela-lancamentos.simplificada th.col-usuario, #tabela-lancamentos.simplificada td.col-usuario,
   #tabela-lancamentos.simplificada th.col-remessa, #tabela-lancamentos.simplificada td.col-remessa { visibility: hidden; }
   #tabela-lancamentos th {
     /* Quebra só entre palavras (no espaço), nunca no meio de uma palavra —
@@ -153,10 +149,7 @@
   #tabela-lancamentos th.coluna-arrastando { opacity: .35; }
   #tabela-lancamentos th.coluna-alvo-drop { background: #dbe7f3; }
   #tabela-lancamentos td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #tabela-lancamentos td.col-historico, #tabela-lancamentos td.col-razao, #tabela-lancamentos td.col-observacao { white-space: normal; word-break: break-word; text-overflow: clip; }
-  #tabela-lancamentos td.col-observacao { cursor: pointer; }
-  #tabela-lancamentos td.col-observacao:hover { background: var(--azul-claro); }
-  #tabela-lancamentos td.col-observacao .observacao-vazia { color: var(--cinza); font-style: italic; }
+  #tabela-lancamentos td.col-historico, #tabela-lancamentos td.col-razao, #tabela-lancamentos td.col-categoria { white-space: normal; word-break: break-word; text-overflow: clip; }
   #tabela-lancamentos td.col-anexos, #tabela-lancamentos td.col-acao { overflow: visible; text-overflow: clip; }
   /* Sem isto, misturar display:flex (ver td.col-valor logo abaixo) com o
      overflow:hidden + text-overflow:ellipsis do td genérico acima confunde
@@ -496,20 +489,11 @@
                e o excesso (overflow:visible) vazava por cima do botão Remover
                na coluna seguinte, deixando os dois quase colados. -->
           <colgroup>
-            <col class="col-origem" style="width:3.66%"><col class="col-status" style="width:4.12%"><col class="col-aporte" style="width:3.66%"><col style="width:2.81%">
-            <col class="col-data" style="width:5.53%"><col class="col-ndoc" style="width:3.66%"><col style="width:5.05%"><col style="width:5.00%">
-            <col class="col-fornecedor" style="width:5.15%"><col class="col-razao" style="width:6.83%"><col class="col-data" style="width:5.53%"><col class="col-data" style="width:5.53%">
-            <col class="col-valor" style="width:4.36%"><col style="width:3.84%"><col class="col-data" style="width:5.53%"><col class="col-historico" style="width:6.83%">
-            <col class="col-usuario" style="width:4.69%"><col class="col-remessa" style="width:3.84%"><col style="width:6.50%">
-            <col style="width:4.00%">
+            <col class="col-origem" style="width:3.66%"><col class="col-aporte" style="width:3.66%"><col style="width:2.81%"><col class="col-data" style="width:5.53%"><col class="col-ndoc" style="width:3.66%"><col style="width:5.05%"><col class="col-fornecedor" style="width:5.15%"><col class="col-razao" style="width:6.83%"><col class="col-data" style="width:5.53%"><col class="col-valor" style="width:4.36%"><col style="width:3.84%"><col class="col-categoria" style="width:6.83%"><col class="col-data" style="width:5.53%"><col class="col-historico" style="width:6.83%"><col class="col-remessa" style="width:3.84%"><col style="width:6.5%"><col style="width:4%">
           </colgroup>
           <thead>
           <tr>
-            <th class="col-origem">Origem</th><th class="col-status">Status</th><th class="col-aporte">Aporte</th><th>Tipo</th><th>Emissão</th><th>Nº Doc.</th>
-            <th>Forma Pgto.</th><th>Chave Pix</th><th>Fornecedor</th><th>Razão Social</th>
-            <th>Vencimento</th><th>Venc. Real</th><th>Valor</th><th class="col-parcela">Parcela</th><th>Baixa</th>
-            <th>Histórico</th><th class="col-usuario">Usuário</th><th class="col-remessa">Remessa</th>
-            <th class="col-anexos">Anexos</th><th class="col-acao"></th>
+            <th class="col-origem">Origem</th><th class="col-aporte">Aporte</th><th>Tipo</th><th>Emissão</th><th>Nº Doc.</th><th>Forma Pgto.</th><th>Fornecedor</th><th>Razão Social</th><th>Vencimento</th><th>Valor</th><th class="col-parcela">Parcela</th><th>Categoria</th><th>Baixa</th><th>Histórico</th><th class="col-remessa">Remessa</th><th class="col-anexos">Anexos</th><th class="col-acao"></th>
           </tr>
           <!-- Linha de filtro por coluna removida (buscar em "Buscar em todas
                as colunas…" já cobre o mesmo caso de uso, sem duplicar
@@ -518,11 +502,7 @@
                (linha-filtros-coluna também é usada pelo modal-detalhe
                genérico, então a classe/regras continuam existindo). -->
           <tr class="linha-filtros-coluna">
-            <th class="col-origem"></th><th class="col-status"></th><th class="col-aporte"></th>
-            <th></th><th></th><th></th><th></th><th></th><th></th><th></th>
-            <th></th><th></th><th></th><th></th><th></th>
-            <th class="col-usuario"></th><th class="col-remessa"></th>
-            <th></th><th></th>
+            <th class="col-origem"></th><th class="col-aporte"></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th class="col-remessa"></th><th></th><th></th>
           </tr>
           </thead>
           <tbody></tbody>
@@ -1365,7 +1345,7 @@ if (ABAS_PERMITIDAS_RESTRITO) {
 // width:100%) — por isso aqui zeramos o % delas E redistribuímos entre as
 // que sobraram, pra não sobrar (nem faltar) espaço.
 if (TABELA_LANCAMENTOS_SIMPLIFICADA) {
-  const COLUNAS_ESCONDIDAS_SIMPLIFICADA = ['col-origem', 'col-status', 'col-aporte', 'col-usuario', 'col-remessa'];
+  const COLUNAS_ESCONDIDAS_SIMPLIFICADA = ['col-origem', 'col-aporte', 'col-remessa'];
   document.getElementById('tabela-lancamentos').classList.add('simplificada');
   document.querySelector('#tabela-lancamentos th.col-parcela').textContent = 'Parc.';
   // A busca ("Buscar em todas as colunas…") fica visível pra esse perfil
@@ -2164,13 +2144,13 @@ function exportarXlsx(qual) {
     const linhas = ultimoItensLancamentosFiltrados.map((i) => [
       i.Origem, i.Status, i.Aporte || '', i.Tipo || '', fmtData(i['Data Emissão']), i['Nº Documento'] || '',
       i['Forma Pagamento'] || '', i['Chave Pix'] || '', i['Código Fornecedor'] || '', i['Razão Social'] || '',
-      fmtData(i['Vencimento']), fmtData(i['Vencimento Real']), fmtMoeda(i['R$ Valor']), i['Parcela'] || '',
+      fmtData(i['Vencimento']), fmtData(i['Vencimento Real']), fmtMoeda(i['R$ Valor']), i['Parcela'] || '', categoriaFornecedor_(i),
       fmtData(i['Data Baixa']), i['Histórico'] || '', i['Usuário Inclusor'] || '', i['Remessa'] || '', i['Observação'] || '',
     ]);
     baixarXlsx('lancamentos.xlsx', [
       'Origem', 'Status', 'Aporte', 'Tipo', 'Emissão', 'Nº Documento', 'Forma Pagamento', 'Chave Pix',
       'Código Fornecedor', 'Razão Social', 'Vencimento', 'Vencimento Real', 'Valor',
-      'Parcela', 'Data Baixa', 'Histórico', 'Usuário Inclusor', 'Remessa', 'Observação',
+      'Parcela', 'Categoria', 'Data Baixa', 'Histórico', 'Usuário Inclusor', 'Remessa', 'Observação',
     ], linhas);
   } else if (qual === 'aporte') {
     const linhas = Array.from(document.querySelectorAll('#tabela-aporte tbody tr')).map((tr) =>
@@ -2834,6 +2814,317 @@ function textoBuscavel(i) {
   ].map(v => String(v == null ? '' : v).toLowerCase()).join(' ␟ ');
 }
 
+// O que cada fornecedor efetivamente fornece (material/serviço), por
+// Código Fornecedor — usado na coluna "Categoria" de Todos os lançamentos.
+// Levantado a partir do histórico real de lançamentos do projeto (campo
+// DETALHAMENTO do Protheus, agregado por fornecedor) e pesquisa quando o
+// nome do fornecedor sozinho não deixava claro o ramo. Não é recalculado
+// em tempo real — é uma lista fixa, igual a um "de-para" de cadastro; um
+// fornecedor novo que ainda não apareceu aqui simplesmente fica sem
+// categoria até a lista ser atualizada.
+const CATEGORIA_POR_FORNECEDOR_ = {
+  "-": "CAUÇÃO DE ALOJAMENTO (INTERNO)",
+  "0": "TRIBUTOS/RETENÇÕES (RECEITA FEDERAL)",
+  "FOLHA": "FOLHA DE PAGAMENTO (INTERNO)",
+  "262371": "MADEIRA (COMPENSADO)",
+  "360305": "TRIBUTOS/RETENÇÕES (FGTS)",
+  "394460": "TRIBUTOS/RETENÇÕES (DARF)",
+  "506515": "PROJETO DE ARQUITETURA",
+  "675898": "PRESTAÇÃO DE SERVIÇO",
+  "ADIANT": "ADIANTAMENTO DE FOLHA (INTERNO)",
+  "1004450": "AREIA",
+  "1041450": "AREIA",
+  "1397886": "TELA SOLDADA (AÇO)",
+  "1454366": "AÇO TREFILADO",
+  "1837729": "PEÇAS PARA VEÍCULOS",
+  "2150847": "SERVIÇOS AERONÁUTICOS",
+  "2222222": "RESCISÃO DE CONTRATO (INTERNO)",
+  "2438322": "COMBUSTÍVEL (DIESEL)",
+  "3289855": "SINALIZAÇÃO E COMUNICAÇÃO VISUAL",
+  "3385348": "LOCAÇÃO DE ESCAVADEIRA",
+  "3466523": "EMBALAGENS (TUBOS DE PAPEL)",
+  "3506307": "COMBUSTÍVEL (CARTÃO FROTA)",
+  "3769753": "SUPRIMENTOS DE INFORMÁTICA",
+  "3908995": "LOCAÇÃO DE CAMINHÃO MUNCK",
+  "3914701": "LOCAÇÃO DE EQUIPAMENTOS",
+  "4077836": "MATERIAL HIDRÁULICO",
+  "4185877": "PEÇAS PARA MÁQUINAS E VEÍCULOS",
+  "4200797": "MATERIAL DE CONSTRUÇÃO",
+  "4314714": "MANGUEIRAS HIDRÁULICAS",
+  "4325091": "CONTRIBUIÇÃO SINDICAL (INTERNO)",
+  "4636160": "MOBILIÁRIO",
+  "4743858": "ENGENHARIA/PROJETO",
+  "4808914": "SEGURANÇA/VIGILÂNCIA",
+  "4999366": "LOCAÇÃO DE NOTEBOOKS",
+  "5196859": "FRETE",
+  "5342079": "LOCAÇÃO DE CAMINHÃO MUNCK",
+  "5353032": "EPIs E FERRAMENTAS",
+  "5355544": "MANUTENÇÃO DE AR CONDICIONADO",
+  "5371489": "TIJOLO/CERÂMICA",
+  "5413061": "MADEIRA",
+  "5643310": "EXTINTORES",
+  "5674774": "ALUGUEL DE IMÓVEL",
+  "5775268": "COLETA DE RESÍDUOS",
+  "6012849": "EPIs E FERRAMENTAS",
+  "6094934": "LOCAÇÃO DE EQUIPAMENTOS",
+  "6193299": "CAIXINHA/REEMBOLSO (INTERNO)",
+  "6224460": "LOCAÇÃO DE INFORMÁTICA",
+  "6573638": "ALUGUEL DE IMÓVEL",
+  "6573836": "ALUGUEL DE IMÓVEL",
+  "6640130": "TUBOS DE AÇO",
+  "6891105": "FERRAMENTAS",
+  "6962260": "FERRAMENTAS",
+  "7040108": "ÁGUA/ESGOTO",
+  "7047251": "ENERGIA ELÉTRICA",
+  "7084577": "PROGRAMA JOVEM APRENDIZ",
+  "7207491": "MATERIAL DE INSTALAÇÕES",
+  "7240450": "FERRAMENTAS",
+  "7272825": "EQUIPAMENTOS DE INFORMÁTICA",
+  "7327166": "PNEUS",
+  "7332665": "GEOTÊXTIL E DESMOLDANTE",
+  "7341423": "VALE-TRANSPORTE",
+  "7358761": "AÇO E VERGALHÃO",
+  "7550015": "TERRAPLENAGEM",
+  "7557333": "VERGALHÃO",
+  "7577414": "FERRAMENTAS",
+  "7615500": "MATERIAL DE CONSTRUÇÃO (ADITIVOS/ARGAMASSA)",
+  "7649281": "ALUGUEL DE IMÓVEL",
+  "7733015": "AÇO",
+  "7811510": "PASSAGENS AÉREAS",
+  "7832066": "ALUGUEL DE IMÓVEL",
+  "7861800": "PEÇAS E MANUTENÇÃO VEICULAR",
+  "7954605": "TRIBUTOS/RETENÇÕES (ISS)",
+  "8076438": "SONDAGEM/GEOTECNIA",
+  "8675701": "MATERIAL DE CONSTRUÇÃO",
+  "8729969": "FERRAMENTAS",
+  "8732993": "FERRAMENTAS",
+  "8932220": "EXECUÇÃO DE ESTACAS",
+  "8942852": "PROJETO ESTRUTURAL",
+  "9044403": "LOCAÇÃO DE CAMINHÃO MUNCK",
+  "9490815": "MANUTENÇÃO VEICULAR",
+  "9493387": "FERRAMENTAS E GERADOR",
+  "10194360": "ESTRUTURA METÁLICA",
+  "10216982": "PROJETO DE SINALIZAÇÃO VIÁRIA",
+  "10260249": "CIMENTO",
+  "10331868": "BOMBA HIDRÁULICA",
+  "10342330": "DEDETIZAÇÃO",
+  "10625949": "MOBILIÁRIO",
+  "10690929": "VERGALHÃO E ARAME",
+  "10776989": "PEÇAS PARA MÁQUINAS",
+  "11093170": "EPIs",
+  "11146783": "PEÇAS PARA MÁQUINAS",
+  "11172415": "PEÇAS PARA VEÍCULOS",
+  "11189160": "MANUTENÇÃO DE EQUIPAMENTOS",
+  "11411236": "MANUTENÇÃO DE EQUIPAMENTOS",
+  "11663771": "CHAPA DE AÇO",
+  "11711728": "LOCAÇÃO DE EQUIPAMENTOS",
+  "11831930": "MATERIAL DE LIMPEZA",
+  "12010165": "ENGENHARIA/CONSULTORIA",
+  "12361630": "ALUGUEL DE IMÓVEL",
+  "13721150": "HOSPEDAGEM",
+  "13792260": "LOCAÇÃO DE EQUIPAMENTOS/CAMINHÃO",
+  "14608193": "AGREGADOS (PEDRA/BRITA)",
+  "15024021": "FERRAMENTAS",
+  "15338329": "LOCAÇÃO DE VEÍCULOS",
+  "15466144": "CIMENTO",
+  "15821368": "EXECUÇÃO DE ESTACAS",
+  "16385002": "SONDAGEM/GEOTECNIA",
+  "16681858": "LOCAÇÃO DE CONTAINER/BOX MODULAR",
+  "16728952": "ADESIVOS/SINALIZAÇÃO",
+  "17349956": "ALUGUEL DE IMÓVEL",
+  "17469701": "AÇO, VERGALHÃO E TELHA",
+  "18028981": "LOCAÇÃO DE ESCORAS/ANDAIMES",
+  "18199708": "PROJETO DE ENGENHARIA",
+  "18252720": "CONSULTORIA/PARECER TÉCNICO",
+  "18486864": "LOCAÇÃO DE VEÍCULO",
+  "18917812": "LOCAÇÃO DE BOMBA DE CONCRETO",
+  "19028744": "LOCAÇÃO DE EQUIPAMENTOS",
+  "19068720": "ÁGUA MINERAL",
+  "19499346": "FARDAMENTO",
+  "19537752": "LOCAÇÃO DE PLATAFORMA ELEVATÓRIA",
+  "19596238": "ÁGUA MINERAL",
+  "19784090": "PLANTIO DE ÁRVORES",
+  "19843238": "MATERIAL DE ESCRITÓRIO",
+  "20187793": "MATERIAL DE CONSTRUÇÃO",
+  "20388082": "TELHA (AÇO)",
+  "21421336": "PERFURAÇÃO DE POÇO",
+  "21795352": "PEÇAS PARA VEÍCULOS",
+  "22300615": "INSTALAÇÃO ELÉTRICA",
+  "22407874": "PRESTAÇÃO DE SERVIÇO",
+  "22595220": "SONDAGEM/GEOTECNIA",
+  "22597572": "MANUTENÇÃO DE BETONEIRA",
+  "23228989": "FRETE",
+  "23365159": "TRANSPORTE",
+  "23497696": "FRETE/LOCAÇÃO DE CAMINHÃO",
+  "23674714": "SOFTWARE/LICENÇA",
+  "24073694": "SUPRIMENTOS DE INFORMÁTICA",
+  "24414749": "MANUTENÇÃO VEICULAR (PNEUS)",
+  "24547286": "CONSULTORIA DE SISTEMAS (TOTVS)",
+  "24822197": "MANUTENÇÃO VEICULAR (AR CONDICIONADO)",
+  "24903177": "COMUNICAÇÃO VISUAL",
+  "25371904": "ALUGUEL DE IMÓVEL",
+  "25975554": "GASES INDUSTRIAIS",
+  "26065616": "AFERIÇÃO/METROLOGIA",
+  "26494698": "COLETA DE RESÍDUOS",
+  "26658181": "EPIs E FERRAMENTAS",
+  "26846738": "SERVIÇOS GRÁFICOS",
+  "27084310": "ALUGUEL DE IMÓVEL",
+  "27237738": "TREINAMENTO DE SEGURANÇA",
+  "27304272": "SAÚDE OCUPACIONAL",
+  "27682961": "ALUGUEL DE IMÓVEL",
+  "28169305": "FRETE",
+  "28675682": "PONTO ELETRÔNICO",
+  "29067113": "CONCRETO E CONCRETAGEM",
+  "29258178": "MOBILIÁRIO",
+  "29404299": "MATERIAL DE ESCRITÓRIO",
+  "29438792": "MATERIAL DE LIMPEZA",
+  "29505055": "RÁDIO COMUNICADOR",
+  "29816344": "FERRAMENTAS E EQUIPAMENTOS",
+  "30114661": "MANUTENÇÃO VEICULAR",
+  "30371947": "MANUTENÇÃO DE EQUIPAMENTOS",
+  "30649653": "TREINAMENTO DE SEGURANÇA",
+  "30747049": "VIDROS",
+  "31362425": "ALIMENTAÇÃO/REFEIÇÃO",
+  "31630631": "TINTA E LOCAÇÃO DE RETROESCAVADEIRA",
+  "32222131": "BATERIAS",
+  "32246768": "PROJETO DE ESTRUTURA METÁLICA",
+  "32321018": "COLETA DE RESÍDUOS",
+  "32613688": "PROTENSÃO",
+  "32721991": "ENSAIO DE PIT EM ESTACAS",
+  "33081704": "ADITIVOS PARA CONCRETO",
+  "33338556": "LOCAÇÃO DE CAMINHÃO",
+  "33614493": "MATERIAL DE LIMPEZA",
+  "33834025": "CINTAS/ACESSÓRIOS DE IÇAMENTO",
+  "33845322": "LOCAÇÃO DE GERADOR",
+  "33859765": "LOCAÇÃO DE CAÇAMBA/BOTA-FORA",
+  "33886831": "MANUTENÇÃO DE INSTRUMENTOS",
+  "34136754": "FRETE",
+  "34656118": "MADEIRA",
+  "34669106": "RESTAURAÇÃO/SERVIÇOS DIVERSOS",
+  "35021022": "PRESTAÇÃO DE SERVIÇO/CONSULTORIA",
+  "35088657": "MATERIAL ELÉTRICO",
+  "35246768": "PROJETO DE ESTRUTURA METÁLICA",
+  "35272919": "LOCAÇÃO DE GUINDASTE/MUNCK",
+  "35434905": "LOCAÇÃO DE ANDAIMES/ESCORAS",
+  "35481679": "FERRAMENTAS",
+  "37295834": "FRETE",
+  "37439063": "PRESTAÇÃO DE SERVIÇO/CONSULTORIA",
+  "37524702": "MATERIAL DE CONSTRUÇÃO",
+  "37726560": "SERVIÇOS GRÁFICOS",
+  "37730964": "PROJETO/INSTALAÇÃO ELÉTRICA (SPDA)",
+  "37903682": "PODA DE ÁRVORES",
+  "38318624": "EMBALAGENS (TUBOS DE PAPELÃO)",
+  "38501772": "PEÇAS PARA EQUIPAMENTOS",
+  "38827397": "FARDAMENTO",
+  "39229750": "TRANSPORTE DE CARGA/BOTA-FORA",
+  "39327710": "EPIs E FERRAMENTAS",
+  "39413871": "LAVAGEM VEICULAR",
+  "39493717": "COMBUSTÍVEL",
+  "39749029": "FERRAMENTAS",
+  "40069740": "MANUTENÇÃO DE AR CONDICIONADO",
+  "40081999": "EPIs E MATERIAIS",
+  "40460697": "FARDAMENTO",
+  "40778342": "TUBOS DE AÇO",
+  "40778836": "MATERIAL HIDRÁULICO",
+  "41068190": "ALUGUEL DE IMÓVEL",
+  "41191753": "ALUGUEL DE IMÓVEL",
+  "41426966": "ELETRODOMÉSTICOS",
+  "41556176": "AR CONDICIONADO",
+  "41644624": "LOCAÇÃO DE BANHEIRO QUÍMICO",
+  "41854617": "MANUTENÇÃO DE EQUIPAMENTOS",
+  "42014927": "HOSPEDAGEM",
+  "42111363": "LAVAGEM DE EQUIPAMENTOS",
+  "42283770": "SEGURO DE VIDA",
+  "42587780": "FERRAMENTAS E PARAFUSOS",
+  "43073873": "PROTENSÃO",
+  "43129836": "PROJETO/INSTALAÇÃO ELÉTRICA (SPDA)",
+  "43193297": "ALIMENTAÇÃO/REFEIÇÃO",
+  "44357085": "PEÇAS PARA MÁQUINAS",
+  "45141688": "MATERIAL DE ESCRITÓRIO",
+  "45557739": "LOCAÇÃO DE GUINDASTE/MUNCK",
+  "45698596": "ANÁLISE DE ÁGUA",
+  "45736131": "LOCAÇÃO DE VEÍCULOS",
+  "45754377": "FRETE",
+  "46170722": "PRESTAÇÃO DE SERVIÇO",
+  "46365440": "PRESTAÇÃO DE SERVIÇO",
+  "47194040": "COMUNICAÇÃO VISUAL",
+  "47811670": "PRESTAÇÃO DE SERVIÇO",
+  "47869518": "INSTALAÇÃO ELÉTRICA",
+  "48517895": "MATERIAL HIDRÁULICO",
+  "48755030": "LIMPEZA E LUBRIFICAÇÃO",
+  "48912993": "BEBEDOURO",
+  "49054895": "SERVIÇOS DE ALVENARIA",
+  "49275455": "FARDAMENTO",
+  "50458148": "PRESTAÇÃO DE SERVIÇO",
+  "50891179": "HOSPEDAGEM",
+  "51564795": "ENGENHARIA/PLANEJAMENTO",
+  "52645873": "SEGURANÇA/VIGILÂNCIA",
+  "52687097": "TRANSPORTE DE MATERIAL",
+  "53103465": "LOCAÇÃO DE EQUIPAMENTOS",
+  "53471219": "GESSO",
+  "53477320": "MONTAGEM DE SUPERESTRUTURA FERROVIÁRIA",
+  "53574442": "MANUTENÇÃO DE EQUIPAMENTOS",
+  "53734399": "PRESTAÇÃO DE SERVIÇO/CONSTRUÇÃO",
+  "53956350": "ASSESSORIA TÉCNICA",
+  "54216818": "LOCAÇÃO DE BANHEIRO QUÍMICO",
+  "54595488": "ALUGUEL DE IMÓVEL",
+  "55070785": "LOCAÇÃO DE CONTAINER",
+  "55148858": "CONSULTORIA JURÍDICA",
+  "55155847": "LOCAÇÃO DE ANDAIMES",
+  "55379222": "SERVIÇO DE COMUNICAÇÃO/DESIGN",
+  "55757755": "INTERNET/TELECOM",
+  "56187445": "LOCAÇÃO DE EQUIPAMENTOS",
+  "56203786": "LOCAÇÃO DE RETROESCAVADEIRA",
+  "57314836": "MANUTENÇÃO DE EQUIPAMENTOS",
+  "58445923": "ALUGUEL DE IMÓVEL",
+  "58473827": "TIJOLO/BLOCO",
+  "58516707": "MANUTENÇÃO DE EXTINTORES",
+  "58694466": "VIDRO E PEÇAS VEICULARES",
+  "58727857": "SERVIÇO DE IMPRIMAÇÃO",
+  "58827709": "LIMPEZA DE AR CONDICIONADO",
+  "58935686": "PROJETO DE COMBATE A INCÊNDIO",
+  "59622276": "GELO",
+  "60117824": "PODA DE ÁRVORES",
+  "60415961": "LOCAÇÃO DE BANHEIRO QUÍMICO",
+  "60634166": "PRESTAÇÃO DE SERVIÇO",
+  "61074506": "CORDOALHA DE AÇO",
+  "61596238": "FOLHA DE PAGAMENTO/PLR (INTERNO)",
+  "62224523": "INDENIZAÇÃO (SINISTRO)",
+  "63024637": "MANUTENÇÃO/INSTALAÇÃO DE REDE",
+  "63043867": "PRESTAÇÃO DE SERVIÇO",
+  "63067344": "PRESTAÇÃO DE SERVIÇO",
+  "63267110": "PRESTAÇÃO DE SERVIÇO",
+  "63276801": "LOCAÇÃO DE EQUIPAMENTOS",
+  "63319301": "LOCAÇÃO DE EQUIPAMENTOS/TRANSPORTE",
+  "63378170": "PRESTAÇÃO DE SERVIÇO",
+  "63597186": "CONSULTORIA",
+  "63822521": "TOPOGRAFIA/PRESTAÇÃO DE SERVIÇO",
+  "64172012": "MANUTENÇÃO DE FERRAMENTAS",
+  "64781522": "ENGENHARIA/CONSULTORIA",
+  "65437021": "PRESTAÇÃO DE SERVIÇO",
+  "65767094": "AR CONDICIONADO",
+  "66769166": "PRESTAÇÃO DE SERVIÇO/ENGENHARIA",
+  "67791821": "LOCAÇÃO DE EQUIPAMENTOS",
+  "67820752": "PRESTAÇÃO DE SERVIÇO",
+  "69034668": "VALE-ALIMENTAÇÃO",
+  "84501803": "ALUGUEL DE IMÓVEL",
+  "88360273": "ALUGUEL DE IMÓVEL",
+  "92660406": "MATERIAL DE REFRIGERAÇÃO",
+  "139269773": "ALUGUEL DE IMÓVEL",
+  "701555183": "ALUGUEL DE IMÓVEL",
+  "FOLHA MENSAL": "FOLHA DE PAGAMENTO (INTERNO)",
+  "VALE TRANSPORTE": "VALE-TRANSPORTE (INTERNO)",
+  "PREVISAO LOCACAO IMOVEIS": "ALUGUEL DE IMÓVEL (INTERNO)",
+};
+// Acha a categoria pelo Código Fornecedor já sem zeros à esquerda (mesma
+// normalização feita na importação — ver removerZerosEsquerda_ no
+// Code.gs), pra bater com as chaves do mapa acima independente de como o
+// código foi digitado/importado.
+function categoriaFornecedor_(i) {
+  const cod = String(i['Código Fornecedor'] == null ? '' : i['Código Fornecedor']).trim().replace(/^0+(?=\d)/, '');
+  return CATEGORIA_POR_FORNECEDOR_[cod] || '';
+}
+
 // Definição de cada coluna de "Todos os lançamentos" — uma única fonte de
 // verdade usada pra montar o <colgroup>, as duas linhas do cabeçalho (título
 // + filtro) e cada célula do corpo, tudo na ORDEM ATUAL escolhida pelo
@@ -2845,26 +3136,26 @@ function textoBuscavel(i) {
 // seletor próprio acima da tabela (ver .filtros); Anexos/Ação ficam de fora
 // daqui (não são arrastáveis nem ordenáveis) — ver
 // COLUNAS_LANCAMENTOS_FIXAS_FINAL mais abaixo.
+// Venc. Real, Usuário, Status, Chave Pix e Observação saíram da planilha
+// (ficam poluindo a leitura rápida) mas continuam disponíveis no pop-up de
+// detalhamento ao clicar numa linha (ver CAMPOS_DETALHE_LINHA, que é
+// independente desta lista).
 const DEFINICAO_COLUNAS_LANCAMENTOS = [
   { chave: 'origem', rotulo: 'Origem', classeCol: 'col-origem', classeTh: 'col-origem', classeFiltroTh: 'col-origem', larguraBase: 3.66, extrator: i => i.Origem, filtroId: null },
-  { chave: 'status', rotulo: 'Status', classeCol: 'col-status', classeTh: 'col-status', classeFiltroTh: 'col-status', larguraBase: 4.12, extrator: i => i.Status, filtroId: null },
   { chave: 'aporte', rotulo: 'Aporte', classeCol: 'col-aporte', classeTh: 'col-aporte', classeFiltroTh: 'col-aporte', larguraBase: 3.66, extrator: i => i.Aporte, filtroId: null },
   { chave: 'tipo', rotulo: 'Tipo', classeCol: null, classeTh: null, classeFiltroTh: null, larguraBase: 2.81, extrator: i => i.Tipo, filtroId: 'flc-tipo' },
   { chave: 'emissao', rotulo: 'Emissão', classeCol: 'col-data', classeTh: null, classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Data Emissão']), filtroId: 'flc-emissao' },
   { chave: 'ndoc', rotulo: 'Nº Doc.', classeCol: 'col-ndoc', classeTh: null, classeFiltroTh: null, larguraBase: 3.66, extrator: i => i['Nº Documento'], filtroId: 'flc-ndoc' },
   { chave: 'formapgto', rotulo: 'Forma Pgto.', classeCol: null, classeTh: null, classeFiltroTh: null, larguraBase: 5.05, extrator: i => i['Forma Pagamento'], filtroId: 'flc-formapgto' },
-  { chave: 'chavepix', rotulo: 'Chave Pix', classeCol: null, classeTh: null, classeFiltroTh: null, larguraBase: 5.00, extrator: i => i['Chave Pix'], filtroId: 'flc-chavepix' },
   { chave: 'fornecedor', rotulo: 'Fornecedor', classeCol: 'col-fornecedor', classeTh: null, classeFiltroTh: null, larguraBase: 5.15, extrator: i => i['Código Fornecedor'], filtroId: 'flc-fornecedor' },
   { chave: 'razao', rotulo: 'Razão Social', classeCol: 'col-razao', classeTh: null, classeFiltroTh: null, larguraBase: 6.83, extrator: i => i['Razão Social'], filtroId: 'flc-razao' },
   { chave: 'vencimento', rotulo: 'Vencimento', classeCol: 'col-data', classeTh: null, classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Vencimento']), filtroId: 'flc-vencimento' },
-  { chave: 'vencreal', rotulo: 'Venc. Real', classeCol: 'col-data', classeTh: null, classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Vencimento Real']), filtroId: 'flc-vencreal' },
   { chave: 'valor', rotulo: 'Valor', classeCol: 'col-valor', classeTh: null, classeFiltroTh: null, larguraBase: 4.36, extrator: i => paraNumero(i['R$ Valor']), filtroId: 'flc-valor' },
   { chave: 'parcela', rotulo: 'Parcela', classeCol: null, classeTh: 'col-parcela', classeFiltroTh: null, larguraBase: 3.84, extrator: i => i['Parcela'], filtroId: 'flc-parcela' },
+  { chave: 'categoria', rotulo: 'Categoria', classeCol: 'col-categoria', classeTh: null, classeFiltroTh: null, larguraBase: 6.83, extrator: i => categoriaFornecedor_(i), filtroId: null },
   { chave: 'baixa', rotulo: 'Baixa', classeCol: 'col-data', classeTh: null, classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Data Baixa']), filtroId: 'flc-baixa' },
   { chave: 'historico', rotulo: 'Histórico', classeCol: 'col-historico', classeTh: null, classeFiltroTh: null, larguraBase: 6.83, extrator: i => i['Histórico'], filtroId: 'flc-historico' },
-  { chave: 'usuario', rotulo: 'Usuário', classeCol: 'col-usuario', classeTh: 'col-usuario', classeFiltroTh: 'col-usuario', larguraBase: 4.69, extrator: i => i['Usuário Inclusor'], filtroId: 'flc-usuario' },
   { chave: 'remessa', rotulo: 'Remessa', classeCol: 'col-remessa', classeTh: 'col-remessa', classeFiltroTh: 'col-remessa', larguraBase: 3.84, extrator: i => i['Remessa'], filtroId: 'flc-remessa' },
-  { chave: 'observacao', rotulo: 'Observação', classeCol: 'col-observacao', classeTh: null, classeFiltroTh: null, larguraBase: 6.83, extrator: i => i['Observação'], filtroId: null },
 ];
 // Sempre no fim, nessa ordem, nunca arrastáveis (são funcionais, não dados
 // do lançamento) — Anexos tem os botões de documento/comprovante, Ação tem
@@ -2992,32 +3283,24 @@ function celulaLancamento_(chave, i) {
       const badge = i.Origem === 'ERP' ? 'badge-erp' : 'badge-manual';
       return `<td class="col-origem"><span class="badge ${badge}">${i.Origem}</span></td>`;
     }
-    case 'status': {
-      const badge = i.Status === 'Duplicado – revisar' ? 'badge-dup' : 'badge-ok';
-      return `<td class="col-status" title="${escaparHtml(i.Status)}"><span class="badge ${badge}">${i.Status}</span></td>`;
-    }
     case 'aporte': return `<td class="col-aporte">${i.Aporte || ''}</td>`;
     case 'tipo': return `<td>${i.Tipo || ''}</td>`;
     case 'emissao': return `<td>${fmtData(i['Data Emissão'])}</td>`;
     case 'ndoc': return `<td>${i['Nº Documento'] || ''}</td>`;
     case 'formapgto': return `<td title="${escaparHtml(i['Forma Pagamento'])}">${i['Forma Pagamento'] || ''}</td>`;
-    case 'chavepix': return `<td title="${escaparHtml(i['Chave Pix'])}">${i['Chave Pix'] || ''}</td>`;
     case 'fornecedor': return `<td title="${escaparHtml(i['Código Fornecedor'])}">${i['Código Fornecedor'] || ''}</td>`;
     case 'razao': return `<td class="col-razao">${i['Razão Social'] || ''}</td>`;
     case 'vencimento': return `<td>${fmtData(i['Vencimento'])}</td>`;
-    case 'vencreal': return `<td>${fmtData(i['Vencimento Real'])}</td>`;
     case 'valor':
       return `<td class="col-valor" title="${escaparHtml(fmtMoeda(i['R$ Valor']))}">${htmlMoedaAlinhada(i['R$ Valor'])}</td>`;
     case 'parcela': return `<td>${i['Parcela'] || ''}</td>`;
+    case 'categoria': {
+      const cat = categoriaFornecedor_(i);
+      return `<td class="col-categoria" title="${escaparHtml(cat)}">${cat ? escaparHtml(cat) : ''}</td>`;
+    }
     case 'baixa': return `<td>${fmtData(i['Data Baixa'])}</td>`;
     case 'historico': return `<td class="col-historico">${i['Histórico'] || ''}</td>`;
-    case 'usuario': return `<td class="col-usuario" title="${escaparHtml(i['Usuário Inclusor'])}">${i['Usuário Inclusor'] || ''}</td>`;
     case 'remessa': return `<td class="col-remessa">${i['Remessa'] || ''}</td>`;
-    case 'observacao': {
-      const obs = i['Observação'] || '';
-      const conteudo = obs ? escaparHtml(obs) : '<span class="observacao-vazia">Adicionar observação…</span>';
-      return `<td class="col-observacao" title="Clique para editar a observação" onclick="event.stopPropagation(); editarObservacao('${escaparAtributo(i.ID)}','${i.Origem}','${escaparAtributo(obs)}')">${conteudo}</td>`;
-    }
     default: return '<td></td>';
   }
 }
