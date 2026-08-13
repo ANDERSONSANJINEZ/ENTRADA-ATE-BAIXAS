@@ -3437,11 +3437,12 @@ function voltarTodosAportes() {
   renderizarDetalheAporte();
 }
 
-// Retenções que o Protheus já lança soltas (IRRF/INSS/Contribuição Social
-// retida na fonte — Tipo "TX"/"INS") mas cujo valor já está consolidado
-// dentro de um boleto DARF do mesmo período: mostrar essas linhas também
-// no Aporte pediria o valor em duplicidade, então ficam de fora.
-const TIPOS_RETENCAO_DARF_ = ['TX', 'INS'];
+// Tipos que ficam de fora do Aporte porque já são pedidos por outro
+// caminho: TX/INS (IRRF/INSS/Contribuição Social retida na fonte) e ISS
+// já entram consolidados num boleto DARF/DAM do mesmo período — mostrar
+// essas linhas soltas também no Aporte pediria o valor em duplicidade.
+// RES/RESCISAO (rescisões de contrato) também ficam de fora.
+const TIPOS_EXCLUIDOS_APORTE_ = ['TX', 'INS', 'ISS', 'RES', 'RESCISAO'];
 
 // Um extrator por coluna (Aporte, Data, N/Doc., Descrição, Venc., Valor) —
 // usado por aplicarOrdenacao/tornarOrdenavel, mesmas funções genéricas de
@@ -3488,7 +3489,7 @@ function renderizarDetalheAporte() {
   let itens = aporte
     ? ultimoItensAnalise.filter((i) => calcularAporte(i['Vencimento']) === aporte)
     : ultimoItensAnalise.slice();
-  itens = itens.filter((i) => !TIPOS_RETENCAO_DARF_.includes(String(i.Tipo || '').trim().toUpperCase()));
+  itens = itens.filter((i) => !TIPOS_EXCLUIDOS_APORTE_.includes(String(i.Tipo || '').trim().toUpperCase()));
 
   const busca = (document.getElementById('busca-detalhe-aporte').value || '').trim().toLowerCase();
   if (busca) {
