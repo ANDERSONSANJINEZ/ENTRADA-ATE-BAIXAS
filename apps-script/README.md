@@ -119,23 +119,39 @@ lado:
 - **Extrato bancário** — envie o extrato do banco em `.xlsx`, também com
   qualquer nome. O resultado do cruzamento aparece na aba **Conciliação**
   (ver abaixo), não nesta aba.
+- **Comprovantes bancários** — busca automática, de uma vez, no Drive
+  (`PASTAS_BUSCA_ANEXO` no `Code.gs`) do comprovante de pagamento de todos
+  os títulos já baixados que ainda não têm `Link Comprovante` salvo. É a
+  mesma busca do botão 🧾 por linha (ver seção abaixo), só que rodando pra
+  todos os pendentes de uma vez em vez de um título por clique — processa
+  em lotes (ver `TAMANHO_LOTE_COMPROVANTES` no `Code.gs`) mostrando uma
+  barra de progresso, e pode ser cancelada a qualquer momento sem perder o
+  que já foi encontrado até ali.
 
-O upload de títulos exige edição habilitada; o do extrato bancário
-funciona mesmo em modo leitura (só salvar o resultado no histórico da
-planilha exige edição — ver seção Conciliação Bancária).
+O upload de títulos e a busca em lote de comprovantes exigem edição
+habilitada; o upload do extrato bancário funciona mesmo em modo leitura
+(só salvar o resultado no histórico da planilha exige edição — ver seção
+Conciliação Bancária).
 
 ## Anexos (documentos e comprovantes) por lançamento
 
 Na aba **Lançamentos**, a coluna "Anexos" de cada linha tem dois botões (📄
-documento, 🧾 comprovante). Diferente de versões anteriores, o link **não é
-mais buscado automaticamente no Drive** (a busca automática não conseguia
-achar os arquivos de forma confiável) — agora é colado manualmente:
+documento, 🧾 comprovante):
 
-- Clicar num botão sem link ainda cadastrado abre um campo pra colar o link
-  (do Google Drive ou de onde o arquivo estiver salvo) e salva.
-- Clicar num botão que já tem link cadastrado abre o mesmo campo,
-  pré-preenchido — dá pra só confirmar pra abrir o link, ou editar e
-  confirmar pra trocá-lo. O botão fica azul quando já tem um link salvo.
+- Clicar num botão sem link ainda cadastrado busca automaticamente no
+  Drive (mesmas pastas de `PASTAS_BUSCA_ANEXO`, ver `Code.gs`); se achar,
+  já salva e abre o arquivo direto, sem pedir confirmação. Se não achar
+  nada, abre um campo pra colar o link manualmente (do Google Drive ou de
+  onde o arquivo estiver salvo).
+- Clicar num botão que já tem link cadastrado abre o link direto, sem
+  buscar de novo. Pra trocar um link já salvo, é só colar um novo (o campo
+  de edição manual sempre aceita sobrescrever). O botão fica azul quando já
+  tem um link salvo.
+
+A busca automática exige que o nome do arquivo no Drive siga o padrão
+"TIPO Nº_DOCUMENTO FORNECEDOR...pdf" (ex.: "NF 351 RENOVE
+DISTRIBUIDORA.pdf", "COMPROVANTE 351 RENOVE DISTRIB 15466144.pdf") — sem
+isso ela não encontra o arquivo e cai direto no cadastro manual.
 
 Os links ficam guardados nas colunas `Link Documento`/`Link Comprovante` da
 planilha (abas `ERP` e `Manual`) e são **preservados entre reimportações**

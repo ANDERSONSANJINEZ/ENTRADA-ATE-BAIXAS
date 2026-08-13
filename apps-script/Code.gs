@@ -565,10 +565,11 @@ function api_removerDuplicados(payload) {
   return resultado;
 }
 
-// Grava o link de anexo (documento ou comprovante) digitado manualmente
-// pelo usuário para um lançamento — a busca automática no Drive foi
-// removida (não achava os arquivos de forma confiável). payload:
-// { id, origem: 'ERP'|'Manual', tipo: 'documento'|'comprovante', url }.
+// Grava o link de anexo (documento ou comprovante) de um lançamento —
+// chamada tanto quando a pessoa cola o link à mão quanto quando a busca
+// automática no Drive (ver buscarCandidatosAnexo_) já encontra e salva
+// sozinha. payload: { id, origem: 'ERP'|'Manual', tipo: 'documento'|
+// 'comprovante', url }.
 function api_definirAnexo(payload) {
   var nomeUsuario = validarAcessoEdicao_(payload);
   var origem = payload.origem === 'Manual' ? 'Manual' : 'ERP';
@@ -757,19 +758,24 @@ function paddingsFornecedor_(codigo) {
   return resultado;
 }
 
-function api_buscarAnexoDrive(payload) {
-  validarAcessoEdicao_(payload);
-  var nDocOriginal = removerZerosEsquerda_(String(payload.nDocumento || '')).trim();
+// Núcleo da busca/pontuação de anexo no Drive, isolado de api_buscarAnexoDrive
+// pra poder ser chamado também pela busca em lote (api_buscarComprovantesLote)
+// sem duplicar a lógica — as duas fazem exatamente a mesma varredura +
+// filtro de pontuação, só mudam quem chama (clique manual num título vs.
+// loop automático sobre vários títulos baixados) e o que fazem com o
+// resultado (mostrar candidato vs. já gravar o 1º direto na planilha).
+function buscarCandidatosAnexo_(nDocumento, codigoFornecedor, razaoSocial, tipo) {
+  var nDocOriginal = removerZerosEsquerda_(String(nDocumento || '')).trim();
   var nDocAlvo = normalizarTextoBusca_(nDocOriginal);
   if (!nDocAlvo) return { candidatos: [] };
-  var codigosFornecedor = paddingsFornecedor_(payload.codigoFornecedor); // ex.: ["64781522"] ou ["00005678","000005678"]
+  var codigosFornecedor = paddingsFornecedor_(codigoFornecedor); // ex.: ["64781522"] ou ["00005678","000005678"]
   // Sem Código Fornecedor pra combinar na busca, um Nº Documento bem curto
   // (1-2 caracteres) sozinho bateria com uma fração enorme do Drive — nem
   // tenta, pra não travar sem achar nada de útil mesmo.
   if (!codigosFornecedor.length && nDocAlvo.length < 3) return { candidatos: [] };
-  var palavrasFornecedor = normalizarTextoBusca_(payload.razaoSocial).split(' ')
+  var palavrasFornecedor = normalizarTextoBusca_(razaoSocial).split(' ')
     .filter(function (p) { return p.length >= 4; });
-  var buscandoComprovante = payload.tipo === 'comprovante';
+  var buscandoComprovante = tipo === 'comprovante';
 
   // Combina Nº Documento + Código Fornecedor (nas duas larguras possíveis,
   // 8 e 9 dígitos) na busca sempre que o código estiver disponível (é o
@@ -831,6 +837,96 @@ function api_buscarAnexoDrive(payload) {
 
   candidatos.sort(function (a, b) { return b.pontuacao - a.pontuacao; });
   return { candidatos: candidatos.slice(0, 5) };
+}
+
+// Chamada pelo botão de anexo (📄/🧾) de um título específico em
+// Lançamentos — só sugere; quem decide se aplica é sempre a pessoa
+// (ver definirOuAbrirAnexo no Index.html), nunca grava nada sozinha.
+function api_buscarAnexoDrive(payload) {
+  validarAcessoEdicao_(payload);
+  return buscarCandidatosAnexo_(payload.nDocumento, payload.codigoFornecedor, payload.razaoSocial, payload.tipo);
+}
+
+// Quantos títulos TENTAR por chamada na busca em lote — cada um faz uma
+// consulta ao índice do Drive (DriveApp.searchFiles), então um lote grande
+// demais correria o risco de estourar o tempo de execução de uma única
+// requisição. 40 é uma folga confortável mesmo em conexões lentas; o
+// cliente chama de novo com o cursor seguinte até finalizado=true (ver
+// buscarComprovantesEmLote no Index.html).
+var TAMANHO_LOTE_COMPROVANTES = 40;
+
+// Busca automática, em lote, do comprovante de pagamento de TODOS os
+// títulos já baixados (ERP + Manual) que ainda não têm Link Comprovante
+// salvo — usada pelo card "Comprovantes bancários" da aba Atualizar Dados.
+// Só considera título baixado: título ainda em aberto não tem comprovante
+// de pagamento pra achar.
+//
+// Paginada por um CURSOR sobre a lista ESTÁVEL de todas as linhas (ERP
+// depois Manual, na ordem da planilha) — não sobre a lista de pendentes
+// em si, que encolhe a cada comprovante achado. Se paginasse pela lista de
+// pendentes, achar um comprovante no meio de um lote desalinharia o offset
+// da próxima chamada com a lista já mais curta, pulando exatamente os
+// títulos que viriam logo depois dos que acabaram de ser resolvidos.
+// Cursor sobre a lista estável não tem esse problema: sempre avança sobre
+// as mesmas posições, achando comprovante ou não.
+function api_buscarComprovantesLote(payload) {
+  var nomeUsuario = validarAcessoEdicao_(payload);
+  var compCol = HEADERS.indexOf('Link Comprovante');
+  var docBaixaCol = HEADERS.indexOf('Data Baixa');
+  var nDocCol = HEADERS.indexOf('Nº Documento');
+  var fornecedorCol = HEADERS.indexOf('Código Fornecedor');
+  var razaoCol = HEADERS.indexOf('Razão Social');
+
+  // Não guarda estado entre chamadas — remonta a lista estável a cada
+  // chamada, então sempre reflete o estado atual da planilha (inclusive se
+  // algo mudar entre um lote e outro, como alguém colando um link manual
+  // enquanto a busca em lote está rodando).
+  var todasLinhas = [];
+  ['ERP', 'Manual'].forEach(function (origem) {
+    var sh = getSheet_(origem);
+    var ultimaLinha = sh.getLastRow();
+    if (ultimaLinha < 2) return;
+    var dados = sh.getRange(2, 1, ultimaLinha - 1, HEADERS.length).getValues();
+    for (var i = 0; i < dados.length; i++) {
+      todasLinhas.push({
+        sheet: sh, linha: i + 2,
+        baixado: !!dados[i][docBaixaCol], temLink: !!dados[i][compCol],
+        nDocumento: dados[i][nDocCol], codigoFornecedor: dados[i][fornecedorCol], razaoSocial: dados[i][razaoCol],
+      });
+    }
+  });
+  var totalPendentes = todasLinhas.filter(function (l) { return l.baixado && !l.temLink; }).length;
+
+  // Avança o cursor sobre todasLinhas, testando elegibilidade linha a
+  // linha — só a busca no Drive (a parte lenta) conta pro limite do lote;
+  // pular uma linha não-elegível é só indexação em memória, praticamente
+  // grátis, então não precisa contar contra TAMANHO_LOTE_COMPROVANTES.
+  var cursor = payload.cursor || 0;
+  var processados = 0, encontrados = 0;
+  while (cursor < todasLinhas.length && processados < TAMANHO_LOTE_COMPROVANTES) {
+    var linha = todasLinhas[cursor];
+    cursor++;
+    if (!linha.baixado || linha.temLink) continue;
+    processados++;
+    var resultado = buscarCandidatosAnexo_(linha.nDocumento, linha.codigoFornecedor, linha.razaoSocial, 'comprovante');
+    if (resultado.candidatos && resultado.candidatos.length) {
+      linha.sheet.getRange(linha.linha, compCol + 1).setValue(resultado.candidatos[0].url);
+      encontrados++;
+    }
+  }
+
+  var finalizado = cursor >= todasLinhas.length;
+  if (processados > 0) {
+    registrarLog_(nomeUsuario, 'Buscar comprovantes em lote',
+      encontrados + ' de ' + processados + ' comprovante(s) encontrado(s) neste lote');
+  }
+  return {
+    totalPendentes: totalPendentes,
+    processadosNesteLote: processados,
+    encontradosNesteLote: encontrados,
+    cursor: cursor,
+    finalizado: finalizado,
+  };
 }
 
 // Campos que o modal de detalhamento pode alterar num lançamento MANUAL —
@@ -904,6 +1000,7 @@ function doPost(e) {
     else if (acao === 'removerDuplicados') resultado = api_removerDuplicados(payload);
     else if (acao === 'definirAnexo') resultado = api_definirAnexo(payload);
     else if (acao === 'buscarAnexoDrive') resultado = api_buscarAnexoDrive(payload);
+    else if (acao === 'buscarComprovantesLote') resultado = api_buscarComprovantesLote(payload);
     else if (acao === 'definirObservacao') resultado = api_definirObservacao(payload);
     else if (acao === 'definirCategoria') resultado = api_definirCategoria(payload);
     else if (acao === 'validarEdicao') resultado = api_validarEdicao(payload);

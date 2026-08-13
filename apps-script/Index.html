@@ -263,6 +263,8 @@
      empresa costuma ser comprido). */
   .linha-tipo-razao { display: grid; grid-template-columns: 0.5fr 1fr 0.5fr 2fr; gap: 10px; }
   .aviso { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+  .barra-progresso { background: var(--azul-claro); border-radius: 6px; height: 10px; overflow: hidden; }
+  .barra-progresso-preenchimento { background: var(--azul); height: 100%; width: 0%; transition: width .2s; }
   #dropzone, #dropzone-extrato { border: 2px dashed var(--borda); border-radius: 10px; padding: 40px; text-align: center; color: var(--cinza); margin-bottom: 16px; cursor: pointer; }
   #dropzone.sobre, #dropzone-extrato.sobre { border-color: var(--azul); background: var(--azul-claro); }
   .badge-alerta { background: #fee2e2; color: var(--vermelho); }
@@ -705,6 +707,23 @@
         </div>
         <div id="resumo-conciliacao"></div>
       </div>
+    </div>
+    <div class="painel" id="painel-comprovantes-lote">
+      <h2>Comprovantes bancários — busca automática no Drive</h2>
+      <p style="font-size:13px;color:var(--cinza)">
+        Procura, de uma vez, o comprovante de pagamento de todos os títulos já
+        baixados que ainda não têm um link salvo (mesma busca usada no botão
+        🧾 de cada linha em Lançamentos, só que pra todos de uma vez). Pode
+        levar alguns minutos se houver muitos pendentes — dá pra cancelar a
+        qualquer momento sem perder o que já foi encontrado.
+      </p>
+      <button class="btn" id="btn-buscar-comprovantes-lote" onclick="buscarComprovantesEmLote()">🔍 Buscar comprovantes pendentes</button>
+      <button class="btn secundario" id="btn-cancelar-comprovantes-lote" style="display:none;" onclick="cancelarBuscaComprovantesLote()">Cancelar</button>
+      <div id="progresso-comprovantes-lote" style="display:none; margin-top:14px; max-width:520px;">
+        <div class="barra-progresso"><div class="barra-progresso-preenchimento" id="barra-comprovantes-fill"></div></div>
+        <div id="texto-progresso-comprovantes" style="font-size:13px; color:var(--cinza); margin-top:6px;"></div>
+      </div>
+      <div id="resultado-comprovantes-lote" class="aviso" style="display:none; margin-top:14px; margin-bottom:0;"></div>
     </div>
   </section>
 
@@ -5015,6 +5034,74 @@ dropzoneExtrato.addEventListener('drop', (e) => {
   if (e.dataTransfer.files[0]) processarExtrato(e.dataTransfer.files[0]);
 });
 
+// Busca em lote de comprovantes bancários (card "Comprovantes bancários" em
+// Atualizar Dados) — chama api_buscarComprovantesLote repetidamente (um
+// lote de cada vez, ver TAMANHO_LOTE_COMPROVANTES no Code.gs) até acabar os
+// pendentes ou a pessoa cancelar, atualizando a barra de progresso a cada
+// volta. Cada chamada já grava direto na planilha os comprovantes achados
+// (diferente do botão por linha, que só sugere) — por isso só recarrega o
+// estado (carregarTudo) no final, uma vez, em vez de a cada lote.
+let cancelarBuscaComprovantes = false;
+
+async function buscarComprovantesEmLote() {
+  const btnIniciar = document.getElementById('btn-buscar-comprovantes-lote');
+  const btnCancelar = document.getElementById('btn-cancelar-comprovantes-lote');
+  const painelProgresso = document.getElementById('progresso-comprovantes-lote');
+  const barraFill = document.getElementById('barra-comprovantes-fill');
+  const textoProgresso = document.getElementById('texto-progresso-comprovantes');
+  const resultadoDiv = document.getElementById('resultado-comprovantes-lote');
+
+  cancelarBuscaComprovantes = false;
+  btnIniciar.style.display = 'none';
+  btnCancelar.style.display = '';
+  resultadoDiv.style.display = 'none';
+  painelProgresso.style.display = '';
+  barraFill.style.width = '0%';
+  textoProgresso.textContent = 'Buscando…';
+
+  // totalPendentes fica fixo no valor devolvido pela 1ª chamada (é o que a
+  // pessoa via quando clicou em "Buscar") — as chamadas seguintes recontam
+  // os pendentes reais a cada vez (podem ser menores, já que os achados
+  // saem da lista), então usar sempre o valor mais recente faria a barra
+  // de progresso andar de forma errática em vez de subir de forma estável
+  // até o total original.
+  let cursor = 0, totalPendentes = null, totalEncontrados = 0, totalProcessados = 0, erro = null;
+  try {
+    while (true) {
+      const dados = await chamarServidor('buscarComprovantesLote', { cursor });
+      if (totalPendentes === null) totalPendentes = dados.totalPendentes;
+      totalEncontrados += dados.encontradosNesteLote;
+      totalProcessados += dados.processadosNesteLote;
+      const pct = totalPendentes ? Math.min(100, Math.round((totalProcessados / totalPendentes) * 100)) : 100;
+      barraFill.style.width = pct + '%';
+      textoProgresso.textContent = `${totalProcessados.toLocaleString('pt-BR')} de ${totalPendentes.toLocaleString('pt-BR')} título(s) baixado(s) verificados · ${totalEncontrados.toLocaleString('pt-BR')} comprovante(s) encontrado(s)`;
+      cursor = dados.cursor;
+      if (dados.finalizado || cancelarBuscaComprovantes) break;
+    }
+  } catch (e) {
+    erro = e.message;
+  }
+
+  painelProgresso.style.display = 'none';
+  btnIniciar.style.display = '';
+  btnCancelar.style.display = 'none';
+  resultadoDiv.style.display = '';
+  if (erro) {
+    resultadoDiv.textContent = `Erro ao buscar comprovantes: ${erro}`;
+  } else if (totalPendentes === 0) {
+    resultadoDiv.textContent = 'Nenhum título baixado está sem comprovante — nada para buscar.';
+  } else if (cancelarBuscaComprovantes && totalProcessados < totalPendentes) {
+    resultadoDiv.textContent = `Busca cancelada: ${totalEncontrados.toLocaleString('pt-BR')} comprovante(s) encontrado(s) em ${totalProcessados.toLocaleString('pt-BR')} de ${totalPendentes.toLocaleString('pt-BR')} título(s) verificados.`;
+  } else {
+    resultadoDiv.textContent = `${totalEncontrados.toLocaleString('pt-BR')} comprovante(s) encontrado(s) de ${totalPendentes.toLocaleString('pt-BR')} título(s) baixado(s) pendente(s).`;
+  }
+  if (totalEncontrados > 0) await carregarTudo(); // traz os links recém-gravados pro estado da tela
+}
+
+function cancelarBuscaComprovantesLote() {
+  cancelarBuscaComprovantes = true;
+}
+
 async function processarArquivo(file) {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array', cellDates: true });
@@ -5105,6 +5192,7 @@ function atualizarUiModoLeitura() {
   // histórico da planilha continua exigindo senha, ver salvarConciliacaoNaPlanilha)
   // — por isso aqui escondemos só o painel de baixas, não a aba inteira.
   document.getElementById('painel-atualizar-baixas').style.display = MODO_LEITURA ? 'none' : '';
+  document.getElementById('painel-comprovantes-lote').style.display = MODO_LEITURA ? 'none' : '';
   document.getElementById('btn-abrir-lancamento-manual').style.display = MODO_LEITURA ? 'none' : '';
   if (MODO_LEITURA) fecharModalLancamentoManual(); // voltar pra leitura com o pop-up aberto não deveria deixar editar
   const btnRemoverDuplicados = document.getElementById('btn-remover-duplicados');
