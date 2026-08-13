@@ -574,10 +574,11 @@
         <button class="btn secundario small" onclick="exportarXlsx('detalheAporte')">⬇ Exportar Excel</button>
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:0; align-items:center;">
+        <input id="busca-detalhe-aporte" class="busca-tabela" placeholder="Buscar em N/Doc. e Descrição…" style="max-width:320px; margin-bottom:0;">
+        <button type="button" class="btn secundario small" onclick="limparFiltrosDetalheAporte()">✕ Limpar filtros</button>
         <select id="select-aporte-detalhe" class="busca-tabela" style="max-width:420px; margin-bottom:0;">
           <option value="">Todos os aportes</option>
         </select>
-        <input id="busca-detalhe-aporte" class="busca-tabela" placeholder="Buscar em todas as colunas…" style="max-width:320px; margin-bottom:0;">
         <button type="button" id="btn-voltar-todos-aportes" class="btn secundario small" style="display:none; margin-bottom:0;" onclick="voltarTodosAportes()">↺ Todos os aportes</button>
       </div>
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; margin-top:10px; flex-wrap:wrap;">
@@ -4174,6 +4175,15 @@ function voltarTodosAportes() {
   renderizarDetalheAporte();
 }
 
+// Limpa só a busca (N/Doc./Descrição) — diferente de "↺ Todos os aportes",
+// que é quem cuida de voltar a seleção de aporte pra "todos"; os dois
+// ficam separados de propósito, um botão pra cada filtro.
+function limparFiltrosDetalheAporte() {
+  document.getElementById('busca-detalhe-aporte').value = '';
+  paginaDetalheAporte = 1;
+  renderizarDetalheAporte();
+}
+
 // Tipos que ficam de fora do Aporte porque já são pedidos por outro
 // caminho: TX/INS (IRRF/INSS/Contribuição Social retida na fonte) e ISS
 // já entram consolidados num boleto DARF/DAM do mesmo período — mostrar
@@ -4228,11 +4238,14 @@ function renderizarDetalheAporte() {
     : ultimoItensAnalise.slice();
   itens = itens.filter((i) => !TIPOS_EXCLUIDOS_APORTE_.includes(String(i.Tipo || '').trim().toUpperCase()));
 
+  // Só nas colunas N/Doc. e Descrição (diferente da busca "em todas as
+  // colunas" de Todos os lançamentos) — são as duas colunas onde faz
+  // sentido buscar texto livre aqui; Aporte/Data/Venc./Valor têm seus
+  // próprios seletores (aporte) ou não são texto livre de qualquer forma.
   const busca = (document.getElementById('busca-detalhe-aporte').value || '').trim().toLowerCase();
   if (busca) {
     itens = itens.filter((i) => contemBusca([
-      calcularAporte(i['Vencimento']), fmtData(i['Data Emissão']), i.Tipo, i['Nº Documento'], `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(),
-      montarDescricaoAporte_(i), fmtData(i['Vencimento']), fmtMoeda(i['R$ Valor']),
+      `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(), montarDescricaoAporte_(i),
     ], busca));
   }
   // Padrão na 1ª vez que esta tabela é ordenada na sessão (ninguém clicou
