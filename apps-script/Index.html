@@ -3213,12 +3213,42 @@ function chaveCategoriaFornecedor_(i) {
 function categoriaEhFixa_(i) {
   return !!CATEGORIA_POR_FORNECEDOR_[chaveCategoriaFornecedor_(i)];
 }
-// Aproximação de categoria a partir do próprio Histórico do lançamento,
-// usada só quando o fornecedor não está no "de-para" fixo — mesma limpeza
-// de ruído (Nº Documento com qualquer prefixo conhecido, fração de
-// parcela solta, sufixo /CE-XXX) já usada em limparNumeroDocDoHistorico_
-// (Detalhe por Aporte), mas sem depender da coluna Parcela bater.
+// Alguns Tipos já dizem sozinhos, e com mais certeza do que qualquer
+// palavra-chave no Histórico, que categoria é essa — são guias/retenções
+// administrativas, não uma compra de material/serviço (ver também
+// TIPOS_EXCLUIDOS_APORTE_, que tira boa parte desses do Aporte).
+const CATEGORIA_POR_TIPO_ = {
+  'ISS': 'IMPOSTO', 'TX': 'IMPOSTO', 'INS': 'IMPOSTO', 'DARF': 'IMPOSTO', 'DAM': 'IMPOSTO',
+  'RES': 'RESCISÃO', 'RESCISAO': 'RESCISÃO',
+  'FGTS': 'FGTS',
+  'FOL': 'FOLHA DE PAGAMENTO',
+};
+// Palavra-chave no Histórico (já limpo) -> rótulo curto de categoria — a
+// 1ª que bater vence. Objetivo é um rótulo de 1-3 palavras (igual ao
+// "de-para" fixo), não a frase inteira do Histórico.
+const PALAVRAS_CATEGORIA_HISTORICO_ = [
+  [/PROJETO/i, 'PROJETOS'],
+  [/CONSULTORIA/i, 'CONSULTORIA'],
+  [/MANUTEN[CÇ][AÃ]O/i, 'MANUTENÇÃO'],
+  [/LOCA[CÇ][AÃ]O/i, 'LOCAÇÃO DE EQUIPAMENTOS'],
+  [/FRETE|TRANSPORTE/i, 'FRETE/TRANSPORTE'],
+  [/ALUGUEL/i, 'ALUGUEL DE IMÓVEL'],
+  [/HOSPEDAGEM/i, 'HOSPEDAGEM'],
+  [/PRESTA[CÇ][AÃ]O DE SERVI[CÇ]O|SERVI[CÇ]O/i, 'PRESTAÇÃO DE SERVIÇO'],
+];
+// Aproximação de categoria a partir do Tipo/Histórico do lançamento, usada
+// só quando o fornecedor não está no "de-para" fixo. Primeiro tenta pelo
+// Tipo (mais confiável — ver CATEGORIA_POR_TIPO_); se não for um desses,
+// limpa o ruído do Histórico (Nº Documento com qualquer prefixo conhecido,
+// fração de parcela solta, sufixo /CE-XXX — mesma limpeza de
+// limparNumeroDocDoHistorico_/Detalhe por Aporte, mas sem depender da
+// coluna Parcela bater) e condensa numa palavra-chave curta (ver
+// PALAVRAS_CATEGORIA_HISTORICO_); sem palavra-chave conhecida, usa o texto
+// já limpo mesmo, só que curto — evita rótulo comprido tipo frase inteira.
 function categoriaDoHistorico_(i) {
+  const porTipo = CATEGORIA_POR_TIPO_[String(i.Tipo || '').trim().toUpperCase()];
+  if (porTipo) return porTipo;
+
   const hist = i['Histórico'];
   if (!hist) return '';
   let h = String(hist);
@@ -3233,7 +3263,17 @@ function categoriaDoHistorico_(i) {
   }
   h = h.replace(/^\s*\d+\s*\/\s*\d+\s*[-–]?\s*/, '');
   h = h.replace(/\/\s*CE-\d+\b/gi, '');
-  return h.replace(/\s*-\s*-\s*/g, ' - ').replace(/^\s*-\s*/, '').replace(/\s*-\s*$/, '').trim();
+  h = h.replace(/\s*-\s*-\s*/g, ' - ').replace(/^\s*-\s*/, '').replace(/\s*-\s*$/, '').trim();
+  if (!h) return '';
+
+  for (const [regex, rotulo] of PALAVRAS_CATEGORIA_HISTORICO_) {
+    if (regex.test(h)) return rotulo;
+  }
+  // Sem palavra-chave conhecida: mantém o texto limpo, mas encurtado (só a
+  // 1ª "frase" antes do 1º hífen, sem passar de ~40 caracteres) — melhor
+  // um resumo aproximado do que a linha inteira do Histórico.
+  const primeiraParte = h.split(' - ')[0].trim();
+  return primeiraParte.length > 40 ? primeiraParte.slice(0, 40).trim() + '…' : primeiraParte;
 }
 // Categoria exibida na coluna "Categoria" de Todos os lançamentos —
 // prioridade: (1) "de-para" fixo por Código Fornecedor, (2) categoria
