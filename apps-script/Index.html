@@ -516,18 +516,21 @@
       </div>
       <div class="filtros">
         <input id="busca" class="busca-tabela" placeholder="Buscar em todas as colunas…" style="margin-bottom:0;">
-        <select id="filtro-origem">
-          <option value="">Origem: todas</option>
-          <option value="ERP">ERP</option>
-          <option value="Manual">Manual</option>
+        <select id="filtro-aporte">
+          <option value="">Aporte: todos</option>
+        </select>
+        <select id="filtro-categoria">
+          <option value="">Categoria: todas</option>
         </select>
         <select id="filtro-status">
           <option value="">Status: todos</option>
           <option value="OK">OK</option>
           <option value="Duplicado – revisar">Duplicado – revisar</option>
         </select>
-        <select id="filtro-aporte">
-          <option value="">Aporte: todos</option>
+        <select id="filtro-origem">
+          <option value="">Origem: todas</option>
+          <option value="ERP">ERP</option>
+          <option value="Manual">Manual</option>
         </select>
         <button type="button" class="btn secundario small" onclick="limparFiltrosLancamentos()">✕ Limpar filtros</button>
       </div>
@@ -4009,6 +4012,7 @@ function renderizarLancamentos() {
   const fOrigem = document.getElementById('filtro-origem').value;
   const fStatus = document.getElementById('filtro-status').value;
   const fAporte = document.getElementById('filtro-aporte').value;
+  const fCategoria = document.getElementById('filtro-categoria').value;
 
   let itens = erpFiltrado().concat(manualFiltrado()).map(i => Object.assign({ Aporte: calcularAporte(i['Vencimento']) }, i));
 
@@ -4022,9 +4026,25 @@ function renderizarLancamentos() {
     selectAporte.value = aportesDisponiveis.includes(selecionado) ? selecionado : '';
   }
 
+  // Não grava a categoria calculada no próprio item (ex.: via Object.assign
+  // acima, como o Aporte) — item já tem um campo 'Categoria' bruto (o
+  // digitado manualmente, ver api_definirCategoria), e sobrescrevê-lo
+  // faria a exibição da linha (celulaLancamento_, que chama
+  // categoriaFornecedor_ direto) e este filtro discordarem entre si.
+  const selectCategoria = document.getElementById('filtro-categoria');
+  const categoriasDisponiveis = Array.from(new Set(itens.map(i => categoriaFornecedor_(i)).filter(Boolean))).sort();
+  if (selectCategoria.dataset.opcoes !== categoriasDisponiveis.join('|')) {
+    selectCategoria.dataset.opcoes = categoriasDisponiveis.join('|');
+    const selecionada = selectCategoria.value;
+    selectCategoria.innerHTML = '<option value="">Categoria: todas</option>' +
+      categoriasDisponiveis.map(c => `<option value="${escaparAtributo(c)}">${escaparHtml(c)}</option>`).join('');
+    selectCategoria.value = categoriasDisponiveis.includes(selecionada) ? selecionada : '';
+  }
+
   if (fOrigem) itens = itens.filter(i => i.Origem === fOrigem);
   if (fStatus) itens = itens.filter(i => i.Status === fStatus);
   if (fAporte) itens = itens.filter(i => i.Aporte === fAporte);
+  if (fCategoria) itens = itens.filter(i => categoriaFornecedor_(i) === fCategoria);
   if (busca) itens = itens.filter(i => correspondeBusca(textoBuscavel(i), busca));
 
   itens.sort((a, b) => (paraData(b['Vencimento']) || 0) - (paraData(a['Vencimento']) || 0));
@@ -4073,18 +4093,19 @@ function renderizarLancamentos() {
   tornarOrdenavel('tabela-lancamentos', extratoresLancamentosEmOrdem(), () => { paginaLancamentos = 1; renderizarLancamentos(); });
   tornarColunasRedimensionaveis('tabela-lancamentos');
 }
-['busca', 'filtro-origem', 'filtro-status', 'filtro-aporte'].forEach(id =>
+['busca', 'filtro-origem', 'filtro-status', 'filtro-aporte', 'filtro-categoria'].forEach(id =>
   document.getElementById(id).addEventListener('input', () => { paginaLancamentos = 1; renderizarLancamentos(); }));
 
-// Limpa a busca, os 3 seletores (Origem/Status/Aporte) e todos os filtros
-// por coluna de "Todos os lançamentos" de uma vez — sem isso, um filtro
-// esquecido em alguma coluna escondida (fora da largura visível da tela,
-// como no print que motivou este botão) passava despercebido.
+// Limpa a busca, os 4 seletores (Aporte/Categoria/Status/Origem) e todos os
+// filtros por coluna de "Todos os lançamentos" de uma vez — sem isso, um
+// filtro esquecido em alguma coluna escondida (fora da largura visível da
+// tela, como no print que motivou este botão) passava despercebido.
 function limparFiltrosLancamentos() {
   document.getElementById('busca').value = '';
   document.getElementById('filtro-origem').value = '';
   document.getElementById('filtro-status').value = '';
   document.getElementById('filtro-aporte').value = '';
+  document.getElementById('filtro-categoria').value = '';
   paginaLancamentos = 1;
   renderizarLancamentos();
 }
