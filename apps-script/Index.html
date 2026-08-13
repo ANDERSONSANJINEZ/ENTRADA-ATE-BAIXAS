@@ -574,7 +574,7 @@
         <button class="btn secundario small" onclick="exportarXlsx('detalheAporte')">⬇ Exportar Excel</button>
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:0; align-items:center;">
-        <input id="busca-detalhe-aporte" class="busca-tabela" placeholder="Buscar em N/Doc. e Descrição…" style="max-width:320px; margin-bottom:0;">
+        <input id="busca-detalhe-aporte" class="busca-tabela" placeholder="Buscar em N/Doc., Descrição e Venc.…" style="max-width:320px; margin-bottom:0;">
         <button type="button" class="btn secundario small" onclick="limparFiltrosDetalheAporte()">✕ Limpar filtros</button>
         <select id="select-aporte-detalhe" class="busca-tabela" style="max-width:420px; margin-bottom:0;">
           <option value="">Todos os aportes</option>
@@ -4158,14 +4158,14 @@ let ultimoDetalheAporte = [];
 
 // Mesmo critério usado por renderizarDetalheAporte pra decidir o que entra
 // na tabela (exclui TIPOS_EXCLUIDOS_APORTE_ e, se houver texto na busca,
-// só N/Doc. ou Descrição batendo) — usado tanto pela tabela quanto pelo
-// menu de aportes, pra manter os dois sempre consistentes entre si.
+// só N/Doc., Descrição ou Venc. batendo) — usado tanto pela tabela quanto
+// pelo menu de aportes, pra manter os dois sempre consistentes entre si.
 function itensParaDetalheAporte_() {
   const busca = (document.getElementById('busca-detalhe-aporte').value || '').trim().toLowerCase();
   return ultimoItensAnalise.filter((i) => {
     if (TIPOS_EXCLUIDOS_APORTE_.includes(String(i.Tipo || '').trim().toUpperCase())) return false;
     if (!busca) return true;
-    return contemBusca([`${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(), montarDescricaoAporte_(i)], busca);
+    return contemBusca([`${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(), montarDescricaoAporte_(i), fmtData(i['Vencimento'])], busca);
   });
 }
 
@@ -4194,7 +4194,7 @@ function voltarTodosAportes() {
   renderizarDetalheAporte();
 }
 
-// Limpa só a busca (N/Doc./Descrição) — diferente de "↺ Todos os aportes",
+// Limpa só a busca (N/Doc./Descrição/Venc.) — diferente de "↺ Todos os aportes",
 // que é quem cuida de voltar a seleção de aporte pra "todos"; os dois
 // ficam separados de propósito, um botão pra cada filtro.
 function limparFiltrosDetalheAporte() {
@@ -4253,7 +4253,7 @@ function renderizarDetalheAporte() {
 
   // Sem aporte selecionado: mostra TODOS os títulos (de todos os aportes),
   // pra dar pra buscar em qualquer um sem precisar escolher um de cada vez.
-  // Exclusão de tipo e busca (N/Doc.+Descrição) vêm de itensParaDetalheAporte_
+  // Exclusão de tipo e busca (N/Doc./Descrição/Venc.) vêm de itensParaDetalheAporte_
   // — mesmo critério usado por popularSelectAporteDetalhe pra decidir quais
   // aportes aparecem no menu, pra tabela e menu nunca ficarem inconsistentes
   // entre si (ex.: menu oferecendo um aporte que a busca atual não bate com
