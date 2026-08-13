@@ -11,6 +11,14 @@
      versão community dela não grava estilo (cor, negrito) no arquivo, então
      as exportações formatadas usam ExcelJS (abaixo), que suporta de verdade. -->
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<!-- pdfjs-dist + pdf-lib + jszip: usadas só pela seção "Separar comprovantes
+     bancários" (aba Atualizar Dados) — leem o texto de cada página do PDF
+     pra achar a Descrição, separam cada página num PDF individual e
+     empacotam tudo num .zip, inteiramente no navegador (sem passar pelo
+     servidor Apps Script). -->
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   :root {
     --azul: #1f4e78;
@@ -263,8 +271,9 @@
      empresa costuma ser comprido). */
   .linha-tipo-razao { display: grid; grid-template-columns: 0.5fr 1fr 0.5fr 2fr; gap: 10px; }
   .aviso { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
-  .barra-progresso { background: var(--azul-claro); border-radius: 6px; height: 10px; overflow: hidden; }
-  .barra-progresso-preenchimento { background: var(--azul); height: 100%; width: 0%; transition: width .2s; }
+  .dropzone-comprovante { border: 2px dashed var(--borda); border-radius: 10px; padding: 24px 12px; text-align: center; color: var(--cinza); cursor: pointer; font-size: 13px; margin-bottom: 16px; }
+  .dropzone-comprovante.sobre { border-color: var(--azul); background: var(--azul-claro); }
+  .dropzone-comprovante.preenchido { border-color: #16a34a; color: #15803d; }
   #dropzone, #dropzone-extrato { border: 2px dashed var(--borda); border-radius: 10px; padding: 40px; text-align: center; color: var(--cinza); margin-bottom: 16px; cursor: pointer; }
   #dropzone.sobre, #dropzone-extrato.sobre { border-color: var(--azul); background: var(--azul-claro); }
   .badge-alerta { background: #fee2e2; color: var(--vermelho); }
@@ -708,22 +717,23 @@
         <div id="resumo-conciliacao"></div>
       </div>
     </div>
-    <div class="painel" id="painel-comprovantes-lote">
-      <h2>Comprovantes bancários — busca automática no Drive</h2>
+    <div class="painel">
+      <h2>📎 Separar comprovantes bancários</h2>
       <p style="font-size:13px;color:var(--cinza)">
-        Procura, de uma vez, o comprovante de pagamento de todos os títulos já
-        baixados que ainda não têm um link salvo (mesma busca usada no botão
-        🧾 de cada linha em Lançamentos, só que pra todos de uma vez). Pode
-        levar alguns minutos se houver muitos pendentes — dá pra cancelar a
-        qualquer momento sem perder o que já foi encontrado.
+        Envie um ou mais lotes de comprovante em PDF do banco (um
+        comprovante por página cada), sem precisar uni-los antes. Cada
+        página é separada num PDF individual, nomeado pela Descrição
+        encontrada nela, e tudo volta num .zip — direto no navegador, sem
+        passar pela planilha.
       </p>
-      <button class="btn" id="btn-buscar-comprovantes-lote" onclick="buscarComprovantesEmLote()">🔍 Buscar comprovantes pendentes</button>
-      <button class="btn secundario" id="btn-cancelar-comprovantes-lote" style="display:none;" onclick="cancelarBuscaComprovantesLote()">Cancelar</button>
-      <div id="progresso-comprovantes-lote" style="display:none; margin-top:14px; max-width:520px;">
-        <div class="barra-progresso"><div class="barra-progresso-preenchimento" id="barra-comprovantes-fill"></div></div>
-        <div id="texto-progresso-comprovantes" style="font-size:13px; color:var(--cinza); margin-top:6px;"></div>
+      <div class="dropzone-comprovante" id="dropzone-comprovantes">Arraste um ou mais lotes de PDF aqui ou clique para selecionar
+        <input type="file" id="arquivo-comprovantes" accept="application/pdf" multiple style="display:none">
       </div>
-      <div id="resultado-comprovantes-lote" class="aviso" style="display:none; margin-top:14px; margin-bottom:0;"></div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button class="btn" id="btn-separar-comprovantes" onclick="separarComprovantesBancarios()">Separar e baixar .zip</button>
+        <span id="status-separar-comprovantes" style="font-size:13px;color:var(--cinza)"></span>
+      </div>
+      <div id="resumo-comprovantes"></div>
     </div>
   </section>
 
@@ -5034,72 +5044,176 @@ dropzoneExtrato.addEventListener('drop', (e) => {
   if (e.dataTransfer.files[0]) processarExtrato(e.dataTransfer.files[0]);
 });
 
-// Busca em lote de comprovantes bancários (card "Comprovantes bancários" em
-// Atualizar Dados) — chama api_buscarComprovantesLote repetidamente (um
-// lote de cada vez, ver TAMANHO_LOTE_COMPROVANTES no Code.gs) até acabar os
-// pendentes ou a pessoa cancelar, atualizando a barra de progresso a cada
-// volta. Cada chamada já grava direto na planilha os comprovantes achados
-// (diferente do botão por linha, que só sugere) — por isso só recarrega o
-// estado (carregarTudo) no final, uma vez, em vez de a cada lote.
-let cancelarBuscaComprovantes = false;
+// ---------- Separar comprovantes bancários ----------
+// Roda inteiramente no navegador (pdfjs-dist pra ler o texto de cada
+// página, pdf-lib pra separar as páginas, jszip pra empacotar) — não passa
+// pelo servidor Apps Script, então não tem limite de 6 minutos de execução
+// nem precisa de nenhuma permissão extra no Drive. Mesma lógica de
+// extração de Descrição do script Python que substituiu.
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
-async function buscarComprovantesEmLote() {
-  const btnIniciar = document.getElementById('btn-buscar-comprovantes-lote');
-  const btnCancelar = document.getElementById('btn-cancelar-comprovantes-lote');
-  const painelProgresso = document.getElementById('progresso-comprovantes-lote');
-  const barraFill = document.getElementById('barra-comprovantes-fill');
-  const textoProgresso = document.getElementById('texto-progresso-comprovantes');
-  const resultadoDiv = document.getElementById('resultado-comprovantes-lote');
+let arquivosComprovantesSelecionados = [];
 
-  cancelarBuscaComprovantes = false;
-  btnIniciar.style.display = 'none';
-  btnCancelar.style.display = '';
-  resultadoDiv.style.display = 'none';
-  painelProgresso.style.display = '';
-  barraFill.style.width = '0%';
-  textoProgresso.textContent = 'Buscando…';
+const COMPROVANTE_DESCRICAO_INLINE_RE = /Descri[cç][aã]o[:\s]+(.+)/i;
+const COMPROVANTE_DESCRICAO_LABEL_RE = /Descri[cç][aã]o/i;
+const COMPROVANTE_NOME_INVALIDO_RE = /[<>:"/\\|?*]/g;
+const COMPROVANTE_PREFIXO_TIPO_RE = /^[A-Z]+(?=\s+\d)/;
 
-  // totalPendentes fica fixo no valor devolvido pela 1ª chamada (é o que a
-  // pessoa via quando clicou em "Buscar") — as chamadas seguintes recontam
-  // os pendentes reais a cada vez (podem ser menores, já que os achados
-  // saem da lista), então usar sempre o valor mais recente faria a barra
-  // de progresso andar de forma errática em vez de subir de forma estável
-  // até o total original.
-  let cursor = 0, totalPendentes = null, totalEncontrados = 0, totalProcessados = 0, erro = null;
-  try {
-    while (true) {
-      const dados = await chamarServidor('buscarComprovantesLote', { cursor });
-      if (totalPendentes === null) totalPendentes = dados.totalPendentes;
-      totalEncontrados += dados.encontradosNesteLote;
-      totalProcessados += dados.processadosNesteLote;
-      const pct = totalPendentes ? Math.min(100, Math.round((totalProcessados / totalPendentes) * 100)) : 100;
-      barraFill.style.width = pct + '%';
-      textoProgresso.textContent = `${totalProcessados.toLocaleString('pt-BR')} de ${totalPendentes.toLocaleString('pt-BR')} título(s) baixado(s) verificados · ${totalEncontrados.toLocaleString('pt-BR')} comprovante(s) encontrado(s)`;
-      cursor = dados.cursor;
-      if (dados.finalizado || cancelarBuscaComprovantes) break;
+function comprovanteReconstruirLinhas(items) {
+  const linhas = [];
+  const tolerancia = 2;
+  items.forEach((item) => {
+    const y = item.transform[5];
+    let linha = linhas.find((l) => Math.abs(l.y - y) <= tolerancia);
+    if (!linha) {
+      linha = { y, itens: [] };
+      linhas.push(linha);
     }
-  } catch (e) {
-    erro = e.message;
-  }
-
-  painelProgresso.style.display = 'none';
-  btnIniciar.style.display = '';
-  btnCancelar.style.display = 'none';
-  resultadoDiv.style.display = '';
-  if (erro) {
-    resultadoDiv.textContent = `Erro ao buscar comprovantes: ${erro}`;
-  } else if (totalPendentes === 0) {
-    resultadoDiv.textContent = 'Nenhum título baixado está sem comprovante — nada para buscar.';
-  } else if (cancelarBuscaComprovantes && totalProcessados < totalPendentes) {
-    resultadoDiv.textContent = `Busca cancelada: ${totalEncontrados.toLocaleString('pt-BR')} comprovante(s) encontrado(s) em ${totalProcessados.toLocaleString('pt-BR')} de ${totalPendentes.toLocaleString('pt-BR')} título(s) verificados.`;
-  } else {
-    resultadoDiv.textContent = `${totalEncontrados.toLocaleString('pt-BR')} comprovante(s) encontrado(s) de ${totalPendentes.toLocaleString('pt-BR')} título(s) baixado(s) pendente(s).`;
-  }
-  if (totalEncontrados > 0) await carregarTudo(); // traz os links recém-gravados pro estado da tela
+    linha.itens.push(item);
+  });
+  linhas.sort((a, b) => b.y - a.y);
+  return linhas
+    .map((l) => {
+      l.itens.sort((a, b) => a.transform[4] - b.transform[4]);
+      return l.itens.map((i) => i.str).join(' ').replace(/\s+/g, ' ').trim();
+    })
+    .filter((l) => l.length > 0);
 }
 
-function cancelarBuscaComprovantesLote() {
-  cancelarBuscaComprovantes = true;
+function comprovanteExtrairDescricao(linhas) {
+  for (const linha of linhas) {
+    const m = linha.match(COMPROVANTE_DESCRICAO_INLINE_RE);
+    if (m) {
+      const candidato = m[1].trim();
+      if (candidato.length > 2 && !candidato.startsWith('R$')) return candidato;
+    }
+  }
+  for (let i = 0; i < linhas.length; i++) {
+    if (COMPROVANTE_DESCRICAO_LABEL_RE.test(linhas[i]) && i > 0) {
+      const candidato = linhas[i - 1].trim();
+      if (candidato && !candidato.startsWith('R$') && candidato.length > 2) return candidato;
+    }
+  }
+  return null;
+}
+
+function comprovanteNomeArquivo(descricao, indicePagina) {
+  if (!descricao) return `pagina_${String(indicePagina).padStart(2, '0')}.pdf`;
+  const semPrefixo = descricao.replace(COMPROVANTE_PREFIXO_TIPO_RE, 'COMPROVANTE');
+  const nomeLimpo = semPrefixo.replace(COMPROVANTE_NOME_INVALIDO_RE, '').trim();
+  return `${nomeLimpo}.pdf`;
+}
+
+function comprovanteNomeSemColisao(nome, usados) {
+  if (!(nome in usados)) {
+    usados[nome] = 1;
+    return nome;
+  }
+  usados[nome] += 1;
+  const idx = nome.lastIndexOf('.');
+  return `${nome.slice(0, idx)} (${usados[nome]}).${nome.slice(idx + 1)}`;
+}
+
+async function separarPdfComprovante(arrayBuffer) {
+  // Nao resolve colisao de nome aqui — quem chama (separarComprovantesBancarios)
+  // faz isso numa unica passada, com um "usados" compartilhado entre todos os
+  // arquivos selecionados, senao duas paginas de arquivos diferentes podiam
+  // colidir de novo depois de cada uma ja ter sido desambiguada sozinha.
+  const pdfjsDoc = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+  const pdfLibDoc = await PDFLib.PDFDocument.load(arrayBuffer.slice(0));
+  const totalPaginas = pdfLibDoc.getPageCount();
+  const resultados = [];
+
+  for (let i = 0; i < totalPaginas; i++) {
+    const pagina = await pdfjsDoc.getPage(i + 1);
+    const conteudo = await pagina.getTextContent();
+    const linhas = comprovanteReconstruirLinhas(conteudo.items);
+    const descricao = comprovanteExtrairDescricao(linhas);
+    const nome = comprovanteNomeArquivo(descricao, i + 1);
+
+    const novoDoc = await PDFLib.PDFDocument.create();
+    const [copiada] = await novoDoc.copyPages(pdfLibDoc, [i]);
+    novoDoc.addPage(copiada);
+    const bytes = await novoDoc.save();
+
+    resultados.push({ nome, bytes, achouDescricao: !!descricao });
+  }
+  return resultados;
+}
+
+function configurarDropzoneComprovantes() {
+  const dz = document.getElementById('dropzone-comprovantes');
+  const input = document.getElementById('arquivo-comprovantes');
+  const marcarSelecionados = (files) => {
+    arquivosComprovantesSelecionados = Array.from(files || []);
+    const n = arquivosComprovantesSelecionados.length;
+    dz.textContent = n
+      ? `✓ ${n} arquivo${n > 1 ? 's' : ''} selecionado${n > 1 ? 's' : ''} (${arquivosComprovantesSelecionados.map((f) => f.name).join(', ')})`
+      : 'Arraste um ou mais lotes de PDF aqui ou clique para selecionar';
+    dz.classList.toggle('preenchido', !!n);
+  };
+  dz.onclick = () => input.click();
+  input.onchange = (e) => marcarSelecionados(e.target.files);
+  ['dragover', 'dragleave', 'drop'].forEach((evt) => dz.addEventListener(evt, (e) => e.preventDefault()));
+  dz.addEventListener('dragover', () => dz.classList.add('sobre'));
+  dz.addEventListener('dragleave', () => dz.classList.remove('sobre'));
+  dz.addEventListener('drop', (e) => {
+    dz.classList.remove('sobre');
+    if (e.dataTransfer.files.length) marcarSelecionados(e.dataTransfer.files);
+  });
+}
+configurarDropzoneComprovantes();
+
+async function separarComprovantesBancarios() {
+  const statusEl = document.getElementById('status-separar-comprovantes');
+  const resumoEl = document.getElementById('resumo-comprovantes');
+  const btn = document.getElementById('btn-separar-comprovantes');
+
+  if (!arquivosComprovantesSelecionados.length) {
+    resumoEl.innerHTML = '<div class="aviso">Selecione ao menos um arquivo PDF.</div>';
+    return;
+  }
+
+  btn.disabled = true;
+  resumoEl.innerHTML = '';
+  const zip = new JSZip();
+  const usados = {};
+  let totalPaginas = 0;
+  let totalSemDescricao = 0;
+
+  try {
+    for (const file of arquivosComprovantesSelecionados) {
+      statusEl.textContent = `Processando "${file.name}"…`;
+      const buffer = await file.arrayBuffer();
+      const paginas = await separarPdfComprovante(buffer);
+      paginas.forEach(({ nome, bytes, achouDescricao }) => {
+        const nomeFinal = comprovanteNomeSemColisao(nome, usados);
+        zip.file(nomeFinal, bytes);
+        if (!achouDescricao) totalSemDescricao += 1;
+      });
+      totalPaginas += paginas.length;
+    }
+
+    statusEl.textContent = 'Gerando .zip…';
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `comprovantes_${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    statusEl.textContent = '';
+    resumoEl.innerHTML = `<div class="aviso">.zip baixado — ${totalPaginas} comprovante(s) separado(s)${totalSemDescricao ? `, ${totalSemDescricao} sem descrição encontrada (nomeados pagina_NN.pdf — confira manualmente)` : ''}.</div>`;
+    toast('Comprovantes separados e baixados.');
+  } catch (e) {
+    statusEl.textContent = '';
+    resumoEl.innerHTML = `<div class="aviso">Falha ao separar comprovantes: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function processarArquivo(file) {
@@ -5192,7 +5306,6 @@ function atualizarUiModoLeitura() {
   // histórico da planilha continua exigindo senha, ver salvarConciliacaoNaPlanilha)
   // — por isso aqui escondemos só o painel de baixas, não a aba inteira.
   document.getElementById('painel-atualizar-baixas').style.display = MODO_LEITURA ? 'none' : '';
-  document.getElementById('painel-comprovantes-lote').style.display = MODO_LEITURA ? 'none' : '';
   document.getElementById('btn-abrir-lancamento-manual').style.display = MODO_LEITURA ? 'none' : '';
   if (MODO_LEITURA) fecharModalLancamentoManual(); // voltar pra leitura com o pop-up aberto não deveria deixar editar
   const btnRemoverDuplicados = document.getElementById('btn-remover-duplicados');

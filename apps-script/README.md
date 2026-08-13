@@ -119,18 +119,19 @@ lado:
 - **Extrato bancário** — envie o extrato do banco em `.xlsx`, também com
   qualquer nome. O resultado do cruzamento aparece na aba **Conciliação**
   (ver abaixo), não nesta aba.
-- **Comprovantes bancários** — busca automática, de uma vez, no Drive
-  (`PASTAS_BUSCA_ANEXO` no `Code.gs`) do comprovante de pagamento de todos
-  os títulos já baixados que ainda não têm `Link Comprovante` salvo. É a
-  mesma busca do botão 🧾 por linha (ver seção abaixo), só que rodando pra
-  todos os pendentes de uma vez em vez de um título por clique — processa
-  em lotes (ver `TAMANHO_LOTE_COMPROVANTES` no `Code.gs`) mostrando uma
-  barra de progresso, e pode ser cancelada a qualquer momento sem perder o
-  que já foi encontrado até ali.
+- **Separar comprovantes bancários** — envie um ou mais lotes de PDF do
+  banco (um comprovante por página, sem precisar uni-los antes); a tela lê
+  o texto de cada página (`pdfjs-dist`), separa cada uma num PDF individual
+  (`pdf-lib`) nomeado pela "Descrição" encontrada nela, e empacota tudo num
+  `.zip` (`jszip`) pra baixar. Roda inteiramente no navegador — não passa
+  pelo servidor Apps Script nem grava nada na planilha, então funciona
+  mesmo em modo leitura. Serve pra preparar os arquivos que depois vão pra
+  pasta do Drive usada pela busca automática de comprovante (ver seção
+  "Anexos" abaixo).
 
-O upload de títulos e a busca em lote de comprovantes exigem edição
-habilitada; o upload do extrato bancário funciona mesmo em modo leitura
-(só salvar o resultado no histórico da planilha exige edição — ver seção
+O upload de títulos exige edição habilitada; o upload do extrato bancário e
+a separação de comprovantes funcionam mesmo em modo leitura (só salvar o
+resultado da conciliação no histórico da planilha exige edição — ver seção
 Conciliação Bancária).
 
 ## Anexos (documentos e comprovantes) por lançamento
