@@ -302,8 +302,8 @@
      cards: cursor de mão + leve destaque no hover, avisando que dá pra
      clicar pra ver os títulos por trás do número. O cursor da barra/linha em
      si é controlado via Chart.js (options.onHover), não CSS. */
-  #tabela-aporte tbody tr, #tabela-abc tbody tr { cursor: pointer; }
-  #tabela-aporte tbody tr:hover, #tabela-abc tbody tr:hover { background: var(--azul-claro); }
+  #tabela-aporte tbody tr, #tabela-abc tbody tr, #tabela-abc-categoria tbody tr { cursor: pointer; }
+  #tabela-aporte tbody tr:hover, #tabela-abc tbody tr:hover, #tabela-abc-categoria tbody tr:hover { background: var(--azul-claro); }
   .card.clicavel { cursor: pointer; transition: box-shadow .15s, transform .15s; }
   .card.clicavel:hover { box-shadow: 0 4px 10px rgba(31,78,120,.18); transform: translateY(-1px); }
   .modal-overlay {
@@ -380,7 +380,7 @@
 <main>
 
   <section id="aba-dashboard" class="aba ativa">
-    <input id="busca-dashboard" class="busca-tabela" placeholder="Buscar em Remessa, Aporte e Curva ABC…" style="max-width:420px; margin-bottom:16px;">
+    <input id="busca-dashboard" class="busca-tabela" placeholder="Buscar em Remessa, Aporte, Curva ABC e Categoria…" style="max-width:420px; margin-bottom:16px;">
     <div class="cards" id="cards-kpi"></div>
     <div class="grid-2">
       <div class="painel">
@@ -431,6 +431,42 @@
           <thead><tr><th title="Marque pra aparecer no gráfico &quot;Curva ABC dos fornecedores&quot;">Gráfico</th><th>Fornecedor</th><th>Razão Social</th><th>Qtde</th><th>Valor Total</th><th>% do Total</th><th>% Acum.</th><th>Classe</th></tr></thead>
           <tbody></tbody>
         </table>
+      </div>
+    </div>
+    <div class="painel">
+      <div class="cabecalho-painel">
+        <h2>Custo por Categoria — Baixado x A Baixar</h2>
+        <button class="btn secundario small" onclick="exportarXlsx('categoriaCusto')">⬇ Exportar Excel</button>
+      </div>
+      <div id="categoria-custo-chart-wrap" style="height:340px; width:100%;">
+        <canvas id="chart-categoria-custo"></canvas>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="painel">
+        <div class="cabecalho-painel">
+          <h2>Curva ABC por Categoria</h2>
+          <button class="btn secundario small" onclick="restaurarSelecaoPadraoCategoria()" title="Volta a mostrar as 8 categorias de maior valor no período">↺ Padrão (8 maiores)</button>
+          <button class="btn secundario small" onclick="exportarXlsx('abcCategoria')">⬇ Exportar Excel</button>
+        </div>
+        <div id="abc-categoria-vazio" style="font-size:13px; color:var(--cinza); display:none;">Nenhuma categoria selecionada.</div>
+        <div id="abc-categoria-chart-wrap" style="height:340px; width:100%;">
+          <canvas id="chart-abc-categoria"></canvas>
+        </div>
+      </div>
+      <div class="painel">
+        <div class="cabecalho-painel">
+          <h2>Ranking de categorias</h2>
+          <button class="btn secundario small" onclick="limparSelecaoCategoriaGrafico()" title="Desmarca todas as categorias do gráfico 'Curva ABC por Categoria'">☐ Limpar seleção</button>
+          <button class="btn secundario small" onclick="exportarXlsx('rankingCategoria')">⬇ Exportar Excel</button>
+        </div>
+        <div id="total-abc-categoria" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
+        <div class="tabela-scroll">
+          <table id="tabela-abc-categoria">
+            <thead><tr><th title="Marque pra aparecer no gráfico &quot;Curva ABC por Categoria&quot;">Gráfico</th><th>Categoria</th><th>Qtde</th><th>Valor Total</th><th>% do Total</th><th>% Acum.</th><th>Classe</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </div>
     <div class="painel">
@@ -2253,6 +2289,17 @@ function exportarXlsx(qual) {
   } else if (qual === 'pagosAbc') {
     const linhas = ultimoDadosPagosAbc.map(([nome, mes, valor]) => [nome, mes, fmtMoeda(valor)]);
     baixarXlsx('pagos_curva_abc.xlsx', ['Fornecedor', 'Mês', 'Valor Pago'], linhas);
+  } else if (qual === 'categoriaCusto') {
+    const linhas = ultimoDadosCategoriaCusto.map(([cat, baixado, aBaixar, total]) => [cat, fmtMoeda(baixado), fmtMoeda(aBaixar), fmtMoeda(total)]);
+    baixarXlsx('custo_por_categoria.xlsx', ['Categoria', 'Baixado', 'A Baixar', 'Total'], linhas);
+  } else if (qual === 'abcCategoria') {
+    const linhas = ultimoDadosAbcCategoria.map(([cat, pct, acum]) => [cat, `${pct.toFixed(1)}%`, `${acum.toFixed(1)}%`]);
+    baixarXlsx('curva_abc_categoria.xlsx', ['Categoria', '% do Total', '% Acumulado'], linhas);
+  } else if (qual === 'rankingCategoria') {
+    const linhas = Array.from(document.querySelectorAll('#tabela-abc-categoria tbody tr')).map((tr) =>
+      Array.from(tr.querySelectorAll('td:not(.col-check-abc)')).map((td) => td.textContent.trim())
+    );
+    baixarXlsx('ranking_categorias.xlsx', ['Categoria', 'Qtde', 'Valor Total', '% do Total', '% Acum.', 'Classe'], linhas);
   } else if (qual === 'detalheAporte') {
     const numeroAporte = document.getElementById('select-aporte-detalhe').value;
     if (!numeroAporte) { toast('Selecione um aporte antes de exportar.'); return; }
@@ -2326,6 +2373,7 @@ function atualizarSetasOrdenacao(tabelaId) {
 
 // ---------- Dashboard ----------
 let chartAging, chartFluxo, chartStatusPagamento, chartPagosAbc, chartAporte;
+let chartCategoriaCusto, chartAbcCategoria;
 let ultimoAbertos = [];
 let ultimoItensAnalise = [];
 
@@ -2385,6 +2433,9 @@ function renderizarDashboard() {
   renderizarResumoAporte(abertos);
   renderizarCurvaAbc(itens);
   renderizarPagosAbcTop15(itens);
+  renderizarCustoPorCategoria(itens);
+  renderizarRankingCategoria(itens);
+  renderizarGraficoAbcCategoria(itens);
 }
 
 // Agrupa por mês/ano do Vencimento e acumula ao longo do tempo: somatório
@@ -2875,10 +2926,217 @@ function abrirDetalheFornecedor(cod, nome) {
   abrirDetalhe(`${nome || cod} — todos os títulos no período`, itens);
 }
 
+// ---------- Dashboard: agrupamento por Categoria ----------
+// Mesma ideia da Curva ABC de fornecedores, só que agrupando por
+// categoriaFornecedor_(i) em vez de Código Fornecedor — reaproveita a
+// mesma classificação A/B/C (80/95) e o mesmo padrão de seleção
+// null=automático / Set=manual.
+const EXTRATORES_ABC_CATEGORIA = [undefined, l => l.cat, l => l.qtde, l => l.valor, l => l.pct, l => l.acum, l => l.classe];
+const TOP_N_PADRAO_CATEGORIA = 8;
+let selecaoCategoriaGrafico = null;
+let ultimoDadosCategoriaCusto = []; // export: [categoria, baixado, a baixar, total]
+let ultimoDadosAbcCategoria = []; // export: [categoria, % do total, % acumulado]
+
+function calcularRankingAbcCategoria(itens) {
+  const grupos = {};
+  itens.forEach(i => {
+    const cat = categoriaFornecedor_(i) || '(sem categoria)';
+    if (!grupos[cat]) grupos[cat] = { qtde: 0, valor: 0 };
+    grupos[cat].qtde += 1;
+    grupos[cat].valor += paraNumero(i['R$ Valor']);
+  });
+  return Object.entries(grupos).sort((a, b) => b[1].valor - a[1].valor);
+}
+
+function toggleSelecaoCategoriaGrafico(cat) {
+  if (selecaoCategoriaGrafico === null) {
+    const padrao = calcularRankingAbcCategoria(ultimoItensAnalise).slice(0, TOP_N_PADRAO_CATEGORIA).map(([c]) => c);
+    selecaoCategoriaGrafico = new Set(padrao);
+  }
+  if (selecaoCategoriaGrafico.has(cat)) selecaoCategoriaGrafico.delete(cat); else selecaoCategoriaGrafico.add(cat);
+  renderizarRankingCategoria(ultimoItensAnalise);
+  renderizarGraficoAbcCategoria(ultimoItensAnalise);
+}
+function restaurarSelecaoPadraoCategoria() {
+  selecaoCategoriaGrafico = null;
+  renderizarRankingCategoria(ultimoItensAnalise);
+  renderizarGraficoAbcCategoria(ultimoItensAnalise);
+}
+function limparSelecaoCategoriaGrafico() {
+  selecaoCategoriaGrafico = new Set();
+  renderizarRankingCategoria(ultimoItensAnalise);
+  renderizarGraficoAbcCategoria(ultimoItensAnalise);
+}
+
+function renderizarRankingCategoria(itens) {
+  const totalGeral = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const ordenadoBase = calcularRankingAbcCategoria(itens);
+  const categoriasPadrao = ordenadoBase.slice(0, TOP_N_PADRAO_CATEGORIA).map(([cat]) => cat);
+  const selecaoAtual = selecaoCategoriaGrafico === null ? new Set(categoriasPadrao) : selecaoCategoriaGrafico;
+  let acumulado = 0;
+  let linhas = ordenadoBase.map(([cat, g]) => {
+    const pct = totalGeral ? g.valor / totalGeral : 0;
+    acumulado += pct;
+    const classe = acumulado <= 0.8 ? 'A' : acumulado <= 0.95 ? 'B' : 'C';
+    return { cat, qtde: g.qtde, valor: g.valor, pct, acum: acumulado, classe, noGrafico: selecaoAtual.has(cat) };
+  });
+
+  const busca = (document.getElementById('busca-dashboard').value || '').trim().toLowerCase();
+  if (busca) linhas = linhas.filter(l => contemBusca([l.cat, l.qtde, fmtMoeda(l.valor), l.classe], busca));
+  linhas = aplicarOrdenacao('tabela-abc-categoria', linhas, EXTRATORES_ABC_CATEGORIA);
+
+  document.querySelector('#tabela-abc-categoria tbody').innerHTML = linhas.map(l =>
+    `<tr onclick="abrirDetalheCategoria('${escaparAtributo(l.cat)}')" title="Clique para ver os títulos desta categoria">
+      <td class="col-check-abc" onclick="event.stopPropagation()"><input type="checkbox" ${l.noGrafico ? 'checked' : ''} onchange="toggleSelecaoCategoriaGrafico('${escaparAtributo(l.cat)}')" title="Mostrar esta categoria no gráfico 'Curva ABC por Categoria'"></td>
+      <td>${escaparHtml(l.cat)}</td><td>${l.qtde}</td><td>${fmtMoeda(l.valor)}</td>
+      <td>${(l.pct * 100).toFixed(1)}%</td><td>${(l.acum * 100).toFixed(1)}%</td><td>${l.classe}</td>
+    </tr>`
+  ).join('');
+  definirTotalizador('total-abc-categoria', itens);
+  tornarOrdenavel('tabela-abc-categoria', EXTRATORES_ABC_CATEGORIA, () => renderizarRankingCategoria(ultimoItensAnalise));
+}
+
+// Gráfico de Pareto num único eixo (%): barra = % do total daquela
+// categoria, linha = % acumulado — evita o erro clássico de eixo duplo
+// (valor bruto x %). O % acumulado é calculado sobre TODAS as categorias
+// (mesmo critério da tabela), só a exibição é filtrada pra seleção atual.
+function renderizarGraficoAbcCategoria(itens) {
+  const totalGeral = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  const ordenadoBase = calcularRankingAbcCategoria(itens);
+  const categoriasPadrao = ordenadoBase.slice(0, TOP_N_PADRAO_CATEGORIA).map(([cat]) => cat);
+  const selecaoAtual = selecaoCategoriaGrafico === null ? new Set(categoriasPadrao) : selecaoCategoriaGrafico;
+
+  let acumulado = 0;
+  const todasLinhas = ordenadoBase.map(([cat, g]) => {
+    const pct = totalGeral ? (g.valor / totalGeral) * 100 : 0;
+    acumulado += pct;
+    return { cat, valor: g.valor, pct, acum: acumulado };
+  });
+  const linhas = todasLinhas.filter(l => selecaoAtual.has(l.cat));
+
+  if (chartAbcCategoria) { chartAbcCategoria.destroy(); chartAbcCategoria = null; }
+
+  const vazio = document.getElementById('abc-categoria-vazio');
+  const wrap = document.getElementById('abc-categoria-chart-wrap');
+  ultimoDadosAbcCategoria = linhas.map(l => [l.cat, l.pct, l.acum]);
+
+  if (!linhas.length) {
+    vazio.style.display = 'block';
+    wrap.style.display = 'none';
+    return;
+  }
+  vazio.style.display = 'none';
+  wrap.style.display = '';
+
+  const itensPorCategoria = {};
+  linhas.forEach(l => { itensPorCategoria[l.cat] = itens.filter(i => (categoriaFornecedor_(i) || '(sem categoria)') === l.cat); });
+
+  chartAbcCategoria = new Chart(document.getElementById('chart-abc-categoria'), {
+    data: {
+      labels: linhas.map(l => l.cat),
+      datasets: [
+        { type: 'bar', label: '% do total (categoria)', data: linhas.map(l => l.pct), backgroundColor: '#1f4e78' },
+        { type: 'line', label: '% acumulado', data: linhas.map(l => l.acum), borderColor: '#c0392b', backgroundColor: '#c0392b', tension: 0.25, pointRadius: 3, pointHoverRadius: 5 },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        datalabels: { display: false },
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` } },
+      },
+      scales: {
+        y: { beginAtZero: true, max: 100, title: { display: true, text: '% do total' } },
+        x: { ticks: { autoSkip: true, maxRotation: 30, minRotation: 0 } },
+      },
+      onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      onClick: (ev, els) => {
+        if (!els.length) return;
+        const cat = linhas[els[0].index].cat;
+        abrirDetalhe(`${cat} — todos os títulos no período`, itensPorCategoria[cat]);
+      },
+    },
+  });
+}
+
+// Barra horizontal empilhada: Baixado (verde) x A Baixar (laranja), por
+// categoria — responde diretamente "quanto já saiu x quanto falta sair,
+// por categoria de gasto".
+function renderizarCustoPorCategoria(itens) {
+  const grupos = {};
+  itens.forEach(i => {
+    const cat = categoriaFornecedor_(i) || '(sem categoria)';
+    if (!grupos[cat]) grupos[cat] = { baixado: 0, aBaixar: 0, itensBaixado: [], itensABaixar: [] };
+    const valor = paraNumero(i['R$ Valor']);
+    if (i['Data Baixa']) { grupos[cat].baixado += valor; grupos[cat].itensBaixado.push(i); }
+    else { grupos[cat].aBaixar += valor; grupos[cat].itensABaixar.push(i); }
+  });
+  const linhas = Object.entries(grupos)
+    .map(([cat, g]) => ({ cat, ...g, total: g.baixado + g.aBaixar }))
+    .sort((a, b) => b.total - a.total);
+
+  if (chartCategoriaCusto) { chartCategoriaCusto.destroy(); chartCategoriaCusto = null; }
+
+  // Altura proporcional ao nº de categorias — senão as barras ficam
+  // espremidas quando há muitas categorias diferentes no período.
+  document.getElementById('categoria-custo-chart-wrap').style.height = Math.max(300, linhas.length * 34 + 70) + 'px';
+
+  ultimoDadosCategoriaCusto = linhas.map(l => [l.cat, l.baixado, l.aBaixar, l.total]);
+
+  chartCategoriaCusto = new Chart(document.getElementById('chart-categoria-custo'), {
+    type: 'bar',
+    data: {
+      labels: linhas.map(l => l.cat),
+      datasets: [
+        { label: 'Baixado', data: linhas.map(l => l.baixado), backgroundColor: '#1e7e34', stack: 'total' },
+        { label: 'A baixar', data: linhas.map(l => l.aBaixar), backgroundColor: '#e08e0b', stack: 'total' },
+      ],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        datalabels: { display: false },
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${fmtMoeda(ctx.parsed.x)}`,
+            footer: (ctxs) => `Total: ${fmtMoeda(ctxs.reduce((s, c) => s + c.parsed.x, 0))}`,
+          },
+        },
+      },
+      scales: {
+        x: { stacked: true, beginAtZero: true, title: { display: true, text: 'Valor (R$)' } },
+        y: { stacked: true },
+      },
+      onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      onClick: (ev, els) => {
+        if (!els.length) return;
+        const { datasetIndex, index } = els[0];
+        const l = linhas[index];
+        const rotulo = datasetIndex === 0 ? 'baixado' : 'a baixar';
+        const itensClicados = datasetIndex === 0 ? l.itensBaixado : l.itensABaixar;
+        abrirDetalhe(`${l.cat} — ${rotulo}`, itensClicados);
+      },
+    },
+  });
+}
+
+// Clique numa linha do ranking de categorias — todos os títulos daquela
+// categoria no período filtrado (aberto + baixado).
+function abrirDetalheCategoria(cat) {
+  const itens = ultimoItensAnalise.filter((i) => (categoriaFornecedor_(i) || '(sem categoria)') === cat);
+  abrirDetalhe(`${cat} — todos os títulos no período`, itens);
+}
+
 document.getElementById('busca-dashboard').addEventListener('input', () => {
   renderizarValorPorRemessa();
   renderizarResumoAporte(ultimoAbertos);
   renderizarCurvaAbc(ultimoItensAnalise);
+  renderizarRankingCategoria(ultimoItensAnalise);
 });
 
 // ---------- Lançamentos ----------
