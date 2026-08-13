@@ -540,11 +540,12 @@
         <h2>Aporte</h2>
         <button class="btn secundario small" onclick="exportarXlsx('detalheAporte')">⬇ Exportar Excel</button>
       </div>
-      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:0;">
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:0; align-items:center;">
         <select id="select-aporte-detalhe" class="busca-tabela" style="max-width:420px; margin-bottom:0;">
-          <option value="">Selecione um aporte…</option>
+          <option value="">Todos os aportes</option>
         </select>
         <input id="busca-detalhe-aporte" class="busca-tabela" placeholder="Buscar em todas as colunas…" style="max-width:320px; margin-bottom:0;">
+        <button type="button" id="btn-voltar-todos-aportes" class="btn secundario small" style="display:none; margin-bottom:0;" onclick="voltarTodosAportes()">↺ Todos os aportes</button>
       </div>
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; margin-top:10px; flex-wrap:wrap;">
         <div id="total-detalhe-aporte" style="font-size:13px; color:var(--cinza);"></div>
@@ -552,10 +553,11 @@
       </div>
       <div class="tabela-scroll">
         <table id="tabela-detalhe-aporte">
-          <thead><tr><th>Data</th><th>N/Doc.</th><th>Descrição</th><th>Venc.</th><th>Valor</th></tr></thead>
+          <thead><tr><th>Aporte</th><th>Data</th><th>N/Doc.</th><th>Descrição</th><th>Venc.</th><th>Valor</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
+      <div id="paginacao-detalhe-aporte" class="paginacao"></div>
     </div>
   </section>
 
@@ -1431,27 +1433,39 @@ function fmtData(v) {
   const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
   return `${dia}/${mes}/${d.getUTCFullYear()}`;
 }
-// O Protheus às vezes embute no próprio Histórico o mesmo "Tipo Nº
-// Documento" que já aparece na coluna N/Doc. ao lado, a fração de parcela
-// (ex.: histórico "3/3 - NF 367 - TABUA MISTA..." quando N/Doc. já é "NF
-// 367" e Parcela já é "3") e o código do centro de custo grudado no fim
-// (ex.: ".../CE-007") — tira essas repetições/ruído da descrição
-// exibida/exportada em Detalhe por Aporte, já que a parcela volta a
-// aparecer sozinha no final ("PARC.: 3"). Não faz nada quando o histórico
-// não repete essas informações (a maioria dos casos), só limpa hífens
-// soltos que sobrarem.
-function limparNumeroDocDoHistorico_(historico, nDoc, parcela) {
+// Prefixos de Tipo de documento reconhecidos no texto livre do Histórico —
+// os mesmos usados no lançamento manual e no reconhecimento da conciliação
+// bancária (ver RE_NDOC_LANCAMENTO), mais TX/INS (retenções).
+const PREFIXOS_TIPO_DOC_REGEX_ = 'NFS?e?|NFAG|ND|NF3E|DACTE|BOL|FAT|REC|FOL|FGTS|DARF|DAM|TX|INS';
+
+// O Protheus às vezes embute no próprio Histórico o mesmo Nº Documento que
+// já aparece na coluna N/Doc. ao lado — às vezes com o MESMO prefixo de
+// Tipo (ex.: "NF 367"), às vezes com um prefixo DIFERENTE do que está na
+// coluna Tipo (ex.: Tipo="NF" mas o histórico traz "FAT 82302" ou "BOL
+// 43256119" — inconsistência do próprio Protheus) — também embute a
+// fração de parcela (ex.: "3/3 - NF 367 - TABUA MISTA..." quando Parcela
+// já é "3") e o código do centro de custo grudado no fim (ex.:
+// ".../CE-007"). Tira todas essas repetições/ruído da descrição exibida/
+// exportada em Detalhe por Aporte. Também troca o "P" solto que antecede
+// uma data/período (ex.: "P 07/2026", "P 01/04 a 30/04/2026") por
+// "PERIODO", já que sozinho não fica claro o que esse "P" significa.
+function limparNumeroDocDoHistorico_(historico, nDoc, parcela, numeroDoc) {
   if (!historico) return historico || '';
   let h = historico;
   if (nDoc) {
     const escapado = nDoc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     h = h.replace(new RegExp(escapado, 'i'), '');
   }
+  if (numeroDoc) {
+    const escapadoNum = String(numeroDoc).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    h = h.replace(new RegExp('\\b(?:' + PREFIXOS_TIPO_DOC_REGEX_ + ')\\.?\\s*' + escapadoNum + '\\b', 'gi'), '');
+  }
   if (parcela) {
     const escapadaParcela = String(parcela).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     h = h.replace(new RegExp('\\b0*' + escapadaParcela + '\\s*/\\s*\\d+\\b'), '');
   }
   h = h.replace(/\/\s*CE-\d+\b/gi, '');
+  h = h.replace(/\bP\b(?=\s*\d)/g, 'PERIODO');
   return h.replace(/\s*-\s*-\s*/g, ' - ').replace(/^\s*-\s*/, '').replace(/\s*-\s*$/, '').trim();
 }
 // Acha o total de parcelas na mesma fração "N/M" que limparNumeroDocDoHistorico_
@@ -1469,7 +1483,7 @@ function extrairTotalParcelas_(historico, parcela) {
 function montarDescricaoAporte_(i) {
   const nDoc = `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim();
   const totalParcelas = extrairTotalParcelas_(i['Histórico'], i['Parcela']);
-  const partes = [i['Razão Social'], limparNumeroDocDoHistorico_(i['Histórico'], nDoc, i['Parcela'])].filter(Boolean);
+  const partes = [i['Razão Social'], limparNumeroDocDoHistorico_(i['Histórico'], nDoc, i['Parcela'], i['Nº Documento'])].filter(Boolean);
   let descricao = partes.join(' - ');
   if (i['Parcela']) descricao += ` - PARC.: ${i['Parcela']}${totalParcelas ? '/' + totalParcelas : ''}`;
   return descricao;
@@ -2098,21 +2112,33 @@ async function baixarXlsxAporte_(numeroAporte, itens) {
 
   if (ultimaLinha >= PRIMEIRA_LINHA) {
     const linhaTotal = planilha.getRow(totalRow);
-    const celC = linhaTotal.getCell(3), celE = linhaTotal.getCell(5);
-    celC.value = 'VALOR TOTAL';
+    const celE = linhaTotal.getCell(5);
+    linhaTotal.getCell(3).value = 'VALOR TOTAL';
     celE.value = { formula: `SUM(E${PRIMEIRA_LINHA}:E${ultimaLinha})` };
     celE.numFmt = FORMATO_MOEDA_XLSX_;
-    [celC, celE].forEach((c) => {
-      c.font = { bold: true };
-      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
-      c.alignment = { horizontal: 'center', vertical: 'center' };
-    });
+    // A linha inteira (A-E) fica amarela, não só as células com texto —
+    // do jeito que o modelo do financeiro já destaca o total.
+    for (let c = 1; c <= 5; c++) {
+      const cel = linhaTotal.getCell(c);
+      cel.font = { bold: true };
+      cel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+      cel.alignment = { horizontal: 'center', vertical: 'center' };
+    }
   }
 
   planilha.columns = [
     { width: 12 }, { width: 17 }, { width: 90 }, { width: 14 }, { width: 16 }, { width: 16 }, { width: 9 }, { width: 10 },
   ];
   planilha.views = [{ state: 'frozen', ySplit: 4 }];
+
+  // Mesma logomarca do topo do app, no canto superior esquerdo — igual ao
+  // modelo do financeiro.
+  const logoImg = document.querySelector('header img');
+  if (logoImg && logoImg.src.indexOf('base64,') !== -1) {
+    const base64 = logoImg.src.split('base64,')[1];
+    const imageId = livro.addImage({ base64, extension: 'jpeg' });
+    planilha.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 175, height: 55 } });
+  }
 
   const buffer = await livro.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -3400,16 +3426,29 @@ function popularSelectAporteDetalhe() {
   // números "faltando" no meio da sequência.
   const disponiveis = Array.from(new Set(ultimoItensAnalise.map((i) => calcularAporte(i['Vencimento'])).filter(Boolean))).sort();
   const atual = sel.value;
-  sel.innerHTML = '<option value="">Selecione um aporte…</option>' +
+  sel.innerHTML = '<option value="">Todos os aportes</option>' +
     disponiveis.map((a) => `<option value="${a}">Aporte ${a} — ${periodoDoAporte(a)}</option>`).join('');
   sel.value = disponiveis.includes(atual) ? atual : '';
 }
 
-// Um extrator por coluna (Data, N/Doc., Descrição, Venc., Valor) — usado
-// por aplicarOrdenacao/tornarOrdenavel, mesmas funções genéricas de
+function voltarTodosAportes() {
+  document.getElementById('select-aporte-detalhe').value = '';
+  paginaDetalheAporte = 1;
+  renderizarDetalheAporte();
+}
+
+// Retenções que o Protheus já lança soltas (IRRF/INSS/Contribuição Social
+// retida na fonte — Tipo "TX"/"INS") mas cujo valor já está consolidado
+// dentro de um boleto DARF do mesmo período: mostrar essas linhas também
+// no Aporte pediria o valor em duplicidade, então ficam de fora.
+const TIPOS_RETENCAO_DARF_ = ['TX', 'INS'];
+
+// Um extrator por coluna (Aporte, Data, N/Doc., Descrição, Venc., Valor) —
+// usado por aplicarOrdenacao/tornarOrdenavel, mesmas funções genéricas de
 // clique-pra-ordenar já usadas em tabela-aporte/tabela-abc/
 // tabela-lancamentos/modal-detalhe.
 const EXTRATORES_DETALHE_APORTE = [
+  i => calcularAporte(i['Vencimento']),
   i => paraData(i['Data Emissão']) || 0,
   i => `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(),
   i => montarDescricaoAporte_(i),
@@ -3417,32 +3456,60 @@ const EXTRATORES_DETALHE_APORTE = [
   i => paraNumero(i['R$ Valor']),
 ];
 
+// Mesmo esquema de paginação da tabela de Lançamentos (ver
+// TAMANHO_PAGINA_LANCAMENTOS): com "Todos os aportes" selecionado dá pra
+// listar o histórico inteiro de uma vez, o que já causou lentidão real
+// antes (ver correção equivalente em Lançamentos).
+const TAMANHO_PAGINA_APORTE = 300;
+let paginaDetalheAporte = 1;
+function mudarPaginaDetalheAporte(delta) {
+  paginaDetalheAporte += delta;
+  renderizarDetalheAporte();
+}
+function renderizarPaginacaoDetalheAporte(totalItens, totalPaginas) {
+  const el = document.getElementById('paginacao-detalhe-aporte');
+  if (totalPaginas <= 1) { el.innerHTML = ''; return; }
+  const inicio = (paginaDetalheAporte - 1) * TAMANHO_PAGINA_APORTE + 1;
+  const fim = Math.min(paginaDetalheAporte * TAMANHO_PAGINA_APORTE, totalItens);
+  el.innerHTML = `
+    <button type="button" ${paginaDetalheAporte <= 1 ? 'disabled' : ''} onclick="mudarPaginaDetalheAporte(-1)">‹ Anterior</button>
+    <span>Mostrando ${inicio}–${fim} de ${totalItens} (página ${paginaDetalheAporte} de ${totalPaginas})</span>
+    <button type="button" ${paginaDetalheAporte >= totalPaginas ? 'disabled' : ''} onclick="mudarPaginaDetalheAporte(1)">Próxima ›</button>
+  `;
+}
+
 function renderizarDetalheAporte() {
   const aporte = document.getElementById('select-aporte-detalhe').value;
   const tbody = document.querySelector('#tabela-detalhe-aporte tbody');
-  const totalEl = document.getElementById('total-detalhe-aporte');
-  if (!aporte) {
-    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--cinza)">Selecione um aporte acima.</td></tr>';
-    totalEl.textContent = '';
-    ultimoDetalheAporte = [];
-    return;
-  }
-  let itens = ultimoItensAnalise.filter((i) => calcularAporte(i['Vencimento']) === aporte);
+  document.getElementById('btn-voltar-todos-aportes').style.display = aporte ? '' : 'none';
+
+  // Sem aporte selecionado: mostra TODOS os títulos (de todos os aportes),
+  // pra dar pra buscar em qualquer um sem precisar escolher um de cada vez.
+  let itens = aporte
+    ? ultimoItensAnalise.filter((i) => calcularAporte(i['Vencimento']) === aporte)
+    : ultimoItensAnalise.slice();
+  itens = itens.filter((i) => !TIPOS_RETENCAO_DARF_.includes(String(i.Tipo || '').trim().toUpperCase()));
+
   const busca = (document.getElementById('busca-detalhe-aporte').value || '').trim().toLowerCase();
   if (busca) {
     itens = itens.filter((i) => contemBusca([
-      fmtData(i['Data Emissão']), i.Tipo, i['Nº Documento'], `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(),
+      calcularAporte(i['Vencimento']), fmtData(i['Data Emissão']), i.Tipo, i['Nº Documento'], `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(),
       montarDescricaoAporte_(i), fmtData(i['Vencimento']), fmtMoeda(i['R$ Valor']),
     ], busca));
   }
   // Padrão na 1ª vez que esta tabela é ordenada na sessão (ninguém clicou
   // num cabeçalho ainda): Venc., mais antigo primeiro — igual ao
   // comportamento fixo que este recurso substitui.
-  if (!estadoOrdenacao['tabela-detalhe-aporte']) estadoOrdenacao['tabela-detalhe-aporte'] = { colIdx: 3, asc: true };
+  if (!estadoOrdenacao['tabela-detalhe-aporte']) estadoOrdenacao['tabela-detalhe-aporte'] = { colIdx: 4, asc: true };
   ultimoDetalheAporte = aplicarOrdenacao('tabela-detalhe-aporte', itens, EXTRATORES_DETALHE_APORTE);
 
+  const totalPaginas = Math.max(1, Math.ceil(ultimoDetalheAporte.length / TAMANHO_PAGINA_APORTE));
+  if (paginaDetalheAporte > totalPaginas) paginaDetalheAporte = totalPaginas;
+  if (paginaDetalheAporte < 1) paginaDetalheAporte = 1;
+  const itensPagina = ultimoDetalheAporte.slice((paginaDetalheAporte - 1) * TAMANHO_PAGINA_APORTE, paginaDetalheAporte * TAMANHO_PAGINA_APORTE);
+
   let vencAnterior = null;
-  const linhas = ultimoDetalheAporte.map((i) => {
+  const linhas = itensPagina.map((i) => {
     const vencAtual = fmtData(i['Vencimento']);
     const separador = (vencAnterior !== null && vencAnterior !== vencAtual) ? ' class="separador-grupo"' : '';
     vencAnterior = vencAtual;
@@ -3453,15 +3520,16 @@ function renderizarDetalheAporte() {
     const tituloLinha = (linkDoc || linkComp)
       ? `Clique para abrir o anexo (${[linkDoc ? 'documento' : '', linkComp ? 'comprovante' : ''].filter(Boolean).join(' e ')})`
       : 'Nenhum anexo cadastrado para este título';
-    return `<tr${separador} onclick="abrirAnexoLinhaModalDetalhe('${escaparAtributo(linkDoc)}','${escaparAtributo(linkComp)}')" title="${escaparHtml(tituloLinha)}"><td>${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td>${vencAtual}</td><td class="col-valor">${htmlMoedaAlinhada(i['R$ Valor'])}</td></tr>`;
+    return `<tr${separador} onclick="abrirAnexoLinhaModalDetalhe('${escaparAtributo(linkDoc)}','${escaparAtributo(linkComp)}')" title="${escaparHtml(tituloLinha)}"><td>${calcularAporte(i['Vencimento'])}</td><td>${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td>${vencAtual}</td><td class="col-valor">${htmlMoedaAlinhada(i['R$ Valor'])}</td></tr>`;
   });
-  tbody.innerHTML = linhas.join('') || '<tr><td colspan="5" style="color:var(--cinza)">Nenhum título encontrado para este aporte.</td></tr>';
+  tbody.innerHTML = linhas.join('') || `<tr><td colspan="6" style="color:var(--cinza)">${aporte ? 'Nenhum título encontrado para este aporte.' : 'Nenhum título encontrado.'}</td></tr>`;
   definirTotalizador('total-detalhe-aporte', ultimoDetalheAporte);
-  tornarOrdenavel('tabela-detalhe-aporte', EXTRATORES_DETALHE_APORTE, renderizarDetalheAporte);
+  renderizarPaginacaoDetalheAporte(ultimoDetalheAporte.length, totalPaginas);
+  tornarOrdenavel('tabela-detalhe-aporte', EXTRATORES_DETALHE_APORTE, () => { paginaDetalheAporte = 1; renderizarDetalheAporte(); });
   atualizarSetasOrdenacao('tabela-detalhe-aporte');
 }
-document.getElementById('select-aporte-detalhe').addEventListener('change', renderizarDetalheAporte);
-document.getElementById('busca-detalhe-aporte').addEventListener('input', renderizarDetalheAporte);
+document.getElementById('select-aporte-detalhe').addEventListener('change', () => { paginaDetalheAporte = 1; renderizarDetalheAporte(); });
+document.getElementById('busca-detalhe-aporte').addEventListener('input', () => { paginaDetalheAporte = 1; renderizarDetalheAporte(); });
 
 // ---------- Análise (achados analíticos, calculados ao vivo) ----------
 let ultimoDadosAnalise = [];
@@ -3919,12 +3987,12 @@ async function processarExtrato(file) {
 // Extrai do texto do lançamento bancário os números de nota/documento
 // citados (ex.: "PAGTO ELETRON COBRANCA NF 5858 G M B DE FREITAS" -> "5858";
 // "COBRANCA NFS 1328 LOQUICENTER" -> "1328") — reconhece os mesmos
-// prefixos de Tipo usados no lançamento manual (NF, NFS, NFAG, ND, NF3E,
-// DACTE, BOL, FAT, REC, FOL, FGTS, DARF, DAM). O "Dcto." do extrato é só
-// uma referência interna do banco (não bate com o Nº Documento do
-// título), por isso o número certo tem que vir do texto do lançamento
-// mesmo.
-const RE_NDOC_LANCAMENTO = /\b(?:NFS?e?|NFAG|ND|NF3E|DACTE|BOL|FAT|REC|FOL|FGTS|DARF|DAM)\.?\s*(\d+)\b/gi;
+// prefixos de Tipo usados no lançamento manual e na limpeza da Descrição
+// em Detalhe por Aporte (ver PREFIXOS_TIPO_DOC_REGEX_). O "Dcto." do
+// extrato é só uma referência interna do banco (não bate com o Nº
+// Documento do título), por isso o número certo tem que vir do texto do
+// lançamento mesmo.
+const RE_NDOC_LANCAMENTO = new RegExp('\\b(?:' + PREFIXOS_TIPO_DOC_REGEX_ + ')\\.?\\s*(\\d+)\\b', 'gi');
 function extrairNumerosDocumento_(historico) {
   const h = String(historico || '');
   const numeros = new Set();
