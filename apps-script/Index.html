@@ -4156,13 +4156,32 @@ function parseArquivoProtheus(workbook) {
 // ---------- Detalhe por Aporte ----------
 let ultimoDetalheAporte = [];
 
+// Mesmo critério usado por renderizarDetalheAporte pra decidir o que entra
+// na tabela (exclui TIPOS_EXCLUIDOS_APORTE_ e, se houver texto na busca,
+// só N/Doc. ou Descrição batendo) — usado tanto pela tabela quanto pelo
+// menu de aportes, pra manter os dois sempre consistentes entre si.
+function itensParaDetalheAporte_() {
+  const busca = (document.getElementById('busca-detalhe-aporte').value || '').trim().toLowerCase();
+  return ultimoItensAnalise.filter((i) => {
+    if (TIPOS_EXCLUIDOS_APORTE_.includes(String(i.Tipo || '').trim().toUpperCase())) return false;
+    if (!busca) return true;
+    return contemBusca([`${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(), montarDescricaoAporte_(i)], busca);
+  });
+}
+
 function popularSelectAporteDetalhe() {
   const sel = document.getElementById('select-aporte-detalhe');
   // ultimoItensAnalise = TODOS os títulos do período (aberto + já baixado) —
   // antes usava só os em aberto, e por isso aportes 100% pagos (sem nenhum
   // título aberto) simplesmente sumiam da lista, dando a impressão de
   // números "faltando" no meio da sequência.
-  const disponiveis = Array.from(new Set(ultimoItensAnalise.map((i) => calcularAporte(i['Vencimento'])).filter(Boolean))).sort();
+  //
+  // Filtrado por itensParaDetalheAporte_ (mesmo critério da tabela abaixo)
+  // — sem isso, o menu listava aportes que a tabela mostrava vazios (0
+  // títulos): ou porque nenhum título dele batia com a busca digitada, ou
+  // porque só tinha títulos de um tipo que a tabela já exclui de qualquer
+  // forma (TX/INS/ISS/RES...).
+  const disponiveis = Array.from(new Set(itensParaDetalheAporte_().map((i) => calcularAporte(i['Vencimento'])).filter(Boolean))).sort();
   const atual = sel.value;
   sel.innerHTML = '<option value="">Todos os aportes</option>' +
     disponiveis.map((a) => `<option value="${a}">Aporte ${a} — ${periodoDoAporte(a)}</option>`).join('');
@@ -4181,6 +4200,7 @@ function voltarTodosAportes() {
 function limparFiltrosDetalheAporte() {
   document.getElementById('busca-detalhe-aporte').value = '';
   paginaDetalheAporte = 1;
+  popularSelectAporteDetalhe(); // busca voltou a vazio — o menu volta a listar todos os aportes
   renderizarDetalheAporte();
 }
 
@@ -4233,21 +4253,13 @@ function renderizarDetalheAporte() {
 
   // Sem aporte selecionado: mostra TODOS os títulos (de todos os aportes),
   // pra dar pra buscar em qualquer um sem precisar escolher um de cada vez.
-  let itens = aporte
-    ? ultimoItensAnalise.filter((i) => calcularAporte(i['Vencimento']) === aporte)
-    : ultimoItensAnalise.slice();
-  itens = itens.filter((i) => !TIPOS_EXCLUIDOS_APORTE_.includes(String(i.Tipo || '').trim().toUpperCase()));
-
-  // Só nas colunas N/Doc. e Descrição (diferente da busca "em todas as
-  // colunas" de Todos os lançamentos) — são as duas colunas onde faz
-  // sentido buscar texto livre aqui; Aporte/Data/Venc./Valor têm seus
-  // próprios seletores (aporte) ou não são texto livre de qualquer forma.
-  const busca = (document.getElementById('busca-detalhe-aporte').value || '').trim().toLowerCase();
-  if (busca) {
-    itens = itens.filter((i) => contemBusca([
-      `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(), montarDescricaoAporte_(i),
-    ], busca));
-  }
+  // Exclusão de tipo e busca (N/Doc.+Descrição) vêm de itensParaDetalheAporte_
+  // — mesmo critério usado por popularSelectAporteDetalhe pra decidir quais
+  // aportes aparecem no menu, pra tabela e menu nunca ficarem inconsistentes
+  // entre si (ex.: menu oferecendo um aporte que a busca atual não bate com
+  // nenhum título dele).
+  let itens = itensParaDetalheAporte_();
+  if (aporte) itens = itens.filter((i) => calcularAporte(i['Vencimento']) === aporte);
   // Padrão na 1ª vez que esta tabela é ordenada na sessão (ninguém clicou
   // num cabeçalho ainda): Venc., mais antigo primeiro — igual ao
   // comportamento fixo que este recurso substitui.
@@ -4280,7 +4292,15 @@ function renderizarDetalheAporte() {
   atualizarSetasOrdenacao('tabela-detalhe-aporte');
 }
 document.getElementById('select-aporte-detalhe').addEventListener('change', () => { paginaDetalheAporte = 1; renderizarDetalheAporte(); });
-document.getElementById('busca-detalhe-aporte').addEventListener('input', () => { paginaDetalheAporte = 1; renderizarDetalheAporte(); });
+// Recalcula o menu de aportes a cada tecla digitada — só oferece aportes
+// que tenham pelo menos um título batendo com a busca atual (ver
+// itensParaDetalheAporte_), pra nunca deixar escolher um aporte que a
+// tabela abaixo mostraria vazio.
+document.getElementById('busca-detalhe-aporte').addEventListener('input', () => {
+  paginaDetalheAporte = 1;
+  popularSelectAporteDetalhe();
+  renderizarDetalheAporte();
+});
 
 // ---------- Análise (achados analíticos, calculados ao vivo) ----------
 let ultimoDadosAnalise = [];
