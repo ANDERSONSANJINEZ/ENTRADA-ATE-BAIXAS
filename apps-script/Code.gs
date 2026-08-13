@@ -624,9 +624,9 @@ function api_definirObservacao(payload) {
 // o fornecedor E o texto do Histórico também não dá pra usar como
 // aproximação. Mesma lógica de api_definirObservacao, mas com um passo a
 // mais: ao gravar uma categoria (não ao remover), propaga o mesmo valor
-// pros demais títulos EM ABERTO (sem Data Baixa) do mesmo Código
-// Fornecedor — no ERP e no Manual — pra não obrigar a digitar de novo em
-// cada linha do mesmo fornecedor. Sobrevive a reimportação do ERP (ver
+// pros demais títulos do mesmo Código Fornecedor — no ERP e no Manual,
+// tanto em aberto quanto já baixados — pra não obrigar a digitar de novo
+// em cada linha do mesmo fornecedor. Sobrevive a reimportação do ERP (ver
 // substituirErp_).
 function api_definirCategoria(payload) {
   var nomeUsuario = validarAcessoEdicao_(payload);
@@ -636,7 +636,6 @@ function api_definirCategoria(payload) {
   var docCol = HEADERS.indexOf('Nº Documento') + 1;
   var razaoCol = HEADERS.indexOf('Razão Social') + 1;
   var fornCol = HEADERS.indexOf('Código Fornecedor') + 1;
-  var baixaCol = HEADERS.indexOf('Data Baixa') + 1;
 
   var sh = getSheet_(origem);
   var ultimaLinha = sh.getLastRow();
@@ -663,7 +662,6 @@ function api_definirCategoria(payload) {
         var dadosOrigem = mesmaAba ? dados : shOrigem.getRange(2, 1, ultimaLinhaOrigem - 1, HEADERS.length).getValues();
         for (var j = 0; j < dadosOrigem.length; j++) {
           if (mesmaAba && j === linhaAlvo) continue; // já gravado acima
-          if (dadosOrigem[j][baixaCol - 1]) continue; // só propaga pra título EM ABERTO
           var fornecedorLinha = removerZerosEsquerda_(String(dadosOrigem[j][fornCol - 1] || '').trim());
           if (fornecedorLinha !== fornecedorAlvo) continue;
           shOrigem.getRange(j + 2, colIdx).setValue(valor);
@@ -675,7 +673,7 @@ function api_definirCategoria(payload) {
 
   registrarLog_(nomeUsuario, 'Definir categoria',
     (dados[linhaAlvo][razaoCol - 1] || '') + ' Nº ' + (dados[linhaAlvo][docCol - 1] || '') + (valor ? ': ' + valor : ' (removida)') +
-    (qtdPropagada ? ' — aplicada também a mais ' + qtdPropagada + ' título(s) em aberto do mesmo fornecedor' : ''));
+    (qtdPropagada ? ' — aplicada também a mais ' + qtdPropagada + ' título(s) do mesmo fornecedor' : ''));
   return api_carregar();
 }
 
