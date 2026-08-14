@@ -257,7 +257,8 @@
      conteúdo. O flex fica no <div class="valor-flex"> interno (gerado por
      htmlMoedaAlinhada), que aí sim consegue herdar 100% da altura de um
      <td> comum. */
-  #tabela-detalhe-aporte td.col-valor, #modal-detalhe-tabela td.col-valor, #tabela-lancamentos td.col-valor { padding: 0; }
+  #tabela-detalhe-aporte td.col-valor, #modal-detalhe-tabela td.col-valor, #tabela-lancamentos td.col-valor,
+  #tabela-aporte td.col-valor, #tabela-abc td.col-valor, #tabela-abc-categoria td.col-valor, #tabela-creditos td.col-valor { padding: 0; }
   .valor-flex { display: flex; justify-content: space-between; align-items: center; height: 100%; box-sizing: border-box; padding: 7px 8px; }
   /* Linha clicável pra abrir o anexo (documento/comprovante) do título —
      mesmo comportamento do modal-detalhe genérico. */
@@ -1594,8 +1595,12 @@ function fmtMoeda(v) { return 'R$ ' + paraNumero(v).toLocaleString('pt-BR', { mi
 function htmlMoedaAlinhada(v) {
   const numero = paraNumero(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   // O flex fica no .valor-flex (ver CSS), não no <td> em si — veja o
-  // comentário na regra CSS de .valor-flex pro motivo.
-  return `<div class="valor-flex"><span class="rs">R$</span><span class="valor-num">${numero}</span></div>`;
+  // comentário na regra CSS de .valor-flex pro motivo. O espaço entre os
+  // dois <span> é só texto (whitespace puro não vira item flex, então não
+  // atrapalha o space-between) — existe pra manter td.textContent igual a
+  // "R$ 1.234,56" (com espaço) nas exportações que leem direto do DOM
+  // (ver exportarXlsx: 'aporte'/'abc'/'rankingCategoria').
+  return `<div class="valor-flex"><span class="rs">R$</span> <span class="valor-num">${numero}</span></div>`;
 }
 // Todas as datas do app são "somente data" (sem hora). Formatamos sempre a
 // partir dos componentes UTC do Date — nunca com toLocaleDateString/getters
@@ -2684,7 +2689,7 @@ function renderizarResumoAporte(abertos) {
 
   document.querySelector('#tabela-aporte tbody').innerHTML = linhas.map(l =>
     `<tr onclick="abrirDetalheAporte('${l.aporte}')" title="Clique para ver os títulos em aberto deste aporte">
-      <td>${l.aporte}</td><td>${l.periodo}</td><td>${l.qtdDoc}</td><td>${l.qtdeAberto}</td><td>${fmtMoeda(l.valor)}</td>
+      <td>${l.aporte}</td><td>${l.periodo}</td><td>${l.qtdDoc}</td><td>${l.qtdeAberto}</td><td class="col-valor">${htmlMoedaAlinhada(l.valor)}</td>
     </tr>`
   ).join('') || '<tr><td colspan="5" style="color:var(--cinza)">Nenhum título com aporte identificado.</td></tr>';
   definirTotalizador('total-aporte', abertos);
@@ -2887,7 +2892,7 @@ function renderizarCurvaAbc(itens) {
   document.querySelector('#tabela-abc tbody').innerHTML = linhas.map(l =>
     `<tr onclick="abrirDetalheFornecedor('${escaparAtributo(l.cod)}','${escaparAtributo(l.nome)}')" title="Clique para ver os títulos deste fornecedor">
       <td class="col-check-abc" onclick="event.stopPropagation()"><input type="checkbox" ${l.noGrafico ? 'checked' : ''} onchange="toggleSelecaoAbcGrafico('${escaparAtributo(l.cod)}')" title="Mostrar este fornecedor no gráfico 'Curva ABC dos fornecedores'"></td>
-      <td>${l.cod}</td><td>${l.nome}</td><td>${l.qtde}</td><td>${fmtMoeda(l.valor)}</td>
+      <td>${l.cod}</td><td>${l.nome}</td><td>${l.qtde}</td><td class="col-valor">${htmlMoedaAlinhada(l.valor)}</td>
       <td>${(l.pct * 100).toFixed(1)}%</td><td>${(l.acum * 100).toFixed(1)}%</td><td>${l.classe}</td>
     </tr>`
   ).join('');
@@ -3063,7 +3068,7 @@ function renderizarRankingCategoria(itens) {
   document.querySelector('#tabela-abc-categoria tbody').innerHTML = linhas.map(l =>
     `<tr onclick="abrirDetalheCategoria('${escaparAtributo(l.cat)}')" title="Clique para ver os títulos desta categoria">
       <td class="col-check-abc" onclick="event.stopPropagation()"><input type="checkbox" ${l.noGrafico ? 'checked' : ''} onchange="toggleSelecaoCategoriaGrafico('${escaparAtributo(l.cat)}')" title="Mostrar esta categoria no gráfico 'Curva ABC por Categoria'"></td>
-      <td>${escaparHtml(l.cat)}</td><td>${l.qtde}</td><td>${fmtMoeda(l.valor)}</td>
+      <td>${escaparHtml(l.cat)}</td><td>${l.qtde}</td><td class="col-valor">${htmlMoedaAlinhada(l.valor)}</td>
       <td>${(l.pct * 100).toFixed(1)}%</td><td>${(l.acum * 100).toFixed(1)}%</td><td>${l.classe}</td>
     </tr>`
   ).join('');
@@ -3880,7 +3885,7 @@ const DEFINICAO_COLUNAS_LANCAMENTOS = [
   { chave: 'fornecedor', rotulo: 'Fornecedor', classeCol: 'col-fornecedor', classeTh: 'col-fornecedor', classeFiltroTh: null, larguraBase: 5.15, extrator: i => i['Código Fornecedor'], filtroId: 'flc-fornecedor' },
   { chave: 'razao', rotulo: 'Razão Social', classeCol: 'col-razao', classeTh: null, classeFiltroTh: null, larguraBase: 6.83, extrator: i => i['Razão Social'], filtroId: 'flc-razao' },
   { chave: 'vencimento', rotulo: 'Vencimento', classeCol: 'col-data', classeTh: 'col-data', classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Vencimento']), filtroId: 'flc-vencimento' },
-  { chave: 'valor', rotulo: 'Valor', classeCol: 'col-valor', classeTh: null, classeFiltroTh: null, larguraBase: 4.36, extrator: i => paraNumero(i['R$ Valor']), filtroId: 'flc-valor' },
+  { chave: 'valor', rotulo: 'Valor', classeCol: 'col-valor', classeTh: null, classeFiltroTh: null, larguraBase: 6.83, extrator: i => paraNumero(i['R$ Valor']), filtroId: 'flc-valor' },
   { chave: 'parcela', rotulo: 'Parcela', classeCol: null, classeTh: 'col-parcela', classeFiltroTh: null, larguraBase: 3.84, extrator: i => i['Parcela'], filtroId: 'flc-parcela' },
   { chave: 'categoria', rotulo: 'Categoria', classeCol: 'col-categoria', classeTh: null, classeFiltroTh: null, larguraBase: 6.83, extrator: i => categoriaFornecedor_(i), filtroId: null },
   { chave: 'baixa', rotulo: 'Baixa', classeCol: 'col-data', classeTh: 'col-data', classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Data Baixa']), filtroId: 'flc-baixa' },
@@ -4508,11 +4513,11 @@ function limparFiltrosDetalheAporte() {
 }
 
 // Tipos que ficam de fora do Aporte porque já são pedidos por outro
-// caminho: TX/INS (IRRF/INSS/Contribuição Social retida na fonte) e ISS
-// já entram consolidados num boleto DARF/DAM do mesmo período — mostrar
-// essas linhas soltas também no Aporte pediria o valor em duplicidade.
-// RES/RESCISAO (rescisões de contrato) também ficam de fora.
-const TIPOS_EXCLUIDOS_APORTE_ = ['TX', 'INS', 'ISS', 'RES', 'RESCISAO'];
+// caminho: TX/INS/IRF/COF/CSL/PIS (IRRF/INSS/IR/COFINS/CSLL/PIS retidos na
+// fonte) e ISS já entram consolidados num boleto DARF/DAM do mesmo período
+// — mostrar essas linhas soltas também no Aporte pediria o valor em
+// duplicidade. RES/RESCISAO (rescisões de contrato) também ficam de fora.
+const TIPOS_EXCLUIDOS_APORTE_ = ['TX', 'INS', 'ISS', 'RES', 'RESCISAO', 'IRF', 'COF', 'CSL', 'PIS'];
 
 // Um extrator por coluna (Aporte, Data, N/Doc., Descrição, Venc., Valor) —
 // usado por aplicarOrdenacao/tornarOrdenavel, mesmas funções genéricas de
@@ -5280,10 +5285,10 @@ function renderizarCreditos() {
   document.querySelector('#tabela-creditos tbody').innerHTML = linhas.map((l) => `<tr>
       <td>${escaparHtml(l.nome)}${rotuloCategoria[l.categoria] || ''}</td>
       <td>${l.qtde}</td>
-      <td>${fmtMoeda(l.valor)}</td>
+      <td class="col-valor">${htmlMoedaAlinhada(l.valor)}</td>
       <td>${totalCreditos ? (l.valor / totalCreditos * 100).toFixed(1) : '0.0'}%</td>
-      <td>${l.debitoAtribuido == null ? '—' : fmtMoeda(l.debitoAtribuido)}</td>
-      <td>${l.sobraEstimada == null ? '—' : fmtMoeda(l.sobraEstimada)}</td>
+      <td class="col-valor">${l.debitoAtribuido == null ? '—' : htmlMoedaAlinhada(l.debitoAtribuido)}</td>
+      <td class="col-valor">${l.sobraEstimada == null ? '—' : htmlMoedaAlinhada(l.sobraEstimada)}</td>
     </tr>`).join('') || '<tr><td colspan="6" style="color:var(--cinza)">Nenhum crédito encontrado no extrato.</td></tr>';
   const totalSobra = linhas.filter((l) => l.sobraEstimada != null).reduce((s, l) => s + l.sobraEstimada, 0);
   document.getElementById('total-creditos').textContent =
@@ -5339,15 +5344,15 @@ function renderizarConciliacao() {
     nDoc: r.titulo['Nº Documento'] || '',
     vencimento: fmtData(r.titulo['Vencimento']),
     dataBaixa: fmtData(r.titulo['Data Baixa']),
-    valorTitulo: fmtMoeda(r.titulo['R$ Valor']),
+    valorTitulo: r.titulo['R$ Valor'],
     dataExtrato: r.mov ? fmtData(r.mov.data) : '',
-    valorExtrato: r.mov ? fmtMoeda(r.mov.valor) : '',
+    valorExtrato: r.mov ? r.mov.valor : null,
     historicoExtrato: r.mov ? r.mov.historico : '',
   }));
   const linhasSemTitulo = ultimoResultadoConciliacao.semTitulo.map((mov) => ({
     situacao: 'Sem título correspondente',
-    fornecedor: '', nDoc: '', vencimento: '', dataBaixa: '', valorTitulo: '',
-    dataExtrato: fmtData(mov.data), valorExtrato: fmtMoeda(mov.valor), historicoExtrato: mov.historico,
+    fornecedor: '', nDoc: '', vencimento: '', dataBaixa: '', valorTitulo: null,
+    dataExtrato: fmtData(mov.data), valorExtrato: mov.valor, historicoExtrato: mov.historico,
   }));
   let todas = linhasResultado.concat(linhasSemTitulo);
   if (filtro) todas = todas.filter((l) => l.situacao === filtro);
@@ -5355,8 +5360,11 @@ function renderizarConciliacao() {
   const badgeClasse = (s) => s === 'Conciliado' ? 'badge-ok' : s === 'Divergência de data' ? 'badge-atencao' : 'badge-alerta';
   document.querySelector('#tabela-conciliacao tbody').innerHTML = todas.map((l) => `<tr>
       <td><span class="badge ${badgeClasse(l.situacao)}">${l.situacao}</span></td>
-      <td>${escaparHtml(l.fornecedor)}</td><td>${l.nDoc}</td><td>${l.vencimento}</td><td>${l.dataBaixa}</td><td>${l.valorTitulo}</td>
-      <td>${l.dataExtrato}</td><td>${l.valorExtrato}</td><td title="${escaparHtml(l.historicoExtrato)}">${escaparHtml(l.historicoExtrato)}</td>
+      <td>${escaparHtml(l.fornecedor)}</td><td>${l.nDoc}</td><td>${l.vencimento}</td><td>${l.dataBaixa}</td>
+      <td class="col-valor">${l.valorTitulo == null ? '' : htmlMoedaAlinhada(l.valorTitulo)}</td>
+      <td>${l.dataExtrato}</td>
+      <td class="col-valor">${l.valorExtrato == null ? '' : htmlMoedaAlinhada(l.valorExtrato)}</td>
+      <td title="${escaparHtml(l.historicoExtrato)}">${escaparHtml(l.historicoExtrato)}</td>
     </tr>`).join('') || '<tr><td colspan="9" style="color:var(--cinza)">Nenhum resultado para este filtro.</td></tr>';
 
   const conciliados = linhasResultado.filter((l) => l.situacao === 'Conciliado').length;
