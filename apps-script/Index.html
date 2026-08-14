@@ -583,6 +583,11 @@
           <option value="">Todos os aportes</option>
         </select>
         <button type="button" id="btn-voltar-todos-aportes" class="btn secundario small" style="display:none; margin-bottom:0;" onclick="voltarTodosAportes()">↺ Todos os aportes</button>
+        <select id="filtro-origem-detalhe-aporte">
+          <option value="">Origem: todas</option>
+          <option value="ERP">ERP</option>
+          <option value="Manual">Manual</option>
+        </select>
       </div>
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; margin-top:10px; flex-wrap:wrap;">
         <div id="total-detalhe-aporte" style="font-size:13px; color:var(--cinza);"></div>
@@ -4413,13 +4418,16 @@ function parseArquivoProtheus(workbook) {
 let ultimoDetalheAporte = [];
 
 // Mesmo critério usado por renderizarDetalheAporte pra decidir o que entra
-// na tabela (exclui TIPOS_EXCLUIDOS_APORTE_ e, se houver texto na busca,
-// só N/Doc., Descrição ou Venc. batendo) — usado tanto pela tabela quanto
-// pelo menu de aportes, pra manter os dois sempre consistentes entre si.
+// na tabela (exclui TIPOS_EXCLUIDOS_APORTE_, filtra por Origem se
+// selecionado e, se houver texto na busca, só N/Doc., Descrição ou Venc.
+// batendo) — usado tanto pela tabela quanto pelo menu de aportes, pra
+// manter os dois sempre consistentes entre si.
 function itensParaDetalheAporte_() {
   const busca = (document.getElementById('busca-detalhe-aporte').value || '').trim().toLowerCase();
+  const fOrigem = document.getElementById('filtro-origem-detalhe-aporte').value;
   return ultimoItensAnalise.filter((i) => {
     if (TIPOS_EXCLUIDOS_APORTE_.includes(String(i.Tipo || '').trim().toUpperCase())) return false;
+    if (fOrigem && i.Origem !== fOrigem) return false;
     if (!busca) return true;
     return contemBusca([`${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim(), montarDescricaoAporte_(i), fmtData(i['Vencimento'])], busca);
   });
@@ -4450,13 +4458,15 @@ function voltarTodosAportes() {
   renderizarDetalheAporte();
 }
 
-// Limpa só a busca (N/Doc./Descrição/Venc.) — diferente de "↺ Todos os aportes",
-// que é quem cuida de voltar a seleção de aporte pra "todos"; os dois
-// ficam separados de propósito, um botão pra cada filtro.
+// Limpa a busca (N/Doc./Descrição/Venc.) e o filtro de Origem — diferente
+// de "↺ Todos os aportes", que é quem cuida de voltar a seleção de aporte
+// pra "todos"; ficam separados de propósito, um botão pra cada filtro (o
+// de aporte já tinha o seu próprio antes deste existir).
 function limparFiltrosDetalheAporte() {
   document.getElementById('busca-detalhe-aporte').value = '';
+  document.getElementById('filtro-origem-detalhe-aporte').value = '';
   paginaDetalheAporte = 1;
-  popularSelectAporteDetalhe(); // busca voltou a vazio — o menu volta a listar todos os aportes
+  popularSelectAporteDetalhe(); // filtros voltaram a vazio — o menu volta a listar todos os aportes
   renderizarDetalheAporte();
 }
 
@@ -4548,14 +4558,16 @@ function renderizarDetalheAporte() {
   atualizarSetasOrdenacao('tabela-detalhe-aporte');
 }
 document.getElementById('select-aporte-detalhe').addEventListener('change', () => { paginaDetalheAporte = 1; renderizarDetalheAporte(); });
-// Recalcula o menu de aportes a cada tecla digitada — só oferece aportes
-// que tenham pelo menos um título batendo com a busca atual (ver
-// itensParaDetalheAporte_), pra nunca deixar escolher um aporte que a
-// tabela abaixo mostraria vazio.
-document.getElementById('busca-detalhe-aporte').addEventListener('input', () => {
-  paginaDetalheAporte = 1;
-  popularSelectAporteDetalhe();
-  renderizarDetalheAporte();
+// Recalcula o menu de aportes a cada mudança na busca ou na Origem — só
+// oferece aportes que tenham pelo menos um título batendo com os filtros
+// atuais (ver itensParaDetalheAporte_), pra nunca deixar escolher um
+// aporte que a tabela abaixo mostraria vazio.
+['busca-detalhe-aporte', 'filtro-origem-detalhe-aporte'].forEach((id) => {
+  document.getElementById(id).addEventListener('input', () => {
+    paginaDetalheAporte = 1;
+    popularSelectAporteDetalhe();
+    renderizarDetalheAporte();
+  });
 });
 
 // ---------- Análise (achados analíticos, calculados ao vivo) ----------
