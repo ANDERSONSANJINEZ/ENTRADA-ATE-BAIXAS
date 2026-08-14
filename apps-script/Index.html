@@ -223,6 +223,16 @@
   }
   #modal-detalhe-tabela tbody tr { cursor: pointer; }
   #modal-detalhe-tabela tbody tr:hover { background: var(--azul-claro); }
+  /* Mesmas colunas centralizadas de Todos os lançamentos que também
+     existem aqui (este modal tem um conjunto reduzido de colunas —
+     Aporte/Emissão/Forma Pgto./Parcela/Remessa não aparecem nele). */
+  #modal-detalhe-tabela th.col-origem, #modal-detalhe-tabela td.col-origem,
+  #modal-detalhe-tabela th.col-tipo, #modal-detalhe-tabela td.col-tipo,
+  #modal-detalhe-tabela th.col-fornecedor, #modal-detalhe-tabela td.col-fornecedor,
+  #modal-detalhe-tabela th.col-vencimento, #modal-detalhe-tabela td.col-vencimento,
+  #modal-detalhe-tabela th.col-databaixa, #modal-detalhe-tabela td.col-databaixa {
+    text-align: center;
+  }
   .tabela-scroll { max-height: 480px; overflow: auto; border: 1px solid var(--borda); border-radius: 8px; }
   .paginacao { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--cinza); }
   .paginacao button { background: #fff; color: var(--azul); border: 1px solid var(--azul); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
@@ -257,6 +267,10 @@
   #tabela-detalhe-aporte tbody tr.linha-origem-manual { background: #fee2e2; }
   #tabela-detalhe-aporte tbody tr:hover { background: var(--azul-claro); }
   #tabela-detalhe-aporte thead th { text-align: center; }
+  /* Cabeçalho já é centralizado (regra acima) — falta só os dados das
+     colunas Aporte, Data e Venc. (as outras, N/Doc./Descrição/Valor,
+     ficam como estão: texto livre ou já alinhado à direita). */
+  #tabela-detalhe-aporte td.col-aporte, #tabela-detalhe-aporte td.col-data, #tabela-detalhe-aporte td.col-venc { text-align: center; }
   .filtros { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
   .filtros input, .filtros select { padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; font-size: 13px; }
   .btn { background: var(--azul); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
@@ -348,6 +362,20 @@
      estilo do destaque de origem Manual na aba Aporte. */
   #tabela-lancamentos tbody tr.linha-duplicada { background: #fee2e2; }
   #tabela-lancamentos tbody tr:hover td:not(.col-anexos):not(.col-acao) { background: var(--azul-claro); }
+  /* Colunas centralizadas (cabeçalho + dados): Origem, Aporte, Tipo,
+     Emissão, Forma Pgto., Fornecedor, Vencimento, Parcela, Baixa e
+     Remessa — col-data cobre Emissão/Vencimento/Baixa de uma vez, já que
+     as 3 compartilham a mesma classe (formatação/largura de data). */
+  #tabela-lancamentos th.col-origem, #tabela-lancamentos td.col-origem,
+  #tabela-lancamentos th.col-aporte, #tabela-lancamentos td.col-aporte,
+  #tabela-lancamentos th.col-tipo, #tabela-lancamentos td.col-tipo,
+  #tabela-lancamentos th.col-data, #tabela-lancamentos td.col-data,
+  #tabela-lancamentos th.col-formapgto, #tabela-lancamentos td.col-formapgto,
+  #tabela-lancamentos th.col-fornecedor, #tabela-lancamentos td.col-fornecedor,
+  #tabela-lancamentos th.col-parcela, #tabela-lancamentos td.col-parcela,
+  #tabela-lancamentos th.col-remessa, #tabela-lancamentos td.col-remessa {
+    text-align: center;
+  }
   @media (max-width: 960px) {
     .grid-2 { grid-template-columns: 1fr; }
     main { padding: 14px; }
@@ -773,8 +801,8 @@
       <table id="modal-detalhe-tabela">
         <thead>
           <tr>
-            <th>Origem</th><th>Status</th><th>Tipo</th><th>Nº Doc.</th><th>Fornecedor</th>
-            <th>Razão Social</th><th>Vencimento</th><th>Valor</th><th>Data Baixa</th><th></th>
+            <th class="col-origem">Origem</th><th>Status</th><th class="col-tipo">Tipo</th><th>Nº Doc.</th><th class="col-fornecedor">Fornecedor</th>
+            <th>Razão Social</th><th class="col-vencimento">Vencimento</th><th>Valor</th><th class="col-databaixa">Data Baixa</th><th></th>
           </tr>
           <tr class="linha-filtros-coluna">
             <th><select id="mdf-origem" onchange="aplicarFiltrosModalDetalhe()"><option value="">Todas</option><option value="ERP">ERP</option><option value="Manual">Manual</option></select></th>
@@ -2003,15 +2031,15 @@ function renderizarModalDetalhe() {
       ? `<button class="btn perigo small" title="Remover lançamento manual" onclick="event.stopPropagation(); removerManualDoModalDetalhe('${escaparAtributo(i.ID)}')">🗑️</button>`
       : '';
     return `<tr onclick="abrirAnexoLinhaModalDetalhe('${escaparAtributo(linkDoc)}','${escaparAtributo(linkComp)}')" title="${escaparHtml(tituloLinha)}">
-      <td><span class="badge ${origemBadge}">${i.Origem || ''}</span></td>
+      <td class="col-origem"><span class="badge ${origemBadge}">${i.Origem || ''}</span></td>
       <td><span class="badge ${statusBadge}">${statusTxt}</span></td>
-      <td>${i.Tipo || ''}</td>
+      <td class="col-tipo">${i.Tipo || ''}</td>
       <td>${i['Nº Documento'] || ''}</td>
-      <td title="${escaparHtml(i['Código Fornecedor'])}">${i['Código Fornecedor'] || ''}</td>
+      <td class="col-fornecedor" title="${escaparHtml(i['Código Fornecedor'])}">${i['Código Fornecedor'] || ''}</td>
       <td>${i['Razão Social'] || ''}</td>
-      <td>${fmtData(i['Vencimento'])}</td>
+      <td class="col-vencimento">${fmtData(i['Vencimento'])}</td>
       <td class="col-valor">${htmlMoedaAlinhada(i['R$ Valor'])}</td>
-      <td>${fmtData(i['Data Baixa'])}</td>
+      <td class="col-databaixa">${fmtData(i['Data Baixa'])}</td>
       <td>${acao}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="10" style="color:var(--cinza)">Nenhum título encontrado para este filtro.</td></tr>';
@@ -3845,17 +3873,17 @@ function categoriaFornecedor_(i) {
 const DEFINICAO_COLUNAS_LANCAMENTOS = [
   { chave: 'origem', rotulo: 'Origem', classeCol: 'col-origem', classeTh: 'col-origem', classeFiltroTh: 'col-origem', larguraBase: 3.66, extrator: i => i.Origem, filtroId: null },
   { chave: 'aporte', rotulo: 'Aporte', classeCol: 'col-aporte', classeTh: 'col-aporte', classeFiltroTh: 'col-aporte', larguraBase: 3.66, extrator: i => i.Aporte, filtroId: null },
-  { chave: 'tipo', rotulo: 'Tipo', classeCol: null, classeTh: null, classeFiltroTh: null, larguraBase: 2.81, extrator: i => i.Tipo, filtroId: 'flc-tipo' },
-  { chave: 'emissao', rotulo: 'Emissão', classeCol: 'col-data', classeTh: null, classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Data Emissão']), filtroId: 'flc-emissao' },
+  { chave: 'tipo', rotulo: 'Tipo', classeCol: null, classeTh: 'col-tipo', classeFiltroTh: null, larguraBase: 2.81, extrator: i => i.Tipo, filtroId: 'flc-tipo' },
+  { chave: 'emissao', rotulo: 'Emissão', classeCol: 'col-data', classeTh: 'col-data', classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Data Emissão']), filtroId: 'flc-emissao' },
   { chave: 'ndoc', rotulo: 'Nº Doc.', classeCol: 'col-ndoc', classeTh: null, classeFiltroTh: null, larguraBase: 3.66, extrator: i => i['Nº Documento'], filtroId: 'flc-ndoc' },
-  { chave: 'formapgto', rotulo: 'Forma Pgto.', classeCol: null, classeTh: null, classeFiltroTh: null, larguraBase: 5.05, extrator: i => i['Forma Pagamento'], filtroId: 'flc-formapgto' },
-  { chave: 'fornecedor', rotulo: 'Fornecedor', classeCol: 'col-fornecedor', classeTh: null, classeFiltroTh: null, larguraBase: 5.15, extrator: i => i['Código Fornecedor'], filtroId: 'flc-fornecedor' },
+  { chave: 'formapgto', rotulo: 'Forma Pgto.', classeCol: null, classeTh: 'col-formapgto', classeFiltroTh: null, larguraBase: 5.05, extrator: i => i['Forma Pagamento'], filtroId: 'flc-formapgto' },
+  { chave: 'fornecedor', rotulo: 'Fornecedor', classeCol: 'col-fornecedor', classeTh: 'col-fornecedor', classeFiltroTh: null, larguraBase: 5.15, extrator: i => i['Código Fornecedor'], filtroId: 'flc-fornecedor' },
   { chave: 'razao', rotulo: 'Razão Social', classeCol: 'col-razao', classeTh: null, classeFiltroTh: null, larguraBase: 6.83, extrator: i => i['Razão Social'], filtroId: 'flc-razao' },
-  { chave: 'vencimento', rotulo: 'Vencimento', classeCol: 'col-data', classeTh: null, classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Vencimento']), filtroId: 'flc-vencimento' },
+  { chave: 'vencimento', rotulo: 'Vencimento', classeCol: 'col-data', classeTh: 'col-data', classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Vencimento']), filtroId: 'flc-vencimento' },
   { chave: 'valor', rotulo: 'Valor', classeCol: 'col-valor', classeTh: null, classeFiltroTh: null, larguraBase: 4.36, extrator: i => paraNumero(i['R$ Valor']), filtroId: 'flc-valor' },
   { chave: 'parcela', rotulo: 'Parcela', classeCol: null, classeTh: 'col-parcela', classeFiltroTh: null, larguraBase: 3.84, extrator: i => i['Parcela'], filtroId: 'flc-parcela' },
   { chave: 'categoria', rotulo: 'Categoria', classeCol: 'col-categoria', classeTh: null, classeFiltroTh: null, larguraBase: 6.83, extrator: i => categoriaFornecedor_(i), filtroId: null },
-  { chave: 'baixa', rotulo: 'Baixa', classeCol: 'col-data', classeTh: null, classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Data Baixa']), filtroId: 'flc-baixa' },
+  { chave: 'baixa', rotulo: 'Baixa', classeCol: 'col-data', classeTh: 'col-data', classeFiltroTh: null, larguraBase: 5.53, extrator: i => paraData(i['Data Baixa']), filtroId: 'flc-baixa' },
   { chave: 'historico', rotulo: 'Histórico', classeCol: 'col-historico', classeTh: null, classeFiltroTh: null, larguraBase: 6.83, extrator: i => i['Histórico'], filtroId: 'flc-historico' },
   { chave: 'remessa', rotulo: 'Remessa', classeCol: 'col-remessa', classeTh: 'col-remessa', classeFiltroTh: 'col-remessa', larguraBase: 3.84, extrator: i => i['Remessa'], filtroId: 'flc-remessa' },
 ];
@@ -3986,16 +4014,16 @@ function celulaLancamento_(chave, i) {
       return `<td class="col-origem"><span class="badge ${badge}">${i.Origem}</span></td>`;
     }
     case 'aporte': return `<td class="col-aporte">${i.Aporte || ''}</td>`;
-    case 'tipo': return `<td>${i.Tipo || ''}</td>`;
-    case 'emissao': return `<td>${fmtData(i['Data Emissão'])}</td>`;
+    case 'tipo': return `<td class="col-tipo">${i.Tipo || ''}</td>`;
+    case 'emissao': return `<td class="col-data">${fmtData(i['Data Emissão'])}</td>`;
     case 'ndoc': return `<td>${i['Nº Documento'] || ''}</td>`;
-    case 'formapgto': return `<td title="${escaparHtml(i['Forma Pagamento'])}">${i['Forma Pagamento'] || ''}</td>`;
-    case 'fornecedor': return `<td title="${escaparHtml(i['Código Fornecedor'])}">${i['Código Fornecedor'] || ''}</td>`;
+    case 'formapgto': return `<td class="col-formapgto" title="${escaparHtml(i['Forma Pagamento'])}">${i['Forma Pagamento'] || ''}</td>`;
+    case 'fornecedor': return `<td class="col-fornecedor" title="${escaparHtml(i['Código Fornecedor'])}">${i['Código Fornecedor'] || ''}</td>`;
     case 'razao': return `<td class="col-razao">${i['Razão Social'] || ''}</td>`;
-    case 'vencimento': return `<td>${fmtData(i['Vencimento'])}</td>`;
+    case 'vencimento': return `<td class="col-data">${fmtData(i['Vencimento'])}</td>`;
     case 'valor':
       return `<td class="col-valor" title="${escaparHtml(fmtMoeda(i['R$ Valor']))}">${htmlMoedaAlinhada(i['R$ Valor'])}</td>`;
-    case 'parcela': return `<td>${i['Parcela'] || ''}</td>`;
+    case 'parcela': return `<td class="col-parcela">${i['Parcela'] || ''}</td>`;
     case 'categoria': {
       const cat = categoriaFornecedor_(i);
       if (categoriaEhFixa_(i)) {
@@ -4004,7 +4032,7 @@ function celulaLancamento_(chave, i) {
       const conteudo = cat ? escaparHtml(cat) : '<span class="categoria-vazia">Adicionar categoria…</span>';
       return `<td class="col-categoria editavel" title="Clique para editar a categoria" onclick="event.stopPropagation(); editarCategoria('${escaparAtributo(i.ID)}','${i.Origem}','${escaparAtributo(i['Categoria'] || '')}')">${conteudo}</td>`;
     }
-    case 'baixa': return `<td>${fmtData(i['Data Baixa'])}</td>`;
+    case 'baixa': return `<td class="col-data">${fmtData(i['Data Baixa'])}</td>`;
     case 'historico': return `<td class="col-historico">${i['Histórico'] || ''}</td>`;
     case 'remessa': return `<td class="col-remessa">${i['Remessa'] || ''}</td>`;
     default: return '<td></td>';
@@ -4565,7 +4593,7 @@ function renderizarDetalheAporte() {
     const tituloLinha = (linkDoc || linkComp)
       ? `Clique para abrir o anexo (${[linkDoc ? 'documento' : '', linkComp ? 'comprovante' : ''].filter(Boolean).join(' e ')})`
       : 'Nenhum anexo cadastrado para este título';
-    return `<tr${classeAttr} onclick="abrirAnexoLinhaModalDetalhe('${escaparAtributo(linkDoc)}','${escaparAtributo(linkComp)}')" title="${escaparHtml(tituloLinha)}"><td>${calcularAporte(i['Vencimento'])}</td><td>${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td>${vencAtual}</td><td class="col-valor">${htmlMoedaAlinhada(i['R$ Valor'])}</td></tr>`;
+    return `<tr${classeAttr} onclick="abrirAnexoLinhaModalDetalhe('${escaparAtributo(linkDoc)}','${escaparAtributo(linkComp)}')" title="${escaparHtml(tituloLinha)}"><td class="col-aporte">${calcularAporte(i['Vencimento'])}</td><td class="col-data">${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td class="col-venc">${vencAtual}</td><td class="col-valor">${htmlMoedaAlinhada(i['R$ Valor'])}</td></tr>`;
   });
   tbody.innerHTML = linhas.join('') || `<tr><td colspan="6" style="color:var(--cinza)">${aporte ? 'Nenhum título encontrado para este aporte.' : 'Nenhum título encontrado.'}</td></tr>`;
   definirTotalizador('total-detalhe-aporte', ultimoDetalheAporte);
