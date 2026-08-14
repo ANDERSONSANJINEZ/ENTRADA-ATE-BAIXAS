@@ -1639,7 +1639,10 @@ function limparNumeroDocDoHistorico_(historico, nDoc, parcela, numeroDoc) {
   }
   if (numeroDoc) {
     const escapadoNum = String(numeroDoc).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    h = h.replace(new RegExp('\\b(?:' + PREFIXOS_TIPO_DOC_REGEX_ + ')\\.?\\s*' + escapadoNum + '\\b', 'gi'), '');
+    // Entre o prefixo e o número, o Protheus às vezes usa hífen em vez de
+    // espaço/ponto (ex.: "NF-19429-PERIODO") — aceita qualquer mistura dos
+    // três (inclusive nenhum separador), não só espaço/ponto.
+    h = h.replace(new RegExp('\\b(?:' + PREFIXOS_TIPO_DOC_REGEX_ + ')[\\s.-]*' + escapadoNum + '\\b', 'gi'), '');
   }
   if (parcela) {
     const escapadaParcela = String(parcela).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
