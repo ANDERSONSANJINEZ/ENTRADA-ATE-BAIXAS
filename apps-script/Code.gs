@@ -720,11 +720,16 @@ function arquivoDentroDasPastasAlvo_(arquivo) {
 // Busca no Drive um documento/comprovante pra um título — usada pelo botão
 // "Buscar no Drive" do pop-up de anexo (só sugere; quem decide se aplica é
 // sempre a pessoa, nunca grava nada sozinho). Os arquivos dessas pastas
-// seguem o padrão de nome "TIPO Nº_DOCUMENTO FORNECEDOR ...pdf" (ex.: "NF
-// 351 RENOVE DISTRIBUIDORA DE MATERIAS.pdf") — exige o Nº Documento bater
-// como palavra inteira no nome E (o Código Fornecedor aparecer no nome OU
-// pelo menos uma palavra de 4+ letras da Razão Social aparecer também),
-// pra não sugerir qualquer arquivo que só por acaso tenha o mesmo número.
+// costumam seguir o padrão de nome "TIPO Nº_DOCUMENTO FORNECEDOR ...pdf"
+// (ex.: "NF 351 RENOVE DISTRIBUIDORA DE MATERIAS.pdf"), mas nem todo
+// arquivo real respeita essa ordem — por isso a condição mínima é, agora,
+// independente de posição: exige o Nº Documento bater como palavra inteira
+// EM QUALQUER LUGAR do nome E o Código Fornecedor aparecer em qualquer
+// lugar do nome também. Achando os dois, já é suficiente pra sugerir o
+// arquivo. Só quando o Código Fornecedor não está disponível pra comparar
+// (raro) é que cai de volta pra exigir pelo menos uma palavra de 4+ letras
+// da Razão Social no nome, pra não sugerir qualquer arquivo que só por
+// acaso tenha o mesmo número.
 //
 // Usa DriveApp.searchFiles() (o índice de busca do Drive) em vez de varrer
 // pasta por pasta — a 1ª versão fazia isso manualmente (getFolders/
@@ -806,16 +811,21 @@ function api_buscarAnexoDrive(payload) {
     var nome = arquivo.getName();
     var nomeNorm = normalizarTextoBusca_(nome);
     var tokens = nomeNorm.split(' ');
-    // Nº Documento sempre vem logo depois do Tipo/COMPROVANTE (tokens[0]) —
-    // posição exata, não só "em algum lugar do nome" — pra não confundir
-    // com o mesmo número aparecendo em outra parte do nome por coincidência
-    // (ex.: dentro do próprio Código Fornecedor).
-    if (tokens[1] !== nDocAlvo) continue;
+    // Nº Documento como palavra inteira em QUALQUER posição do nome — não
+    // mais só logo depois do Tipo/COMPROVANTE (tokens[0]), pois vários
+    // arquivos reais não seguem essa ordem e a busca deixava de achar o
+    // link. Ainda exige bater a palavra inteira (não substring solto), pra
+    // não confundir com o mesmo número aparecendo por coincidência dentro
+    // de outro campo do nome (ex.: dentro do próprio Código Fornecedor).
+    if (tokens.indexOf(nDocAlvo) === -1) continue;
     var pontuacao = 1;
     var codigoBate = codigosFornecedor.some(function (c) { return nomeNorm.indexOf(c) !== -1; });
     if (codigoBate) pontuacao += 2;
     pontuacao += palavrasFornecedor.filter(function (p) { return nomeNorm.indexOf(p) !== -1; }).length;
-    if (pontuacao < 2) continue; // só nº bater não basta — exige código OU nome do fornecedor também
+    // Condição mínima: Nº Documento + Código Fornecedor no nome (em
+    // qualquer posição) já basta. Sem código pra comparar, cai pra exigir
+    // ao menos o nome do fornecedor (regra anterior).
+    if (!codigoBate && pontuacao < 2) continue;
     // Cada botão só pode sugerir o arquivo do tipo certo pra ele — nunca os
     // dois juntos (documento e comprovante são coisas diferentes, mesmo
     // quando os dois existem pro mesmo título): comprovante só aceita
