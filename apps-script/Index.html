@@ -252,6 +252,9 @@
   /* Linha clicável pra abrir o anexo (documento/comprovante) do título —
      mesmo comportamento do modal-detalhe genérico. */
   #tabela-detalhe-aporte tbody tr { cursor: pointer; }
+  /* Identifica lançamento Manual (em vez de ERP) mesmo com "Origem: todas"
+     selecionado no filtro — sem precisar filtrar pra notar. */
+  #tabela-detalhe-aporte tbody tr.linha-origem-manual { background: #fee2e2; }
   #tabela-detalhe-aporte tbody tr:hover { background: var(--azul-claro); }
   #tabela-detalhe-aporte thead th { text-align: center; }
   .filtros { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
@@ -578,16 +581,16 @@
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:0; align-items:center;">
         <input id="busca-detalhe-aporte" class="busca-tabela" placeholder="Buscar em N/Doc., Descrição e Venc.…" style="max-width:320px; margin-bottom:0;">
+        <select id="filtro-origem-detalhe-aporte" class="busca-tabela" style="max-width:150px; margin-bottom:0;">
+          <option value="">Origem: todas</option>
+          <option value="ERP">ERP</option>
+          <option value="Manual">Manual</option>
+        </select>
         <button type="button" class="btn secundario small" onclick="limparFiltrosDetalheAporte()">✕ Limpar filtros</button>
         <select id="select-aporte-detalhe" class="busca-tabela" style="max-width:420px; margin-bottom:0;">
           <option value="">Todos os aportes</option>
         </select>
         <button type="button" id="btn-voltar-todos-aportes" class="btn secundario small" style="display:none; margin-bottom:0;" onclick="voltarTodosAportes()">↺ Todos os aportes</button>
-        <select id="filtro-origem-detalhe-aporte">
-          <option value="">Origem: todas</option>
-          <option value="ERP">ERP</option>
-          <option value="Manual">Manual</option>
-        </select>
       </div>
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; margin-top:10px; flex-wrap:wrap;">
         <div id="total-detalhe-aporte" style="font-size:13px; color:var(--cinza);"></div>
@@ -4540,7 +4543,14 @@ function renderizarDetalheAporte() {
   let vencAnterior = null;
   const linhas = itensPagina.map((i) => {
     const vencAtual = fmtData(i['Vencimento']);
-    const separador = (vencAnterior !== null && vencAnterior !== vencAtual) ? ' class="separador-grupo"' : '';
+    // Duas classes independentes que podem coexistir na mesma linha (um
+    // atributo class="..." só, nunca dois) — separador-grupo (borda entre
+    // vencimentos diferentes) e linha-origem-manual (destaque visual pra
+    // lançamento Manual, ver CSS), cada uma condicional à sua própria regra.
+    const classes = [];
+    if (vencAnterior !== null && vencAnterior !== vencAtual) classes.push('separador-grupo');
+    if (i.Origem === 'Manual') classes.push('linha-origem-manual');
+    const classeAttr = classes.length ? ` class="${classes.join(' ')}"` : '';
     vencAnterior = vencAtual;
     const nDoc = `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim();
     const descricao = montarDescricaoAporte_(i);
@@ -4549,7 +4559,7 @@ function renderizarDetalheAporte() {
     const tituloLinha = (linkDoc || linkComp)
       ? `Clique para abrir o anexo (${[linkDoc ? 'documento' : '', linkComp ? 'comprovante' : ''].filter(Boolean).join(' e ')})`
       : 'Nenhum anexo cadastrado para este título';
-    return `<tr${separador} onclick="abrirAnexoLinhaModalDetalhe('${escaparAtributo(linkDoc)}','${escaparAtributo(linkComp)}')" title="${escaparHtml(tituloLinha)}"><td>${calcularAporte(i['Vencimento'])}</td><td>${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td>${vencAtual}</td><td class="col-valor">${htmlMoedaAlinhada(i['R$ Valor'])}</td></tr>`;
+    return `<tr${classeAttr} onclick="abrirAnexoLinhaModalDetalhe('${escaparAtributo(linkDoc)}','${escaparAtributo(linkComp)}')" title="${escaparHtml(tituloLinha)}"><td>${calcularAporte(i['Vencimento'])}</td><td>${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td>${vencAtual}</td><td class="col-valor">${htmlMoedaAlinhada(i['R$ Valor'])}</td></tr>`;
   });
   tbody.innerHTML = linhas.join('') || `<tr><td colspan="6" style="color:var(--cinza)">${aporte ? 'Nenhum título encontrado para este aporte.' : 'Nenhum título encontrado.'}</td></tr>`;
   definirTotalizador('total-detalhe-aporte', ultimoDetalheAporte);
