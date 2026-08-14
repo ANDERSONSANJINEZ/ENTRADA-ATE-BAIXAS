@@ -342,6 +342,11 @@
   .campo-detalhe .valor-campo a { color: var(--azul); }
   .campo-detalhe input, .campo-detalhe select { width: 100%; padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; font-size: 14px; }
   #tabela-lancamentos tbody tr { cursor: pointer; }
+  /* Destaque visual pra lançamento marcado como duplicado (Status ===
+     "Duplicado – revisar", ver recalcularStatusComDados_ no Code.gs — pega
+     tanto o título do ERP quanto o Manual que bateram entre si), mesmo
+     estilo do destaque de origem Manual na aba Aporte. */
+  #tabela-lancamentos tbody tr.linha-duplicada { background: #fee2e2; }
   #tabela-lancamentos tbody tr:hover td:not(.col-anexos):not(.col-acao) { background: var(--azul-claro); }
   @media (max-width: 960px) {
     .grid-2 { grid-template-columns: 1fr; }
@@ -4113,7 +4118,8 @@ function renderizarLancamentos() {
         <button class="btn secundario small anexo-comp ${linkComp ? 'anexo-definido-verde' : ''}" title="${tituloComp}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','comprovante','${escaparAtributo(linkComp)}')">🧾</button>
       </div></td>`;
     const celulasDados = colunasEmOrdem.map((chave) => celulaLancamento_(chave, i)).join('');
-    return `<tr onclick="abrirDetalheLinha(event, '${idEsc}', '${i.Origem}')" title="Clique para ver o lançamento por completo">
+    const classeDuplicado = i.Status === 'Duplicado – revisar' ? ' class="linha-duplicada"' : '';
+    return `<tr${classeDuplicado} onclick="abrirDetalheLinha(event, '${idEsc}', '${i.Origem}')" title="Clique para ver o lançamento por completo">
       ${celulasDados}
       ${anexos}
       <td class="col-acao">${acao}</td>
