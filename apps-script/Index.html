@@ -197,6 +197,26 @@
   #conteudo-analise a { color: var(--azul); font-weight: bold; text-decoration: none; cursor: pointer; }
   #conteudo-analise a:hover { text-decoration: underline; }
   .grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+  /* Navegação lateral do Dashboard — agrupa os painéis por tipo de gráfico
+     (ver GRUPOS_DASHBOARD_ e mostrarGrupoDashboard) pra não precisar rolar
+     a aba inteira pra achar um gráfico específico. "Todos" (padrão) mostra
+     tudo, igual ao comportamento de antes; escolher um grupo esconde os
+     demais. */
+  .dashboard-layout { display: flex; align-items: flex-start; gap: 20px; }
+  .dashboard-lateral {
+    flex: 0 0 200px; display: flex; flex-direction: column; gap: 2px;
+    position: sticky; top: 12px;
+  }
+  .dashboard-lateral button {
+    text-align: left; border: none; background: none; cursor: pointer;
+    padding: 9px 12px; font-size: 13px; color: var(--cinza); border-radius: 6px;
+    border-left: 3px solid transparent;
+  }
+  .dashboard-lateral button:hover { background: var(--azul-claro); }
+  .dashboard-lateral button.ativo { color: var(--azul); font-weight: bold; background: var(--azul-claro); border-left-color: var(--azul); }
+  .dashboard-conteudo { flex: 1; min-width: 0; }
+  .grupo-dashboard { display: none; }
+  .grupo-dashboard.ativo { display: block; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--borda); white-space: nowrap; }
   th { background: var(--azul-claro); color: var(--azul); position: sticky; top: 0; }
@@ -387,6 +407,8 @@
     main { padding: 14px; }
     form.manual { grid-template-columns: repeat(2, 1fr); }
     .linha-tipo-razao { grid-template-columns: repeat(2, 1fr); }
+    .dashboard-layout { flex-direction: column; }
+    .dashboard-lateral { flex-direction: row; flex-wrap: wrap; position: static; width: 100%; }
   }
   @media (max-width: 600px) {
     form.manual { grid-template-columns: 1fr; }
@@ -436,6 +458,18 @@
   <section id="aba-dashboard" class="aba ativa">
     <input id="busca-dashboard" class="busca-tabela" placeholder="Buscar em Remessa, Aporte, Curva ABC e Categoria…" style="max-width:420px; margin-bottom:16px;">
     <div class="cards" id="cards-kpi"></div>
+    <div class="dashboard-layout">
+      <div class="dashboard-lateral" id="dashboard-lateral">
+        <button class="ativo" data-grupo="todos">Todos</button>
+        <button data-grupo="visao-geral">Visão Geral</button>
+        <button data-grupo="faturado-pago">Faturado x Pago</button>
+        <button data-grupo="custo-categoria">Custo por Categoria</button>
+        <button data-grupo="abc-categoria">Curva ABC por Categoria</button>
+        <button data-grupo="abc-fornecedores">Curva ABC de Fornecedores</button>
+        <button data-grupo="resumo-aporte">Resumo por Aporte</button>
+      </div>
+      <div class="dashboard-conteudo">
+    <div class="grupo-dashboard ativo" data-grupo="visao-geral">
     <div class="grid-2">
       <div class="painel">
         <div class="cabecalho-painel">
@@ -472,6 +506,8 @@
         </div>
       </div>
     </div>
+    </div>
+    <div class="grupo-dashboard ativo" data-grupo="faturado-pago">
     <div class="painel" id="painel-faturado-pago" style="display:none;">
       <div class="cabecalho-painel">
         <h2>Faturado x Pago por Medição</h2>
@@ -493,6 +529,8 @@
         </table>
       </div>
     </div>
+    </div>
+    <div class="grupo-dashboard ativo" data-grupo="custo-categoria">
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Custo por Categoria — Baixado x A Baixar</h2>
@@ -503,6 +541,8 @@
         <canvas id="chart-categoria-custo"></canvas>
       </div>
     </div>
+    </div>
+    <div class="grupo-dashboard ativo" data-grupo="abc-categoria">
     <div class="grid-2">
       <div class="painel">
         <div class="cabecalho-painel">
@@ -531,6 +571,8 @@
         </div>
       </div>
     </div>
+    </div>
+    <div class="grupo-dashboard ativo" data-grupo="abc-fornecedores">
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Curva ABC dos fornecedores</h2>
@@ -557,6 +599,8 @@
         </table>
       </div>
     </div>
+    </div>
+    <div class="grupo-dashboard ativo" data-grupo="resumo-aporte">
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Resumo por Aporte — Qtd Doc x Doc aberto</h2>
@@ -578,6 +622,9 @@
           <thead><tr><th>Aporte</th><th>Período</th><th>Qtd Doc</th><th>Doc aberto</th><th>Valor</th></tr></thead>
           <tbody></tbody>
         </table>
+      </div>
+    </div>
+    </div>
       </div>
     </div>
   </section>
@@ -1589,6 +1636,23 @@ document.querySelectorAll('nav button').forEach(btn => {
     // com uma leitura que quase ninguém abre) — busca só quando a aba é
     // clicada, e só a primeira vez (cache em ultimoLogCarregado).
     if (btn.dataset.aba === 'historico' && !ultimoLogCarregado) carregarHistorico();
+  };
+});
+
+// ---------- Navegação lateral do Dashboard (agrupa por tipo de gráfico) ----------
+// Div comum (não <nav>) de propósito — o seletor 'nav button' logo acima já
+// cobre a barra de abas do topo; se fosse <nav> aqui também, esses botões
+// cairiam nesse mesmo forEach e dataset.aba viria undefined, quebrando os
+// dois. "Todos" (padrão) mostra todo mundo; escolher um grupo específico
+// esconde os demais.
+document.querySelectorAll('#dashboard-lateral button').forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll('#dashboard-lateral button').forEach((b) => b.classList.remove('ativo'));
+    btn.classList.add('ativo');
+    const grupo = btn.dataset.grupo;
+    document.querySelectorAll('.grupo-dashboard').forEach((g) => {
+      g.classList.toggle('ativo', grupo === 'todos' || g.dataset.grupo === grupo);
+    });
   };
 });
 
