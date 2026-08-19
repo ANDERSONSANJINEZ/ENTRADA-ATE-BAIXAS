@@ -92,6 +92,11 @@
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
   .card { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px 16px; text-align: center; display: flex; flex-direction: column; }
   .card .rotulo { font-size: 12px; color: var(--cinza); margin-bottom: 6px; }
+  /* Rótulos de tamanhos diferentes (1 ou 2 linhas) empurravam o valor de
+     cada card pra uma altura diferente — reserva sempre a mesma altura de
+     rótulo (2 linhas) pra que o valor comece na mesma linha em todos os
+     cards da fileira. */
+  #cards-faturamento .rotulo { min-height: 30px; }
   .card .card-valores { margin-top: auto; }
   .card .card-qtde { font-size: 22px; font-weight: bold; color: var(--azul); line-height: 1.2; }
   .card .card-rs { font-size: 14px; color: var(--azul); margin-top: 2px; }
@@ -285,13 +290,16 @@
      htmlMoedaAlinhada), que aí sim consegue herdar 100% da altura de um
      <td> comum. */
   #tabela-detalhe-aporte td.col-valor, #modal-detalhe-tabela td.col-valor, #tabela-lancamentos td.col-valor,
-  #tabela-aporte td.col-valor, #tabela-abc td.col-valor, #tabela-abc-categoria td.col-valor, #tabela-creditos td.col-valor
-  { padding: 0; }
+  #tabela-aporte td.col-valor, #tabela-abc td.col-valor, #tabela-abc-categoria td.col-valor, #tabela-creditos td.col-valor,
+  #tabela-faturado-pago td.col-valor { padding: 0; }
   .valor-flex { display: flex; justify-content: space-between; align-items: center; height: 100%; box-sizing: border-box; padding: 7px 8px; }
   /* Tabela Faturado x Pago: valores em moeda simples (R$ 1.234,56 num só
      texto, sem o componente flex .valor-flex) e tudo centralizado — pedido
      explícito, diferente do padrão alinhado-à-direita das outras tabelas. */
-  .tabela-centralizada th, .tabela-centralizada td { text-align: center; }
+  /* Cabeçalho e coluna "Medição" centralizados; as colunas de dinheiro
+     (.col-valor) usam o layout "R$" à esquerda / valor à direita de
+     .valor-flex, então ficam de fora daqui de propósito. */
+  .tabela-centralizada th, .tabela-centralizada td:not(.col-valor) { text-align: center; }
   /* Linha clicável pra abrir o anexo (documento/comprovante) do título —
      mesmo comportamento do modal-detalhe genérico. */
   #tabela-detalhe-aporte tbody tr { cursor: pointer; }
@@ -3306,6 +3314,12 @@ function renderizarFaturadoPago_() {
       ],
     },
     options: {
+      // maintainAspectRatio:false (padrão do Chart.js é true) — sem isso o
+      // canvas calcula a largura a partir de uma proporção fixa em vez de
+      // esticar até preencher o wrap de 100% de largura, sobrando um vão
+      // vazio à direita do gráfico dentro do painel.
+      responsive: true,
+      maintainAspectRatio: false,
       plugins: {
         datalabels: { display: false },
         legend: { labels: { color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8 } },
@@ -3339,6 +3353,8 @@ function renderizarFaturadoPago_() {
       ],
     },
     options: {
+      responsive: true,
+      maintainAspectRatio: false,
       plugins: {
         datalabels: { display: false },
         legend: { labels: { color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8 } },
@@ -3363,9 +3379,9 @@ function renderizarFaturadoPago_() {
       : '';
     return `<tr onclick="abrirDetalhe('Pago — Med. ${l.medicao}', ultimoItensPagosFaturadoPago_(${l.medicao}))" style="cursor:pointer" title="Clique para ver os títulos pagos nesta janela">
       <td>Medição ${l.medicao}</td>
-      <td>${fmtMoeda(l.faturado)}</td>
-      <td>${fmtMoeda(l.pago)}</td>
-      <td>${fmtMoeda(l.margem)}${tendencia}</td>
+      <td class="col-valor">${htmlMoedaAlinhada(l.faturado)}</td>
+      <td class="col-valor">${htmlMoedaAlinhada(l.pago)}</td>
+      <td class="col-valor">${htmlMoedaAlinhada(l.margem)}${tendencia}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="4" style="color:var(--cinza)">Nenhuma medição com data de referência.</td></tr>';
   ultimoItensPagosPorMedicao_ = linhas.reduce((mapa, l) => { mapa[l.medicao] = l.itensPagos; return mapa; }, {});
