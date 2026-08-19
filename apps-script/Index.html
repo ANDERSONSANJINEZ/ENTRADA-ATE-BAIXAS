@@ -183,11 +183,11 @@
   /* Alça de redimensionar colunas (estilo planilha) — ver
      tornarColunasRedimensionaveis(); fica colada na borda direita do
      cabeçalho, sem atrapalhar o clique de ordenação. */
-  #tabela-lancamentos th .alca-redimensionar, #tabela-faturado-pago th .alca-redimensionar {
+  #tabela-lancamentos th .alca-redimensionar, #tabela-faturado-pago th .alca-redimensionar, #tabela-faturamento-categorias th .alca-redimensionar {
     position: absolute; top: 0; right: -4px; bottom: 0; width: 8px;
     cursor: col-resize; z-index: 5;
   }
-  #tabela-lancamentos th .alca-redimensionar:hover, #tabela-faturado-pago th .alca-redimensionar:hover { background: rgba(31,78,120,.35); }
+  #tabela-lancamentos th .alca-redimensionar:hover, #tabela-faturado-pago th .alca-redimensionar:hover, #tabela-faturamento-categorias th .alca-redimensionar:hover { background: rgba(31,78,120,.35); }
   .anexos-col { display: flex; gap: 4px; }
   /* #tabela-lancamentos no seletor não é enfeite — sem ele, ".btn.small"
      (2 classes) tinha mais especificidade que ".anexos-col button" (1
@@ -294,7 +294,7 @@
      <td> comum. */
   #tabela-detalhe-aporte td.col-valor, #modal-detalhe-tabela td.col-valor, #tabela-lancamentos td.col-valor,
   #tabela-aporte td.col-valor, #tabela-abc td.col-valor, #tabela-abc-categoria td.col-valor, #tabela-creditos td.col-valor,
-  #tabela-faturado-pago td.col-valor { padding: 0; }
+  #tabela-faturado-pago td.col-valor, #tabela-faturamento-categorias td.col-valor { padding: 0; }
   .valor-flex { display: flex; justify-content: space-between; align-items: center; height: 100%; box-sizing: border-box; padding: 7px 8px; }
   /* Sem isso, numa coluna estreita o "R$" fica flexível e o número quebra
      em 2 linhas (flex-shrink:1 é o padrão) — aí a seta/percentual de
@@ -311,7 +311,7 @@
   .tabela-centralizada th, .tabela-centralizada td:not(.col-valor) { text-align: center; }
   /* table-layout:fixed pro <colgroup> valer e a alça de redimensionar (ver
      tornarColunasRedimensionaveis) funcionar igual à tabela de Lançamentos. */
-  #tabela-faturado-pago { table-layout: fixed; }
+  #tabela-faturado-pago, #tabela-faturamento-categorias { table-layout: fixed; }
   /* Linha clicável pra abrir o anexo (documento/comprovante) do título —
      mesmo comportamento do modal-detalhe genérico. */
   #tabela-detalhe-aporte tbody tr { cursor: pointer; }
@@ -494,7 +494,7 @@
         <button data-grupo="fluxo" title="Fluxo de caixa projetado (títulos em aberto)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,14.5 8,9.5 11,12.5 17,5.5"/><polyline points="12.5,5.5 17,5.5 17,10"/></svg></button>
         <button data-grupo="status-pagamento" title="Situação das baixas"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M6.8 10.2l2.2 2.2 4.2-4.8"/></svg></button>
         <button data-grupo="valor-remessa" title="Valor por Remessa (últimas 30)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.2l7-2.9 7 2.9-7 2.9-7-2.9z"/><path d="M3 6.2v7.6l7 2.9 7-2.9V6.2"/><path d="M10 9.1v8.6"/></svg></button>
-        <button data-grupo="faturado-pago" title="Faturado x Pago por Medição"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="2.5" x2="10" y2="17.5"/><path d="M13.5 6H8.2a2.3 2.3 0 000 4.6h3.6a2.3 2.3 0 010 4.6H6"/></svg></button>
+        <button data-grupo="faturado-pago" title="Faturamento"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="2.5" x2="10" y2="17.5"/><path d="M13.5 6H8.2a2.3 2.3 0 000 4.6h3.6a2.3 2.3 0 010 4.6H6"/></svg></button>
         <button data-grupo="custo-categoria" title="Custo por Categoria — Baixado x A Baixar"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h6.2L17 10.8 9.8 18 2 10.2V4z"/><circle cx="6.6" cy="6.6" r="1.1" fill="currentColor" stroke="none"/></svg></button>
         <button data-grupo="abc-categoria" title="Curva ABC por Categoria"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17V12M8 17V8M13 17V4"/><polyline points="3,9 8,5.5 13,2.5 17,1" stroke-width="1.4"/></svg></button>
         <button data-grupo="abc-fornecedores" title="Curva ABC de Fornecedores"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="2.5" width="11" height="15"/><path d="M7.5 6h1.6M11 6h1.6M7.5 9h1.6M11 9h1.6M7.5 12h1.6M11 12h1.6"/></svg></button>
@@ -545,7 +545,7 @@
     <div class="grupo-dashboard" data-grupo="faturado-pago">
     <div class="painel" id="painel-faturado-pago" style="display:none;">
       <div class="cabecalho-painel">
-        <h2>Faturado x Pago por Medição</h2>
+        <h2>Faturamento</h2>
       </div>
       <div id="faturado-pago-aviso" style="display:none; font-size:13px; color:var(--vermelho); margin-bottom:14px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:10px 12px; line-height:1.5;"></div>
       <div id="faturado-pago-conteudo">
@@ -558,7 +558,7 @@
         <div class="painel" style="margin-bottom:18px; width:100%;">
           <div class="cabecalho-painel">
             <h2>Faturado, Pago e Margem por Medição</h2>
-            <button class="btn secundario small" onclick="expandirGrafico('faturadoPago', 'Faturado x Pago por Medição')">⛶ Expandir</button>
+            <button class="btn secundario small" onclick="expandirGrafico('faturadoPago', 'Faturado, Pago e Margem por Medição')">⛶ Expandir</button>
             <button class="btn secundario small" onclick="exportarXlsx('faturadoPago')">⬇ Exportar Excel</button>
           </div>
           <div id="faturado-pago-chart-wrap" style="height:340px; width:100%;">
@@ -575,14 +575,31 @@
             <canvas id="chart-faturado-pago-acumulado"></canvas>
           </div>
         </div>
-        <div class="tabela-scroll">
-          <table id="tabela-faturado-pago" class="tabela-centralizada">
-            <colgroup>
-              <col style="width:15%"><col style="width:28.33%"><col style="width:28.33%"><col style="width:28.33%">
-            </colgroup>
-            <thead><tr><th>Medição</th><th>Faturado</th><th>Pago</th><th>Margem</th></tr></thead>
-            <tbody></tbody>
-          </table>
+        <div class="grid-2">
+          <div>
+            <h3 style="font-size:13px; color:var(--azul); margin:0 0 8px;">Por medição</h3>
+            <div class="tabela-scroll">
+              <table id="tabela-faturado-pago" class="tabela-centralizada">
+                <colgroup>
+                  <col style="width:15%"><col style="width:28.33%"><col style="width:28.33%"><col style="width:28.33%">
+                </colgroup>
+                <thead><tr><th>Medição</th><th>Faturado</th><th>Pago</th><th>Margem</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <h3 style="font-size:13px; color:var(--azul); margin:0 0 8px;" title="Quanto o custo de cada categoria (Custo por Categoria/Ranking de categorias) representa do Faturamento líquido do período">Por categoria de custo</h3>
+            <div class="tabela-scroll">
+              <table id="tabela-faturamento-categorias" class="tabela-centralizada">
+                <colgroup>
+                  <col style="width:40%"><col style="width:30%"><col style="width:30%">
+                </colgroup>
+                <thead><tr><th>Categoria</th><th>Custo no período</th><th>% do Faturamento</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1669,7 +1686,10 @@ async function carregarFaturamento() {
   // ver o fim do arquivo), a série "% do Faturamento" daquele gráfico ainda
   // não existia; re-renderiza agora que state.faturamento chegou. Mesma
   // lógica pra seção "Faturamento" da aba Análise.
-  if (ultimoItensAnalise.length) renderizarGraficoAbcCategoria(ultimoItensAnalise);
+  if (ultimoItensAnalise.length) {
+    renderizarGraficoAbcCategoria(ultimoItensAnalise);
+    renderizarTabelaFaturamentoCategorias(ultimoItensAnalise);
+  }
   if (document.getElementById('conteudo-analise').innerHTML) renderizarAnalise();
 }
 
@@ -1737,24 +1757,62 @@ if (ABAS_PERMITIDAS_RESTRITO) {
   if (abaInicialRestrita) abaInicialRestrita.click();
 }
 
-// Usuárias sem acesso às abas Dashboard/Análise (pedido específico) — pelo
-// nome cadastrado na aba "Usuários" da planilha (usuarioEdicaoNome, ver
-// habilitarEdicao), já que o app não tem identidade de login do Google.
-// Diferente do PERFIS_RESTRITOS acima (link ?usuario=... só-leitura pra
-// compartilhar com terceiros), esta é gente com senha de edição normal —
-// só as duas abas somem da navegação, o resto do acesso continua igual.
+// Controle de visibilidade de abas pelo nome cadastrado na aba "Usuários"
+// da planilha (usuarioEdicaoNome, ver habilitarEdicao) — o app não tem
+// identidade de login do Google, então é o único jeito de saber "quem" é
+// quem. Diferente do PERFIS_RESTRITOS acima (link ?usuario=... só-leitura
+// pra compartilhar com terceiros), esta é gente com senha de edição normal;
+// só abas/seções somem da navegação, o resto do acesso (inclusive editar)
+// continua igual. Duas regras independentes:
+//   1) Dayana Sousa/Francisco Gilderlan: sem Dashboard nem Análise.
+//   2) Faturamento (dentro do Dashboard) e Análise: só Anderson e Zico —
+//      qualquer outro nome (Dayana/Francisco inclusive, e também ninguém
+//      ainda logado) não vê essas duas, mesmo mantendo o resto do
+//      Dashboard visível.
 const USUARIOS_SEM_DASHBOARD_ANALISE_ = ['dayana sousa', 'francisco gilderlan'];
+const USUARIOS_COM_FATURAMENTO_ANALISE_ = ['anderson', 'zico'];
 function aplicarRestricaoAbasPorUsuario_() {
-  if (!usuarioEdicaoNome) return;
-  if (!USUARIOS_SEM_DASHBOARD_ANALISE_.includes(usuarioEdicaoNome.trim().toLowerCase())) return;
+  const nome = (usuarioEdicaoNome || '').trim().toLowerCase();
+
+  // Sempre reaplica do zero (mostra tudo, depois esconde conforme as regras
+  // valerem pro nome atual) — sem isso, alguém restrito logar e depois sair
+  // (ou uma pessoa diferente logar em seguida, no mesmo navegador) deixava
+  // Dashboard/Análise escondidos pra sempre, mesmo pra quem tem acesso.
   ['dashboard', 'analise'].forEach((chave) => {
     const btn = document.querySelector(`nav button[data-aba="${chave}"]`);
-    if (btn) btn.style.display = 'none';
+    if (btn) btn.style.display = '';
   });
-  const abaAtiva = document.querySelector('.aba.ativa');
-  if (abaAtiva && (abaAtiva.id === 'aba-dashboard' || abaAtiva.id === 'aba-analise')) {
+  const btnFaturamentoReset = document.querySelector('#dashboard-lateral button[data-grupo="faturado-pago"]');
+  if (btnFaturamentoReset) btnFaturamentoReset.style.display = '';
+
+  if (nome && USUARIOS_SEM_DASHBOARD_ANALISE_.includes(nome)) {
+    ['dashboard', 'analise'].forEach((chave) => {
+      const btn = document.querySelector(`nav button[data-aba="${chave}"]`);
+      if (btn) btn.style.display = 'none';
+    });
+  }
+
+  if (!USUARIOS_COM_FATURAMENTO_ANALISE_.includes(nome)) {
+    const btnAnalise = document.querySelector('nav button[data-aba="analise"]');
+    if (btnAnalise) btnAnalise.style.display = 'none';
+    const btnFaturamento = document.querySelector('#dashboard-lateral button[data-grupo="faturado-pago"]');
+    if (btnFaturamento) btnFaturamento.style.display = 'none';
+  }
+
+  // Se a aba ativa é uma das que acabou de ficar escondida (botão de nav
+  // com display:none), muda pra Lançamentos — nunca deixa a tela parada
+  // numa aba cujo botão sumiu do menu.
+  const abaAtivaEl = document.querySelector('.aba.ativa');
+  const abaAtivaId = abaAtivaEl ? abaAtivaEl.id.replace('aba-', '') : null;
+  const btnAbaAtiva = abaAtivaId && document.querySelector(`nav button[data-aba="${abaAtivaId}"]`);
+  if (btnAbaAtiva && btnAbaAtiva.style.display === 'none') {
     const btnLancamentos = document.querySelector('nav button[data-aba="lancamentos"]');
     if (btnLancamentos) btnLancamentos.click();
+  }
+  const grupoAtivo = document.querySelector('.grupo-dashboard.ativo');
+  if (grupoAtivo && grupoAtivo.dataset.grupo === 'faturado-pago') {
+    const btnAging = document.querySelector('#dashboard-lateral button[data-grupo="aging"]');
+    if (btnAging && btnAging.style.display !== 'none') btnAging.click();
   }
 }
 aplicarRestricaoAbasPorUsuario_();
@@ -2801,6 +2859,7 @@ function renderizarDashboard() {
   renderizarCustoPorCategoria(itens);
   renderizarRankingCategoria(itens);
   renderizarGraficoAbcCategoria(itens);
+  renderizarTabelaFaturamentoCategorias(itens);
   // Recalcula o Pago com o ERP/Manual atual sem buscar a planilha de
   // Faturamento de novo — o Faturado já está em cache no state.faturamento,
   // carregado 1x à parte (ver carregarFaturamento). Fica escondido até essa
@@ -3270,14 +3329,19 @@ function renderizarFaturadoPago_() {
   // aquele valor representa do Total Faturado.
   const barraProporcao = (valor) => {
     const pct = totalFaturado ? Math.max(0, Math.min(100, (valor / totalFaturado) * 100)) : 0;
-    return `<div style="margin-top:9px; background:#e1e0d9; border-radius:4px; height:6px; overflow:hidden;"><div style="width:${pct}%; height:100%; background:#2a78d6; border-radius:4px;"></div></div>`;
+    // margin-top:auto (não um valor fixo) empurra a barra pro fundo do
+    // card — como .card é flex-column, isso alinha a barra de todos os 6
+    // cards na mesma linha horizontal (a de baixo), em vez de cada uma
+    // ficar coladinha ao valor com uma sobra de espaço em branco variável
+    // abaixo dela.
+    return `<div style="margin-top:auto; background:#e1e0d9; border-radius:4px; height:6px; overflow:hidden;"><div style="width:${pct}%; height:100%; background:#2a78d6; border-radius:4px;"></div></div>`;
   };
   const pagoPctVis = totalFaturado ? Math.max(0, Math.min(100, (totalPago / totalFaturado) * 100)) : 0;
   const aPagar = Math.max(0, totalFaturado - totalPago);
   document.getElementById('cards-faturamento').innerHTML = `
     <div class="card">
       <div class="card-topo-fixo"><div class="rotulo">Faturado — Total (líquido)</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(totalFaturado)}</div></div></div>
-      <div style="margin-top:9px; background:#e1e0d9; border-radius:4px; height:6px; overflow:hidden; display:flex;">
+      <div style="margin-top:auto; background:#e1e0d9; border-radius:4px; height:6px; overflow:hidden; display:flex;">
         <div style="width:${pagoPctVis}%; background:#eb6834;"></div>
         <div style="width:${100 - pagoPctVis}%; background:#2a78d6;"></div>
       </div>
@@ -3301,7 +3365,7 @@ function renderizarFaturadoPago_() {
     </div>
     <div class="card ${resultado >= 0 ? '' : 'alerta'}">
       <div class="card-topo-fixo"><div class="rotulo">Resultado (Faturado − Pago)</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(resultado)}</div></div></div>
-      <div style="position:relative; width:140px; height:76px; margin:6px auto 0;">
+      <div style="position:relative; width:140px; height:76px; margin:auto auto 0;">
         <canvas id="chart-resultado-gauge"></canvas>
         <div id="resultado-gauge-texto" style="position:absolute; left:0; right:0; bottom:0; text-align:center; font-size:18px; font-weight:bold;"></div>
       </div>
@@ -3423,11 +3487,15 @@ function renderizarFaturadoPago_() {
 
   document.querySelector('#tabela-faturado-pago tbody').innerHTML = linhasTabela.map((l) => {
     const tendencia = tendenciaPorMedicao_[l.medicao] || '';
+    // A seta/percentual de tendência entra DENTRO do mesmo <span> do valor
+    // (não como irmão de .valor-flex) — assim fica coladinha ao número, em
+    // vez de cair numa linha própria por baixo do "R$".
+    const numeroMargem = paraNumero(l.margem).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return `<tr onclick="abrirDetalhe('Pago — Med. ${l.medicao}', ultimoItensPagosFaturadoPago_(${l.medicao}))" style="cursor:pointer" title="Clique para ver os títulos pagos nesta janela">
       <td>Medição ${l.medicao}</td>
       <td class="col-valor">${htmlMoedaAlinhada(l.faturado)}</td>
       <td class="col-valor">${htmlMoedaAlinhada(l.pago)}</td>
-      <td class="col-valor">${htmlMoedaAlinhada(l.margem)}${tendencia}</td>
+      <td class="col-valor"><div class="valor-flex"><span class="rs">R$</span> <span class="valor-num">${numeroMargem}${tendencia}</span></div></td>
     </tr>`;
   }).join('') || '<tr><td colspan="4" style="color:var(--cinza)">Nenhuma medição com data de referência.</td></tr>';
   ultimoItensPagosPorMedicao_ = linhas.reduce((mapa, l) => { mapa[l.medicao] = l.itensPagos; return mapa; }, {});
@@ -3780,6 +3848,35 @@ function renderizarGraficoAbcCategoria(itens) {
       },
     },
   });
+}
+
+// Versão em tabela da mesma relação Faturamento x Categorias do gráfico
+// acima — TODAS as categorias (não só as selecionadas no gráfico), com
+// arraste pra redimensionar e clique pra ordenar (mesmo padrão de
+// Lançamentos/Curva ABC). Fica ao lado da tabela "Por medição" no painel
+// Faturamento.
+const EXTRATORES_FATURAMENTO_CATEGORIAS_ = [l => l.cat, l => l.valor, l => l.pctFaturamento];
+function renderizarTabelaFaturamentoCategorias(itens) {
+  const ordenadoBase = calcularRankingAbcCategoria(itens);
+  const totalFaturamento = totalFaturamentoLiquido_();
+  let linhas = ordenadoBase.map(([cat, g]) => ({
+    cat,
+    valor: g.valor,
+    pctFaturamento: totalFaturamento ? (g.valor / totalFaturamento) * 100 : null,
+  }));
+  const busca = (document.getElementById('busca-dashboard').value || '').trim().toLowerCase();
+  if (busca) linhas = linhas.filter(l => contemBusca([l.cat, fmtMoeda(l.valor)], busca));
+  linhas = aplicarOrdenacao('tabela-faturamento-categorias', linhas, EXTRATORES_FATURAMENTO_CATEGORIAS_);
+
+  document.querySelector('#tabela-faturamento-categorias tbody').innerHTML = linhas.map(l => `
+    <tr onclick="abrirDetalheCategoria('${escaparAtributo(l.cat)}')" title="Clique para ver os títulos desta categoria">
+      <td>${escaparHtml(l.cat)}</td>
+      <td class="col-valor">${htmlMoedaAlinhada(l.valor)}</td>
+      <td>${l.pctFaturamento == null ? '—' : l.pctFaturamento.toFixed(1) + '%'}</td>
+    </tr>`
+  ).join('') || '<tr><td colspan="3" style="color:var(--cinza)">Nenhuma categoria no período.</td></tr>';
+  tornarOrdenavel('tabela-faturamento-categorias', EXTRATORES_FATURAMENTO_CATEGORIAS_, () => renderizarTabelaFaturamentoCategorias(ultimoItensAnalise));
+  tornarColunasRedimensionaveis('tabela-faturamento-categorias');
 }
 
 // Quantas categorias entram como barra individual no gráfico de Custo por
