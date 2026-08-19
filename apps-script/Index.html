@@ -269,6 +269,10 @@
     text-align: center;
   }
   .tabela-scroll { max-height: 480px; overflow: auto; border: 1px solid var(--borda); border-radius: 8px; }
+  /* "Por medição" x "Por categoria de custo" lado a lado: height fixo (não
+     max-height) faz as duas terminarem na mesma linha, mesmo tendo números
+     bem diferentes de linhas (medições são poucas; categorias, muitas). */
+  .tabela-scroll-par { height: 380px; }
   .paginacao { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--cinza); }
   .paginacao button { background: #fff; color: var(--azul); border: 1px solid var(--azul); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
   .paginacao button:disabled { opacity: .45; cursor: default; }
@@ -293,7 +297,7 @@
      htmlMoedaAlinhada), que aí sim consegue herdar 100% da altura de um
      <td> comum. */
   #tabela-detalhe-aporte td.col-valor, #modal-detalhe-tabela td.col-valor, #tabela-lancamentos td.col-valor,
-  #tabela-aporte td.col-valor, #tabela-abc td.col-valor, #tabela-abc-categoria td.col-valor, #tabela-creditos td.col-valor,
+  #tabela-aporte td.col-valor, #tabela-abc td.col-valor, #tabela-abc-categoria td.col-valor,
   #tabela-faturado-pago td.col-valor, #tabela-faturamento-categorias td.col-valor { padding: 0; }
   .valor-flex { display: flex; justify-content: space-between; align-items: center; height: 100%; box-sizing: border-box; padding: 7px 8px; }
   /* Sem isso, numa coluna estreita o "R$" fica flexível e o número quebra
@@ -478,7 +482,6 @@
   <button data-aba="lancamentos">Lançamentos</button>
   <button data-aba="detalhe-aporte">Aporte</button>
   <button data-aba="analise">Análise</button>
-  <button data-aba="conciliacao">Conciliação</button>
   <button data-aba="historico">Histórico</button>
   <button data-aba="atualizar" id="nav-atualizar">Atualizar Dados</button>
 </nav>
@@ -578,7 +581,7 @@
         <div class="grid-2">
           <div>
             <h3 style="font-size:13px; color:var(--azul); margin:0 0 8px;">Por medição</h3>
-            <div class="tabela-scroll">
+            <div class="tabela-scroll tabela-scroll-par">
               <table id="tabela-faturado-pago" class="tabela-centralizada">
                 <colgroup>
                   <col style="width:15%"><col style="width:28.33%"><col style="width:28.33%"><col style="width:28.33%">
@@ -590,7 +593,7 @@
           </div>
           <div>
             <h3 style="font-size:13px; color:var(--azul); margin:0 0 8px;" title="Quanto o custo de cada categoria (Custo por Categoria/Ranking de categorias) representa do Faturamento líquido do período">Por categoria de custo</h3>
-            <div class="tabela-scroll">
+            <div class="tabela-scroll tabela-scroll-par">
               <table id="tabela-faturamento-categorias" class="tabela-centralizada">
                 <colgroup>
                   <col style="width:40%"><col style="width:30%"><col style="width:30%">
@@ -811,64 +814,6 @@
     </div>
   </section>
 
-  <section id="aba-conciliacao" class="aba">
-    <div class="painel" id="painel-resultado-conciliacao" style="display:none;">
-      <div class="cabecalho-painel">
-        <h2>Resultado da conciliação bancária</h2>
-        <button class="btn secundario small" onclick="exportarConciliacao()">⬇ Exportar Excel</button>
-      </div>
-      <div id="total-conciliacao" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
-      <div class="filtros">
-        <select id="filtro-conciliacao">
-          <option value="">Situação: todas</option>
-          <option value="Conciliado">Conciliado</option>
-          <option value="Divergência de data">Divergência de data</option>
-          <option value="Sem correspondência no extrato">Sem correspondência no extrato</option>
-          <option value="Sem título correspondente">Sem título correspondente (extrato)</option>
-        </select>
-      </div>
-      <div class="tabela-scroll">
-        <table id="tabela-conciliacao">
-          <thead><tr>
-            <th>Situação</th><th>Fornecedor</th><th>Nº Doc.</th><th>Vencimento</th><th>Data Baixa</th>
-            <th>Valor Título</th><th>Data Extrato</th><th>Valor Extrato</th><th>Histórico Extrato</th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="painel" id="painel-creditos" style="display:none;">
-      <div class="cabecalho-painel">
-        <h2>Créditos recebidos (aportes e rendimentos)</h2>
-        <button class="btn secundario small" onclick="exportarCreditos()">⬇ Exportar Excel</button>
-      </div>
-      <div id="total-creditos" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
-      <div class="tabela-scroll">
-        <table id="tabela-creditos">
-          <thead><tr>
-            <th>Origem</th><th>Qtde</th><th>Total Recebido</th><th>% dos Créditos</th>
-            <th>Débito Atribuído (estimado)</th><th>Sobra Estimada</th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <p style="font-size:12px;color:var(--cinza); margin-top:10px;">
-        "Débito Atribuído" e "Sobra Estimada" são uma estimativa: dividem o
-        total pago a fornecedores no período proporcionalmente entre as
-        consorciadas, conforme o peso do aporte de cada uma — o crédito do
-        Estado do Ceará (🏛️) e a rentabilidade de aplicações (📈) não entram
-        nessa proporção, só os aportes das consorciadas.
-      </p>
-    </div>
-    <div class="painel" id="painel-conciliacao-vazio">
-      <p style="font-size:13px;color:var(--cinza)">
-        Nenhum extrato bancário processado ainda nesta sessão. Envie o
-        extrato na aba <strong>Atualizar Dados</strong> — o resultado do
-        cruzamento aparece aqui.
-      </p>
-    </div>
-  </section>
-
   <section id="aba-historico" class="aba">
     <div class="painel">
       <div class="cabecalho-painel">
@@ -894,36 +839,18 @@
   </section>
 
   <section id="aba-atualizar" class="aba">
-    <div class="grid-2">
-      <div class="painel" id="painel-atualizar-baixas">
-        <h2>Títulos (baixas) — TOTVS Protheus</h2>
-        <p style="font-size:13px;color:var(--cinza)">
-          Envie o export do Protheus em .xlsx (qualquer nome de arquivo). Os
-          títulos importados substituem a última importação salva; os
-          lançamentos manuais não são afetados — apenas recomparados para
-          sinalizar duplicidade.
-        </p>
-        <div id="dropzone">Arraste o arquivo .xlsx aqui ou clique para selecionar
-          <input type="file" id="arquivo-erp" accept=".xlsx" style="display:none">
-        </div>
-        <div id="resumo-importacao"></div>
+    <div class="painel" id="painel-atualizar-baixas">
+      <h2>Títulos (baixas) — TOTVS Protheus</h2>
+      <p style="font-size:13px;color:var(--cinza)">
+        Envie o export do Protheus em .xlsx (qualquer nome de arquivo). Os
+        títulos importados substituem a última importação salva; os
+        lançamentos manuais não são afetados — apenas recomparados para
+        sinalizar duplicidade.
+      </p>
+      <div id="dropzone">Arraste o arquivo .xlsx aqui ou clique para selecionar
+        <input type="file" id="arquivo-erp" accept=".xlsx" style="display:none">
       </div>
-
-      <div class="painel">
-        <h2>Extrato bancário</h2>
-        <p style="font-size:13px;color:var(--cinza)">
-          Envie o extrato bancário em .xlsx (qualquer nome de arquivo) pra
-          cruzar com os títulos já baixados na planilha. O arquivo precisa
-          ter colunas de Data, Valor e Histórico/Descrição — os nomes exatos
-          variam de banco pra banco, o app tenta reconhecer automaticamente.
-          Casamento por valor idêntico e data igual (ou próxima, em até 5
-          dias) — o resultado aparece na aba "Conciliação".
-        </p>
-        <div id="dropzone-extrato">Arraste o extrato aqui ou clique para selecionar
-          <input type="file" id="arquivo-extrato" accept=".xlsx" style="display:none">
-        </div>
-        <div id="resumo-conciliacao"></div>
-      </div>
+      <div id="resumo-importacao"></div>
     </div>
     <div class="painel">
       <h2>📎 Separar comprovantes bancários</h2>
@@ -3334,18 +3261,20 @@ function renderizarFaturadoPago_() {
     // cards na mesma linha horizontal (a de baixo), em vez de cada uma
     // ficar coladinha ao valor com uma sobra de espaço em branco variável
     // abaixo dela.
-    return `<div style="margin-top:auto; background:#e1e0d9; border-radius:4px; height:6px; overflow:hidden;"><div style="width:${pct}%; height:100%; background:#2a78d6; border-radius:4px;"></div></div>`;
+    return `<div style="margin:auto 0; background:#e1e0d9; border-radius:4px; height:6px; overflow:hidden;"><div style="width:${pct}%; height:100%; background:#2a78d6; border-radius:4px;"></div></div>`;
   };
   const pagoPctVis = totalFaturado ? Math.max(0, Math.min(100, (totalPago / totalFaturado) * 100)) : 0;
   const aPagar = Math.max(0, totalFaturado - totalPago);
   document.getElementById('cards-faturamento').innerHTML = `
     <div class="card">
       <div class="card-topo-fixo"><div class="rotulo">Faturado — Total (líquido)</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(totalFaturado)}</div></div></div>
-      <div style="margin-top:auto; background:#e1e0d9; border-radius:4px; height:6px; overflow:hidden; display:flex;">
-        <div style="width:${pagoPctVis}%; background:#eb6834;"></div>
-        <div style="width:${100 - pagoPctVis}%; background:#2a78d6;"></div>
+      <div style="margin:auto 0;">
+        <div style="background:#e1e0d9; border-radius:4px; height:6px; overflow:hidden; display:flex;">
+          <div style="width:${pagoPctVis}%; background:#eb6834;"></div>
+          <div style="width:${100 - pagoPctVis}%; background:#2a78d6;"></div>
+        </div>
+        <div style="font-size:10px; color:var(--cinza); margin-top:4px;">Pago: ${fmtMoeda(totalPago)} · A pagar: ${fmtMoeda(aPagar)}</div>
       </div>
-      <div style="font-size:10px; color:var(--cinza); margin-top:4px;">Pago: ${fmtMoeda(totalPago)} · A pagar: ${fmtMoeda(aPagar)}</div>
     </div>
     <div class="card">
       <div class="card-topo-fixo"><div class="rotulo">Faturado — Média mensal</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMensal)}</div></div></div>
@@ -3365,11 +3294,13 @@ function renderizarFaturadoPago_() {
     </div>
     <div class="card ${resultado >= 0 ? '' : 'alerta'}">
       <div class="card-topo-fixo"><div class="rotulo">Resultado (Faturado − Pago)</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(resultado)}</div></div></div>
-      <div style="position:relative; width:140px; height:76px; margin:auto auto 0;">
-        <canvas id="chart-resultado-gauge"></canvas>
-        <div id="resultado-gauge-texto" style="position:absolute; left:0; right:0; bottom:0; text-align:center; font-size:18px; font-weight:bold;"></div>
+      <div style="margin:auto 0;">
+        <div style="position:relative; width:140px; height:76px; margin:0 auto;">
+          <canvas id="chart-resultado-gauge"></canvas>
+          <div id="resultado-gauge-texto" style="position:absolute; left:0; right:0; bottom:0; text-align:center; font-size:18px; font-weight:bold;"></div>
+        </div>
+        <div style="font-size:10px; color:var(--cinza); margin-top:2px; text-align:center;">Margem de Lucro (acumulada)</div>
       </div>
-      <div style="font-size:10px; color:var(--cinza); margin-top:2px;">Margem de Lucro (acumulada)</div>
     </div>
   `;
   // Velocímetro (meia-rosca) embutido no card Resultado — não é mais um
@@ -3444,9 +3375,9 @@ function renderizarFaturadoPago_() {
     data: {
       labels: labelsAcum,
       datasets: [
-        { type: 'line', label: 'Faturado acumulado', data: acumulados.map((a) => a.faturado), borderColor: '#2a78d6', backgroundColor: '#2a78d6', borderWidth: 2, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3 },
-        { type: 'line', label: 'Pago acumulado', data: acumulados.map((a) => a.pago), borderColor: '#eb6834', backgroundColor: '#eb6834', borderWidth: 2, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3 },
-        { type: 'line', label: 'Saldo acumulado', data: acumulados.map((a) => a.saldo), borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', borderDash: [5, 3], tension: 0.3 },
+        { type: 'line', label: 'Faturado acumulado', data: acumulados.map((a) => a.faturado), borderColor: '#2a78d6', backgroundColor: '#2a78d6', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3 },
+        { type: 'line', label: 'Pago acumulado', data: acumulados.map((a) => a.pago), borderColor: '#eb6834', backgroundColor: '#eb6834', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3 },
+        { type: 'line', label: 'Saldo acumulado', data: acumulados.map((a) => a.saldo), borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', borderDash: [5, 3], tension: 0.3 },
       ],
     },
     options: {
@@ -3476,7 +3407,7 @@ function renderizarFaturadoPago_() {
           const variacao = ((l.margem - anterior.margem) / Math.abs(anterior.margem)) * 100;
           const seta = variacao >= 0 ? '▲' : '▼';
           const cor = variacao >= 0 ? 'var(--verde)' : 'var(--vermelho)';
-          return ` <span style="color:${cor}; font-size:11px;" title="vs Medição ${anterior.medicao}">${seta} ${Math.abs(variacao).toFixed(0)}%</span>`;
+          return `<span style="color:${cor}; font-size:11px;" title="vs Medição ${anterior.medicao}">${seta} ${Math.abs(variacao).toFixed(0)}%</span>`;
         })()
       : '';
   });
@@ -3487,15 +3418,25 @@ function renderizarFaturadoPago_() {
 
   document.querySelector('#tabela-faturado-pago tbody').innerHTML = linhasTabela.map((l) => {
     const tendencia = tendenciaPorMedicao_[l.medicao] || '';
-    // A seta/percentual de tendência entra DENTRO do mesmo <span> do valor
-    // (não como irmão de .valor-flex) — assim fica coladinha ao número, em
-    // vez de cair numa linha própria por baixo do "R$".
     const numeroMargem = paraNumero(l.margem).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // Célula da Margem construída à mão (não com htmlMoedaAlinhada): o
+    // número fica right-aligned numa faixa própria (flex:1) ANTES de uma
+    // faixa de largura fixa reservada pro selo de tendência — presente ou
+    // não (linha sem "anterior" não tem selo, mas a faixa continua lá,
+    // vazia). Sem essa faixa fixa, o comprimento variável do selo (▲79%
+    // x ▲1179%) empurrava o número mais ou menos pra esquerda dependendo
+    // da linha, e o dígito final de cada valor não alinhava verticalmente
+    // de uma linha pra outra.
+    const margemCelula = `<div style="display:flex; align-items:center; height:100%; padding:7px 8px; box-sizing:border-box;">
+      <span class="rs">R$</span>
+      <span class="valor-num" style="flex:1; text-align:right; white-space:nowrap;">${numeroMargem}</span>
+      <span style="display:inline-block; min-width:56px; text-align:right; white-space:nowrap;">${tendencia}</span>
+    </div>`;
     return `<tr onclick="abrirDetalhe('Pago — Med. ${l.medicao}', ultimoItensPagosFaturadoPago_(${l.medicao}))" style="cursor:pointer" title="Clique para ver os títulos pagos nesta janela">
       <td>Medição ${l.medicao}</td>
       <td class="col-valor">${htmlMoedaAlinhada(l.faturado)}</td>
       <td class="col-valor">${htmlMoedaAlinhada(l.pago)}</td>
-      <td class="col-valor"><div class="valor-flex"><span class="rs">R$</span> <span class="valor-num">${numeroMargem}${tendencia}</span></div></td>
+      <td class="col-valor">${margemCelula}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="4" style="color:var(--cinza)">Nenhuma medição com data de referência.</td></tr>';
   ultimoItensPagosPorMedicao_ = linhas.reduce((mapa, l) => { mapa[l.medicao] = l.itensPagos; return mapa; }, {});
@@ -5504,22 +5445,6 @@ function renderizarAnalise() {
   const maiorMedicaoAn = medicoesFat.reduce((m, l) => (!m || l.faturado > m.faturado) ? l : m, null);
   const menorMedicaoAn = medicoesFat.reduce((m, l) => (!m || l.faturado < m.faturado) ? l : m, null);
 
-  // Resumo persistido da Conciliação Bancária (ver resumoConciliacaoBancaria_
-  // no Code.gs) — histórico de TODOS os extratos já processados por
-  // qualquer sessão, não só o mais recente ainda na memória de quem está
-  // com a aba Conciliação Bancária aberta agora. null/totalLinhas 0 = ainda
-  // nenhum extrato processado desde que este recurso existe.
-  const conc = state.resumoConciliacao;
-  const porSituacaoConc = (conc && conc.porSituacao) || {};
-  const qtdeConc = (s) => (porSituacaoConc[s] ? porSituacaoConc[s].qtde : 0);
-  const valorConc = (s) => (porSituacaoConc[s] ? porSituacaoConc[s].valor : 0);
-  const fmtDataHoraImportacao = (v) => {
-    const d = v instanceof Date ? v : new Date(v);
-    if (!v || isNaN(d)) return '';
-    const p = (n) => String(n).padStart(2, '0');
-    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
-  };
-
   document.getElementById('conteudo-analise').innerHTML = `
     <h3>Números que saltam aos olhos</h3>
     <ul>
@@ -5546,18 +5471,6 @@ function renderizarAnalise() {
               : ''
           }.</li>
           <li>Maior medição por faturamento: <strong>Medição ${maiorMedicaoAn.medicao}</strong> (${fmtMoeda(maiorMedicaoAn.faturado)}). Menor: <strong>Medição ${menorMedicaoAn.medicao}</strong> (${fmtMoeda(menorMedicaoAn.faturado)}).</li>
-        `}
-    </ul>
-    <h3>Conciliação bancária (extratos processados)</h3>
-    <ul>
-      ${!conc || !conc.totalLinhas
-        ? '<li>Nenhum extrato bancário conciliado ainda — processe um na aba "Conciliação Bancária" pra esta seção passar a mostrar dados.</li>'
-        : `
-          <li><strong>${conc.qtdeImportacoes.toLocaleString('pt-BR')}</strong> extrato(s) processado(s) até agora — o mais recente em <strong>${fmtDataHoraImportacao(conc.ultimaImportacao)}</strong>.</li>
-          <li>Conciliado: <strong>${qtdeConc('Conciliado').toLocaleString('pt-BR')}</strong> lançamento(s) — ${fmtMoeda(valorConc('Conciliado'))} batendo em valor e data com título baixado.</li>
-          <li>Divergência de data: <strong>${qtdeConc('Divergência de data').toLocaleString('pt-BR')}</strong> — ${fmtMoeda(valorConc('Divergência de data'))} batendo em valor, mas com até 5 dias de diferença entre baixa e movimento bancário.</li>
-          <li>Sem correspondência no extrato: <strong>${qtdeConc('Sem correspondência no extrato').toLocaleString('pt-BR')}</strong> título(s) baixado(s) — ${fmtMoeda(valorConc('Sem correspondência no extrato'))} sem nenhum lançamento bancário equivalente encontrado até agora (vale conferir se saiu do banco de fato).</li>
-          <li>Sem título correspondente: <strong>${qtdeConc('Sem título correspondente').toLocaleString('pt-BR')}</strong> lançamento(s) do extrato — ${fmtMoeda(valorConc('Sem título correspondente'))} sem nenhum título batendo (pagamento feito mas não registrado no sistema? vale conferir).</li>
         `}
     </ul>
     <h3>Títulos vencidos em aberto</h3>
@@ -5627,11 +5540,6 @@ function renderizarAnalise() {
     ['Faturamento — total pago', medicoesFat.length ? fmtMoeda(totalPagoFatAn) : ''],
     ['Faturamento — resultado (Faturado − Pago)', medicoesFat.length ? fmtMoeda(resultadoFatAn) : ''],
     ['Faturamento — margem (%)', medicoesFat.length ? margemPctAn.toFixed(1) : ''],
-    ['Conciliação bancária — extratos processados', conc ? conc.qtdeImportacoes : 0],
-    ['Conciliação bancária — Conciliado', `${qtdeConc('Conciliado')} lançamento(s), ${fmtMoeda(valorConc('Conciliado'))}`],
-    ['Conciliação bancária — Divergência de data', `${qtdeConc('Divergência de data')} lançamento(s), ${fmtMoeda(valorConc('Divergência de data'))}`],
-    ['Conciliação bancária — Sem correspondência no extrato', `${qtdeConc('Sem correspondência no extrato')} título(s), ${fmtMoeda(valorConc('Sem correspondência no extrato'))}`],
-    ['Conciliação bancária — Sem título correspondente', `${qtdeConc('Sem título correspondente')} lançamento(s), ${fmtMoeda(valorConc('Sem título correspondente'))}`],
     ['Concentração top 3 fornecedores (%)', pctTop3.toFixed(1)],
     ['Prazo médio de baixa (dias)', dpoMedio != null ? dpoMedio.toFixed(0) : ''],
     ...formasOrdenadas.map(([fp, d]) => [`Forma de pagamento — ${fp}`, `${d.qtde} título(s), ${fmtMoeda(d.valor)}`]),
@@ -6161,8 +6069,6 @@ function renderizarConciliacao() {
     `${conciliados} conciliado(s) · ${divergentes} com divergência de data · ${semExtrato} sem correspondência no extrato · ${linhasSemTitulo.length} lançamento(s) do extrato sem título` +
     (foraDoPeriodo ? ` · ${foraDoPeriodo} título(s) com Vencimento fora do mês do extrato (não entraram na comparação)` : '');
 }
-document.getElementById('filtro-conciliacao').addEventListener('input', renderizarConciliacao);
-
 function exportarConciliacao() {
   const linhas = Array.from(document.querySelectorAll('#tabela-conciliacao tbody tr'))
     .filter((tr) => tr.children.length === 9)
@@ -6171,18 +6077,6 @@ function exportarConciliacao() {
     'Situação', 'Fornecedor', 'Nº Doc.', 'Vencimento', 'Data Baixa', 'Valor Título', 'Data Extrato', 'Valor Extrato', 'Histórico Extrato',
   ], linhas);
 }
-
-const dropzoneExtrato = document.getElementById('dropzone-extrato');
-const inputExtrato = document.getElementById('arquivo-extrato');
-dropzoneExtrato.onclick = () => inputExtrato.click();
-inputExtrato.onchange = (e) => { if (e.target.files[0]) processarExtrato(e.target.files[0]); };
-['dragover', 'dragleave', 'drop'].forEach((evt) => dropzoneExtrato.addEventListener(evt, (e) => e.preventDefault()));
-dropzoneExtrato.addEventListener('dragover', () => dropzoneExtrato.classList.add('sobre'));
-dropzoneExtrato.addEventListener('dragleave', () => dropzoneExtrato.classList.remove('sobre'));
-dropzoneExtrato.addEventListener('drop', (e) => {
-  dropzoneExtrato.classList.remove('sobre');
-  if (e.dataTransfer.files[0]) processarExtrato(e.dataTransfer.files[0]);
-});
 
 // ---------- Separar comprovantes bancários ----------
 // Roda inteiramente no navegador (pdfjs-dist pra ler o texto de cada
@@ -6494,11 +6388,6 @@ function prefillUsuarioInclusor() {
 }
 
 function atualizarUiModoLeitura() {
-  // Diferente do antigo "Importar" (aba inteira só de edição), a nova aba
-  // "Atualizar Dados" também abriga a Conciliação Bancária, que continua
-  // disponível em modo leitura (só a visualização — salvar o resultado no
-  // histórico da planilha continua exigindo senha, ver salvarConciliacaoNaPlanilha)
-  // — por isso aqui escondemos só o painel de baixas, não a aba inteira.
   document.getElementById('painel-atualizar-baixas').style.display = MODO_LEITURA ? 'none' : '';
   document.getElementById('btn-abrir-lancamento-manual').style.display = MODO_LEITURA ? 'none' : '';
   if (MODO_LEITURA) fecharModalLancamentoManual(); // voltar pra leitura com o pop-up aberto não deveria deixar editar
