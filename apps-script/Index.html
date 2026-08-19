@@ -3038,7 +3038,29 @@ function renderizarFluxoCaixa(abertos, hoje) {
 // foi baixado até ali): a planilha só traz uma data de emissão por
 // medição, não o período que ela cobre, então isso aproxima "o que foi
 // pago desde a última medição" sem inventar uma regra mais complexa.
+// Qualquer exceção não prevista dentro da renderização (ex.: algo que os
+// testes não cobriram, um valor inesperado vindo da planilha) cai aqui e
+// aparece no aviso em vez de deixar o painel em branco de novo, do mesmo
+// jeito silencioso que já aconteceu duas vezes antes — ver o comentário
+// dentro de renderizarFaturadoPago_ sobre os dois casos já tratados
+// (erro na busca, e medições sem data de referência reconhecível).
 function renderizarFaturadoPago() {
+  try {
+    renderizarFaturadoPago_();
+  } catch (erro) {
+    const painel = document.getElementById('painel-faturado-pago');
+    const avisoEl = document.getElementById('faturado-pago-aviso');
+    const conteudoEl = document.getElementById('faturado-pago-conteudo');
+    painel.style.display = '';
+    avisoEl.style.display = 'block';
+    avisoEl.innerHTML = `<strong>Erro ao montar o painel Faturado x Pago.</strong><br>
+      Detalhe técnico: ${escaparHtml(erro.message)}<br><br>
+      Isso é um bug (não uma falha de acesso à planilha) — me mande esse texto pra eu corrigir.`;
+    conteudoEl.style.display = 'none';
+  }
+}
+
+function renderizarFaturadoPago_() {
   const painel = document.getElementById('painel-faturado-pago');
   const avisoEl = document.getElementById('faturado-pago-aviso');
   const conteudoEl = document.getElementById('faturado-pago-conteudo');
