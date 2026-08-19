@@ -198,22 +198,24 @@
   #conteudo-analise a:hover { text-decoration: underline; }
   .grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
   /* Navegação lateral do Dashboard — agrupa os painéis por tipo de gráfico
-     (ver GRUPOS_DASHBOARD_ e mostrarGrupoDashboard) pra não precisar rolar
-     a aba inteira pra achar um gráfico específico. "Todos" (padrão) mostra
-     tudo, igual ao comportamento de antes; escolher um grupo esconde os
-     demais. */
+     (cada botão = 1 grupo, sempre exatamente 1 ativo por vez — ver o
+     forEach de #dashboard-lateral button mais abaixo) pra não precisar
+     rolar a aba inteira pra achar um gráfico específico. Só ícone + title
+     (tooltip nativo do navegador ao passar o mouse), sem rótulo de texto —
+     trilho estreito, igual ao padrão de sidebar de ícones. */
   .dashboard-layout { display: flex; align-items: flex-start; gap: 20px; }
   .dashboard-lateral {
-    flex: 0 0 200px; display: flex; flex-direction: column; gap: 2px;
+    flex: 0 0 56px; display: flex; flex-direction: column; gap: 4px;
     position: sticky; top: 12px;
   }
   .dashboard-lateral button {
-    text-align: left; border: none; background: none; cursor: pointer;
-    padding: 9px 12px; font-size: 13px; color: var(--cinza); border-radius: 6px;
-    border-left: 3px solid transparent;
+    border: none; background: none; cursor: pointer;
+    width: 56px; height: 48px; font-size: 22px; line-height: 1; color: var(--cinza);
+    border-radius: 8px; border-left: 3px solid transparent;
+    display: flex; align-items: center; justify-content: center;
   }
   .dashboard-lateral button:hover { background: var(--azul-claro); }
-  .dashboard-lateral button.ativo { color: var(--azul); font-weight: bold; background: var(--azul-claro); border-left-color: var(--azul); }
+  .dashboard-lateral button.ativo { background: var(--azul-claro); border-left-color: var(--azul); }
   .dashboard-conteudo { flex: 1; min-width: 0; }
   .grupo-dashboard { display: none; }
   .grupo-dashboard.ativo { display: block; }
@@ -458,18 +460,6 @@
   <section id="aba-dashboard" class="aba ativa">
     <input id="busca-dashboard" class="busca-tabela" placeholder="Buscar em Remessa, Aporte, Curva ABC e Categoria…" style="max-width:420px; margin-bottom:16px;">
     <div class="cards" id="cards-kpi"></div>
-    <div class="dashboard-layout">
-      <div class="dashboard-lateral" id="dashboard-lateral">
-        <button class="ativo" data-grupo="todos">Todos</button>
-        <button data-grupo="visao-geral">Visão Geral</button>
-        <button data-grupo="faturado-pago">Faturado x Pago</button>
-        <button data-grupo="custo-categoria">Custo por Categoria</button>
-        <button data-grupo="abc-categoria">Curva ABC por Categoria</button>
-        <button data-grupo="abc-fornecedores">Curva ABC de Fornecedores</button>
-        <button data-grupo="resumo-aporte">Resumo por Aporte</button>
-      </div>
-      <div class="dashboard-conteudo">
-    <div class="grupo-dashboard ativo" data-grupo="visao-geral">
     <div class="grid-2">
       <div class="painel">
         <div class="cabecalho-painel">
@@ -506,7 +496,15 @@
         </div>
       </div>
     </div>
-    </div>
+    <div class="dashboard-layout">
+      <div class="dashboard-lateral" id="dashboard-lateral">
+        <button class="ativo" data-grupo="faturado-pago" title="Faturado x Pago por Medição">💰</button>
+        <button data-grupo="custo-categoria" title="Custo por Categoria — Baixado x A Baixar">🏷️</button>
+        <button data-grupo="abc-categoria" title="Curva ABC por Categoria">📊</button>
+        <button data-grupo="abc-fornecedores" title="Curva ABC de Fornecedores">🏢</button>
+        <button data-grupo="resumo-aporte" title="Resumo por Aporte">🗓️</button>
+      </div>
+      <div class="dashboard-conteudo">
     <div class="grupo-dashboard ativo" data-grupo="faturado-pago">
     <div class="painel" id="painel-faturado-pago" style="display:none;">
       <div class="cabecalho-painel">
@@ -514,23 +512,32 @@
         <button class="btn secundario small" onclick="expandirGrafico('faturadoPago', 'Faturado x Pago por Medição')">⛶ Expandir</button>
         <button class="btn secundario small" onclick="exportarXlsx('faturadoPago')">⬇ Exportar Excel</button>
       </div>
-      <div id="faturado-pago-aviso" style="display:none; font-size:13px; color:var(--vermelho); margin-bottom:10px;"></div>
-      <p style="font-size:12px; color:var(--cinza); margin-top:0;">
-        Faturado vem da planilha de Faturamento (NFS-e por medição dos prestadores). Pago é o total baixado no período
-        entre a medição anterior e esta. Margem = Faturado − Pago. Clique numa barra "Pago" para ver os títulos.
-      </p>
-      <div id="faturado-pago-chart-wrap" style="height:340px; width:100%;">
-        <canvas id="chart-faturado-pago"></canvas>
-      </div>
-      <div class="tabela-scroll" style="margin-top:14px;">
-        <table id="tabela-faturado-pago">
-          <thead><tr><th>Medição</th><th>Faturado</th><th>Pago</th><th>Margem</th></tr></thead>
-          <tbody></tbody>
-        </table>
+      <div id="faturado-pago-aviso" style="display:none; font-size:13px; color:var(--vermelho); margin-bottom:14px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:10px 12px; line-height:1.5;"></div>
+      <div id="faturado-pago-conteudo">
+        <p style="font-size:12px; color:var(--cinza); margin-top:0;">
+          Faturado vem da planilha de Faturamento (NFS-e por medição dos prestadores). Pago é o total baixado no período
+          entre a medição anterior e esta. Margem = Faturado − Pago. Clique numa barra "Pago" para ver os títulos.
+        </p>
+        <div style="display:flex; gap:20px; align-items:center; margin-bottom:14px; flex-wrap:wrap;">
+          <div style="position:relative; width:180px; height:100px; flex-shrink:0;">
+            <canvas id="chart-margem-gauge"></canvas>
+            <div id="margem-gauge-texto" style="position:absolute; left:0; right:0; bottom:6px; text-align:center; font-size:22px; font-weight:bold; color:var(--azul);"></div>
+            <div style="position:absolute; left:0; right:0; bottom:-14px; text-align:center; font-size:11px; color:var(--cinza);">Margem de Lucro (acumulada)</div>
+          </div>
+          <div id="faturado-pago-chart-wrap" style="height:280px; flex:1; min-width:280px;">
+            <canvas id="chart-faturado-pago"></canvas>
+          </div>
+        </div>
+        <div class="tabela-scroll">
+          <table id="tabela-faturado-pago">
+            <thead><tr><th>Medição</th><th>Faturado</th><th>Pago</th><th>Margem</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </div>
     </div>
-    <div class="grupo-dashboard ativo" data-grupo="custo-categoria">
+    <div class="grupo-dashboard" data-grupo="custo-categoria">
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Custo por Categoria — Baixado x A Baixar</h2>
@@ -542,7 +549,7 @@
       </div>
     </div>
     </div>
-    <div class="grupo-dashboard ativo" data-grupo="abc-categoria">
+    <div class="grupo-dashboard" data-grupo="abc-categoria">
     <div class="grid-2">
       <div class="painel">
         <div class="cabecalho-painel">
@@ -572,7 +579,7 @@
       </div>
     </div>
     </div>
-    <div class="grupo-dashboard ativo" data-grupo="abc-fornecedores">
+    <div class="grupo-dashboard" data-grupo="abc-fornecedores">
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Curva ABC dos fornecedores</h2>
@@ -600,7 +607,7 @@
       </div>
     </div>
     </div>
-    <div class="grupo-dashboard ativo" data-grupo="resumo-aporte">
+    <div class="grupo-dashboard" data-grupo="resumo-aporte">
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Resumo por Aporte — Qtd Doc x Doc aberto</h2>
@@ -1651,7 +1658,7 @@ document.querySelectorAll('#dashboard-lateral button').forEach((btn) => {
     btn.classList.add('ativo');
     const grupo = btn.dataset.grupo;
     document.querySelectorAll('.grupo-dashboard').forEach((g) => {
-      g.classList.toggle('ativo', grupo === 'todos' || g.dataset.grupo === grupo);
+      g.classList.toggle('ativo', g.dataset.grupo === grupo);
     });
   };
 });
@@ -2601,7 +2608,7 @@ function atualizarSetasOrdenacao(tabelaId) {
 
 // ---------- Dashboard ----------
 let chartAging, chartFluxo, chartStatusPagamento, chartPagosAbc, chartAporte;
-let chartCategoriaCusto, chartAbcCategoria, chartFaturadoPago;
+let chartCategoriaCusto, chartAbcCategoria, chartFaturadoPago, chartMargemGauge;
 let ultimoDadosFaturadoPago = []; // export: [{medicao, faturado, pago, margem}]
 let ultimoAbertos = [];
 let ultimoItensAnalise = [];
@@ -3025,20 +3032,39 @@ function renderizarFluxoCaixa(abertos, hoje) {
 // pago desde a última medição" sem inventar uma regra mais complexa.
 function renderizarFaturadoPago() {
   const painel = document.getElementById('painel-faturado-pago');
+  const avisoEl = document.getElementById('faturado-pago-aviso');
+  const conteudoEl = document.getElementById('faturado-pago-conteudo');
+
+  // Erro na busca (planilha externa fora do ar, sem permissão, cabeçalho
+  // mudou etc.) — SEMPRE mostra o painel com o motivo, nunca só some sem
+  // explicação (isso já aconteceu: a planilha falhou e ninguém percebeu
+  // por quê, o painel simplesmente não aparecia). A causa mais comum é
+  // permissão: a conta que executa este Apps Script (Implantar → "Executar
+  // como") precisa ter pelo menos acesso de leitura à planilha de
+  // Faturamento — se for uma conta diferente da que a compartilhou, abra a
+  // planilha de Faturamento e compartilhe com essa conta.
+  if (state.faturamento.erro) {
+    painel.style.display = '';
+    avisoEl.style.display = 'block';
+    avisoEl.innerHTML = `<strong>Não foi possível carregar a planilha de Faturamento.</strong><br>
+      Detalhe técnico: ${escaparHtml(state.faturamento.erro)}<br><br>
+      Causa mais comum: a conta que executa este Apps Script (ver Implantar → "Executar como" no editor)
+      não tem acesso à planilha de Faturamento — abra a planilha de Faturamento no Drive e compartilhe com
+      essa conta (leitura já basta). Se a conta já tem acesso, tente reautorizar o script: no editor do
+      Apps Script, abra qualquer função e clique em "Executar" uma vez — o Google deve pedir autorização
+      de novo, já que este recurso passou a acessar uma planilha diferente da principal.`;
+    conteudoEl.style.display = 'none';
+    return;
+  }
+  avisoEl.style.display = 'none';
+
   const medicoes = (state.faturamento.medicoes || [])
     .filter((m) => m.dataReferencia)
     .slice()
     .sort((a, b) => a.dataReferencia.localeCompare(b.dataReferencia));
   if (!medicoes.length) { painel.style.display = 'none'; return; }
   painel.style.display = '';
-
-  const avisoEl = document.getElementById('faturado-pago-aviso');
-  if (state.faturamento.erro) {
-    avisoEl.style.display = 'block';
-    avisoEl.textContent = 'Não foi possível carregar a planilha de Faturamento — mostrando a última leitura bem-sucedida (se houver). Detalhe: ' + state.faturamento.erro;
-  } else {
-    avisoEl.style.display = 'none';
-  }
+  conteudoEl.style.display = '';
 
   const todosItens = state.erp.concat(state.manual);
   const linhas = medicoes.map((m, idx) => {
@@ -3055,6 +3081,12 @@ function renderizarFaturadoPago() {
   });
   ultimoDadosFaturadoPago = linhas.map((l) => ({ medicao: l.medicao, faturado: l.faturado, pago: l.pago, margem: l.margem }));
 
+  // Saldo acumulado: soma corrida da Margem período a período — mostra se a
+  // folga entre Faturado e Pago está crescendo ou encolhendo ao longo do
+  // tempo, não só medição a medição isolada.
+  let acumulado = 0;
+  const saldoAcumulado = linhas.map((l) => acumulado += l.margem);
+
   const labels = linhas.map((l) => `Med. ${l.medicao}`);
   if (chartFaturadoPago) chartFaturadoPago.destroy();
   chartFaturadoPago = new Chart(document.getElementById('chart-faturado-pago'), {
@@ -3064,6 +3096,7 @@ function renderizarFaturadoPago() {
         { type: 'bar', label: 'Faturado', data: linhas.map((l) => l.faturado), backgroundColor: '#1f4e78' },
         { type: 'bar', label: 'Pago', data: linhas.map((l) => l.pago), backgroundColor: '#e08e0b' },
         { type: 'line', label: 'Margem (Faturado − Pago)', data: linhas.map((l) => l.margem), borderColor: '#1e7e34', backgroundColor: '#1e7e34', tension: 0.3, yAxisID: 'y' },
+        { type: 'line', label: 'Saldo acumulado', data: saldoAcumulado, borderColor: '#5b21b6', backgroundColor: '#5b21b6', borderDash: [5, 3], tension: 0.3, yAxisID: 'y' },
       ],
     },
     options: {
@@ -3082,12 +3115,52 @@ function renderizarFaturadoPago() {
     },
   });
 
-  document.querySelector('#tabela-faturado-pago tbody').innerHTML = linhas.map((l) => `<tr onclick="abrirDetalhe('Pago — Med. ${l.medicao}', ultimoItensPagosFaturadoPago_(${l.medicao}))" style="cursor:pointer" title="Clique para ver os títulos pagos nesta janela">
+  // Gauge de Margem de Lucro — meia-rosca (circumference:180/rotation:-90)
+  // com o texto centralizado por cima via HTML, não por um plugin do
+  // Chart.js (mais simples de manter). % agregada = soma de todas as
+  // margens / soma de todo o Faturado no período, não a média das
+  // margens percentuais de cada medição (evita que uma medição pequena
+  // distorça o número tanto quanto uma grande).
+  const somaFaturado = linhas.reduce((s, l) => s + l.faturado, 0);
+  const somaMargem = linhas.reduce((s, l) => s + l.margem, 0);
+  const margemPct = somaFaturado ? (somaMargem / somaFaturado) * 100 : 0;
+  const corMargem = margemPct >= 15 ? '#1e7e34' : margemPct >= 5 ? '#e08e0b' : '#c0392b';
+  if (chartMargemGauge) chartMargemGauge.destroy();
+  chartMargemGauge = new Chart(document.getElementById('chart-margem-gauge'), {
+    type: 'doughnut',
+    data: {
+      datasets: [{
+        data: [Math.max(margemPct, 0), Math.max(100 - margemPct, 0)],
+        backgroundColor: [corMargem, '#e5e7eb'],
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      circumference: 180, rotation: -90, cutout: '75%',
+      plugins: { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: false } },
+      events: [],
+    },
+  });
+  document.getElementById('margem-gauge-texto').textContent = `${margemPct.toFixed(1)}%`;
+  document.getElementById('margem-gauge-texto').style.color = corMargem;
+
+  document.querySelector('#tabela-faturado-pago tbody').innerHTML = linhas.map((l, idx) => {
+    const anterior = idx > 0 ? linhas[idx - 1] : null;
+    const tendencia = anterior && anterior.margem !== 0
+      ? (() => {
+          const variacao = ((l.margem - anterior.margem) / Math.abs(anterior.margem)) * 100;
+          const seta = variacao >= 0 ? '▲' : '▼';
+          const cor = variacao >= 0 ? 'var(--verde)' : 'var(--vermelho)';
+          return ` <span style="color:${cor}; font-size:11px;" title="vs Medição ${anterior.medicao}">${seta} ${Math.abs(variacao).toFixed(0)}%</span>`;
+        })()
+      : '';
+    return `<tr onclick="abrirDetalhe('Pago — Med. ${l.medicao}', ultimoItensPagosFaturadoPago_(${l.medicao}))" style="cursor:pointer" title="Clique para ver os títulos pagos nesta janela">
       <td>Medição ${l.medicao}</td>
       <td class="col-valor">${htmlMoedaAlinhada(l.faturado)}</td>
       <td class="col-valor">${htmlMoedaAlinhada(l.pago)}</td>
-      <td class="col-valor">${htmlMoedaAlinhada(l.margem)}</td>
-    </tr>`).join('') || '<tr><td colspan="4" style="color:var(--cinza)">Nenhuma medição com data de referência.</td></tr>';
+      <td class="col-valor">${htmlMoedaAlinhada(l.margem)}${tendencia}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="4" style="color:var(--cinza)">Nenhuma medição com data de referência.</td></tr>';
   ultimoItensPagosPorMedicao_ = linhas.reduce((mapa, l) => { mapa[l.medicao] = l.itensPagos; return mapa; }, {});
 }
 // Usado só pelo onclick da linha da tabela acima (não dá pra referenciar o
