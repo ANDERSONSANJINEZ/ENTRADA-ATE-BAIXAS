@@ -92,11 +92,14 @@
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
   .card { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px 16px; text-align: center; display: flex; flex-direction: column; }
   .card .rotulo { font-size: 12px; color: var(--cinza); margin-bottom: 6px; }
-  /* Rótulos de tamanhos diferentes (1 ou 2 linhas) empurravam o valor de
-     cada card pra uma altura diferente — reserva sempre a mesma altura de
-     rótulo (2 linhas) pra que o valor comece na mesma linha em todos os
-     cards da fileira. */
-  #cards-faturamento .rotulo { min-height: 30px; }
+  /* Rótulos de tamanhos diferentes (1 ou 2 linhas) e conteúdo abaixo do
+     valor de altura diferente (a barrinha fina dos outros cards x o
+     velocímetro bem mais alto do card Resultado) deixavam o "R$ ..." de
+     cada card numa altura diferente. Uma faixa de altura fixa, igual nos 6
+     cards, com o conteúdo centralizado dentro dela, garante que o valor
+     fique sempre na mesma linha horizontal — independente do que vem
+     depois dele em cada card. */
+  #cards-faturamento .card-topo-fixo { min-height: 66px; display: flex; flex-direction: column; justify-content: center; }
   .card .card-valores { margin-top: auto; }
   .card .card-qtde { font-size: 22px; font-weight: bold; color: var(--azul); line-height: 1.2; }
   .card .card-rs { font-size: 14px; color: var(--azul); margin-top: 2px; }
@@ -476,7 +479,6 @@
 
   <section id="aba-dashboard" class="aba ativa">
     <input id="busca-dashboard" class="busca-tabela" placeholder="Buscar em Remessa, Aporte, Curva ABC e Categoria…" style="max-width:420px; margin-bottom:16px;">
-    <div class="cards" id="cards-kpi"></div>
     <div class="dashboard-layout">
       <div class="dashboard-lateral" id="dashboard-lateral">
         <button class="ativo" data-grupo="aging" title="Títulos em aberto por faixa de vencimento"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M10 6v4.2l3 2"/></svg></button>
@@ -496,6 +498,7 @@
         <h2>Títulos em aberto por faixa de vencimento</h2>
         <button class="btn secundario small" onclick="expandirGrafico('aging', 'Títulos em aberto por faixa de vencimento')">⛶ Expandir</button>
       </div>
+      <div class="cards" id="cards-kpi" style="margin-bottom:18px;"></div>
       <canvas id="chart-aging"></canvas>
     </div>
     </div>
@@ -1652,8 +1655,10 @@ async function carregarFaturamento() {
   // Se o Dashboard já tinha renderizado o Ranking de categorias antes desta
   // busca terminar (as duas disparam em paralelo no carregamento inicial —
   // ver o fim do arquivo), a série "% do Faturamento" daquele gráfico ainda
-  // não existia; re-renderiza agora que state.faturamento chegou.
+  // não existia; re-renderiza agora que state.faturamento chegou. Mesma
+  // lógica pra seção "Faturamento" da aba Análise.
   if (ultimoItensAnalise.length) renderizarGraficoAbcCategoria(ultimoItensAnalise);
+  if (document.getElementById('conteudo-analise').innerHTML) renderizarAnalise();
 }
 
 async function postarAcao(action, extra) {
@@ -1719,6 +1724,28 @@ if (ABAS_PERMITIDAS_RESTRITO) {
   const abaInicialRestrita = document.querySelector(`nav button[data-aba="${ABAS_PERMITIDAS_RESTRITO[0]}"]`);
   if (abaInicialRestrita) abaInicialRestrita.click();
 }
+
+// Usuárias sem acesso às abas Dashboard/Análise (pedido específico) — pelo
+// nome cadastrado na aba "Usuários" da planilha (usuarioEdicaoNome, ver
+// habilitarEdicao), já que o app não tem identidade de login do Google.
+// Diferente do PERFIS_RESTRITOS acima (link ?usuario=... só-leitura pra
+// compartilhar com terceiros), esta é gente com senha de edição normal —
+// só as duas abas somem da navegação, o resto do acesso continua igual.
+const USUARIOS_SEM_DASHBOARD_ANALISE_ = ['dayana sousa', 'francisco gilderlan'];
+function aplicarRestricaoAbasPorUsuario_() {
+  if (!usuarioEdicaoNome) return;
+  if (!USUARIOS_SEM_DASHBOARD_ANALISE_.includes(usuarioEdicaoNome.trim().toLowerCase())) return;
+  ['dashboard', 'analise'].forEach((chave) => {
+    const btn = document.querySelector(`nav button[data-aba="${chave}"]`);
+    if (btn) btn.style.display = 'none';
+  });
+  const abaAtiva = document.querySelector('.aba.ativa');
+  if (abaAtiva && (abaAtiva.id === 'aba-dashboard' || abaAtiva.id === 'aba-analise')) {
+    const btnLancamentos = document.querySelector('nav button[data-aba="lancamentos"]');
+    if (btnLancamentos) btnLancamentos.click();
+  }
+}
+aplicarRestricaoAbasPorUsuario_();
 
 // Versão simplificada de "Todos os lançamentos" pra esse perfil: sem
 // busca/filtros/exportar/totalizador, e sem as colunas Origem/Status/
@@ -3237,8 +3264,7 @@ function renderizarFaturadoPago_() {
   const aPagar = Math.max(0, totalFaturado - totalPago);
   document.getElementById('cards-faturamento').innerHTML = `
     <div class="card">
-      <div class="rotulo">Faturado — Total (líquido)</div>
-      <div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(totalFaturado)}</div></div>
+      <div class="card-topo-fixo"><div class="rotulo">Faturado — Total (líquido)</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(totalFaturado)}</div></div></div>
       <div style="margin-top:9px; background:#e1e0d9; border-radius:4px; height:6px; overflow:hidden; display:flex;">
         <div style="width:${pagoPctVis}%; background:#eb6834;"></div>
         <div style="width:${100 - pagoPctVis}%; background:#2a78d6;"></div>
@@ -3246,28 +3272,23 @@ function renderizarFaturadoPago_() {
       <div style="font-size:10px; color:var(--cinza); margin-top:4px;">Pago: ${fmtMoeda(totalPago)} · A pagar: ${fmtMoeda(aPagar)}</div>
     </div>
     <div class="card">
-      <div class="rotulo">Faturado — Média mensal</div>
-      <div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMensal)}</div></div>
+      <div class="card-topo-fixo"><div class="rotulo">Faturado — Média mensal</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMensal)}</div></div></div>
       ${barraProporcao(faturadoMensal)}
     </div>
     <div class="card">
-      <div class="rotulo">Faturado — Média por medição</div>
-      <div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMedia)}</div></div>
+      <div class="card-topo-fixo"><div class="rotulo">Faturado — Média por medição</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMedia)}</div></div></div>
       ${barraProporcao(faturadoMedia)}
     </div>
     <div class="card">
-      <div class="rotulo">Faturado — Maior medição</div>
-      <div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMaior)}</div></div>
+      <div class="card-topo-fixo"><div class="rotulo">Faturado — Maior medição</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMaior)}</div></div></div>
       ${barraProporcao(faturadoMaior)}
     </div>
     <div class="card">
-      <div class="rotulo">Faturado — Menor medição</div>
-      <div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMenor)}</div></div>
+      <div class="card-topo-fixo"><div class="rotulo">Faturado — Menor medição</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMenor)}</div></div></div>
       ${barraProporcao(faturadoMenor)}
     </div>
     <div class="card ${resultado >= 0 ? '' : 'alerta'}">
-      <div class="rotulo">Resultado (Faturado − Pago)</div>
-      <div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(resultado)}</div></div>
+      <div class="card-topo-fixo"><div class="rotulo">Resultado (Faturado − Pago)</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(resultado)}</div></div></div>
       <div style="position:relative; width:140px; height:76px; margin:6px auto 0;">
         <canvas id="chart-resultado-gauge"></canvas>
         <div id="resultado-gauge-texto" style="position:absolute; left:0; right:0; bottom:0; text-align:center; font-size:18px; font-weight:bold;"></div>
@@ -5342,6 +5363,22 @@ function renderizarAnalise() {
   const ticketMedio = itens.length ? totalValor / itens.length : 0;
   const ticketPorTipo = tiposOrdenados.map(([t, q]) => [t, porTipo[t] ? (itens.filter((i) => i.Tipo === t).reduce((s, i) => s + paraNumero(i['R$ Valor']), 0) / q) : 0]);
 
+  // Faturamento (planilha externa de NFS-e por medição, ver painel
+  // "Faturado x Pago" no Dashboard) — cruza receita faturada com o que já
+  // foi pago, dando uma visão de receita que o resto da Análise (só custo/
+  // contas a pagar) não tem. Lê de ultimoDadosFaturadoPago (já calculado
+  // por renderizarFaturadoPago_, com Faturado sempre em Valor Liquido) em
+  // vez de recalcular tudo de novo aqui.
+  const medicoesFat = ultimoDadosFaturadoPago;
+  const totalFaturadoAn = medicoesFat.reduce((s, l) => s + l.faturado, 0);
+  const totalPagoFatAn = medicoesFat.reduce((s, l) => s + l.pago, 0);
+  const resultadoFatAn = totalFaturadoAn - totalPagoFatAn;
+  const margemPctAn = totalFaturadoAn ? (resultadoFatAn / totalFaturadoAn) * 100 : 0;
+  const ultimaMedicaoAn = medicoesFat[medicoesFat.length - 1];
+  const penultimaMedicaoAn = medicoesFat[medicoesFat.length - 2];
+  const maiorMedicaoAn = medicoesFat.reduce((m, l) => (!m || l.faturado > m.faturado) ? l : m, null);
+  const menorMedicaoAn = medicoesFat.reduce((m, l) => (!m || l.faturado < m.faturado) ? l : m, null);
+
   // Resumo persistido da Conciliação Bancária (ver resumoConciliacaoBancaria_
   // no Code.gs) — histórico de TODOS os extratos já processados por
   // qualquer sessão, não só o mais recente ainda na memória de quem está
@@ -5367,6 +5404,24 @@ function renderizarAnalise() {
       <li>Tipos: ${tiposOrdenados.map(([t, q]) => `${q} ${t}`).join(', ') || '—'}.</li>
       <li>Maiores fornecedores por nº de títulos: ${fornecedoresOrdenados.map(([cod, q]) => `${nomesFornecedor[cod]} (${q})`).join(', ') || '—'}.</li>
       <li>Usuários lançadores: ${usuariosOrdenados.map(([u, q]) => `${u} (${q.toLocaleString('pt-BR')})`).join(', ') || '—'}.</li>
+    </ul>
+    <h3>Faturamento (medições x pago)</h3>
+    <ul>
+      ${!medicoesFat.length
+        ? `<li>${state.faturamento.erro
+            ? 'Não foi possível carregar a planilha de Faturamento — veja o painel "Faturado x Pago" no Dashboard para o detalhe do erro.'
+            : 'Nenhuma medição de Faturamento disponível ainda para este período.'}</li>`
+        : `
+          <li><strong>${fmtMoeda(totalFaturadoAn)}</strong> faturado (Valor Líquido) em <strong>${medicoesFat.length}</strong> medição(ões), da Medição ${medicoesFat[0].medicao} à Medição ${ultimaMedicaoAn.medicao}.</li>
+          <li><strong>${fmtMoeda(totalPagoFatAn)}</strong> já pago no mesmo intervalo (<strong>${(totalFaturadoAn ? totalPagoFatAn / totalFaturadoAn * 100 : 0).toFixed(1)}%</strong> do faturado) — restam <strong>${fmtMoeda(Math.max(0, resultadoFatAn))}</strong> a pagar.</li>
+          <li>Resultado acumulado (Faturado − Pago): <strong>${fmtMoeda(resultadoFatAn)}</strong> — margem de <strong>${margemPctAn.toFixed(1)}%</strong> sobre o faturado.</li>
+          <li>Última medição (Medição ${ultimaMedicaoAn.medicao}): faturou ${fmtMoeda(ultimaMedicaoAn.faturado)}, pago ${fmtMoeda(ultimaMedicaoAn.pago)}${
+            penultimaMedicaoAn && penultimaMedicaoAn.margem !== 0
+              ? `, margem ${ultimaMedicaoAn.margem >= penultimaMedicaoAn.margem ? 'subiu' : 'caiu'} em relação à Medição ${penultimaMedicaoAn.medicao}`
+              : ''
+          }.</li>
+          <li>Maior medição por faturamento: <strong>Medição ${maiorMedicaoAn.medicao}</strong> (${fmtMoeda(maiorMedicaoAn.faturado)}). Menor: <strong>Medição ${menorMedicaoAn.medicao}</strong> (${fmtMoeda(menorMedicaoAn.faturado)}).</li>
+        `}
     </ul>
     <h3>Conciliação bancária (extratos processados)</h3>
     <ul>
@@ -5443,6 +5498,10 @@ function renderizarAnalise() {
     ['Em aberto — valor', fmtMoeda(abertoValor)],
     ['Vencido em aberto — qtde', vencidos.length],
     ['Vencido em aberto — valor', fmtMoeda(vencidoValor)],
+    ['Faturamento — total faturado (líquido)', medicoesFat.length ? fmtMoeda(totalFaturadoAn) : ''],
+    ['Faturamento — total pago', medicoesFat.length ? fmtMoeda(totalPagoFatAn) : ''],
+    ['Faturamento — resultado (Faturado − Pago)', medicoesFat.length ? fmtMoeda(resultadoFatAn) : ''],
+    ['Faturamento — margem (%)', medicoesFat.length ? margemPctAn.toFixed(1) : ''],
     ['Conciliação bancária — extratos processados', conc ? conc.qtdeImportacoes : 0],
     ['Conciliação bancária — Conciliado', `${qtdeConc('Conciliado')} lançamento(s), ${fmtMoeda(valorConc('Conciliado'))}`],
     ['Conciliação bancária — Divergência de data', `${qtdeConc('Divergência de data')} lançamento(s), ${fmtMoeda(valorConc('Divergência de data'))}`],
@@ -6280,6 +6339,7 @@ async function habilitarEdicao() {
     MODO_LEITURA = false;
     atualizarUiModoLeitura();
     prefillUsuarioInclusor();
+    aplicarRestricaoAbasPorUsuario_();
     if (resp.semRestricao) {
       toast('Aviso: nenhum usuário de edição foi cadastrado ainda — qualquer senha libera a edição. Veja o README para cadastrar usuários.');
     } else {
