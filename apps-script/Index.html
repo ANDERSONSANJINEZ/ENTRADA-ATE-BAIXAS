@@ -460,52 +460,60 @@
   <section id="aba-dashboard" class="aba ativa">
     <input id="busca-dashboard" class="busca-tabela" placeholder="Buscar em Remessa, Aporte, Curva ABC e Categoria…" style="max-width:420px; margin-bottom:16px;">
     <div class="cards" id="cards-kpi"></div>
-    <div class="grid-2">
-      <div class="painel">
-        <div class="cabecalho-painel">
-          <h2>Títulos em aberto por faixa de vencimento</h2>
-          <button class="btn secundario small" onclick="expandirGrafico('aging', 'Títulos em aberto por faixa de vencimento')">⛶ Expandir</button>
-        </div>
-        <canvas id="chart-aging"></canvas>
-      </div>
-      <div class="painel">
-        <div class="cabecalho-painel">
-          <h2>Fluxo de caixa projetado (títulos em aberto)</h2>
-          <button class="btn secundario small" onclick="expandirGrafico('fluxo', 'Fluxo de caixa projetado (títulos em aberto)')">⛶ Expandir</button>
-        </div>
-        <canvas id="chart-fluxo"></canvas>
-      </div>
-    </div>
-    <div class="grid-2">
-      <div class="painel">
-        <div class="cabecalho-painel">
-          <h2>Situação das baixas</h2>
-          <button class="btn secundario small" onclick="expandirGrafico('statusPagamento', 'Situação das baixas')">⛶ Expandir</button>
-        </div>
-        <canvas id="chart-status-pagamento"></canvas>
-        <div id="legenda-status-pagamento" style="text-align:center;font-size:13px;color:var(--cinza);margin-top:8px;"></div>
-      </div>
-      <div class="painel">
-        <div class="cabecalho-painel">
-          <h2>Valor por Remessa (últimas 30)</h2>
-          <button class="btn secundario small" onclick="expandirGrafico('remessa', 'Valor por Remessa (últimas 30)')">⛶ Expandir</button>
-          <button class="btn secundario small" onclick="exportarXlsx('remessa')">⬇ Exportar Excel</button>
-        </div>
-        <div id="remessa-chart-wrap" style="height:300px; width:100%;">
-          <canvas id="chart-remessa"></canvas>
-        </div>
-      </div>
-    </div>
     <div class="dashboard-layout">
       <div class="dashboard-lateral" id="dashboard-lateral">
-        <button class="ativo" data-grupo="faturado-pago" title="Faturado x Pago por Medição">💰</button>
+        <button class="ativo" data-grupo="aging" title="Títulos em aberto por faixa de vencimento">⏳</button>
+        <button data-grupo="fluxo" title="Fluxo de caixa projetado (títulos em aberto)">📈</button>
+        <button data-grupo="status-pagamento" title="Situação das baixas">✅</button>
+        <button data-grupo="valor-remessa" title="Valor por Remessa (últimas 30)">📦</button>
+        <button data-grupo="faturado-pago" title="Faturado x Pago por Medição">💰</button>
         <button data-grupo="custo-categoria" title="Custo por Categoria — Baixado x A Baixar">🏷️</button>
         <button data-grupo="abc-categoria" title="Curva ABC por Categoria">📊</button>
         <button data-grupo="abc-fornecedores" title="Curva ABC de Fornecedores">🏢</button>
         <button data-grupo="resumo-aporte" title="Resumo por Aporte">🗓️</button>
       </div>
       <div class="dashboard-conteudo">
-    <div class="grupo-dashboard ativo" data-grupo="faturado-pago">
+    <div class="grupo-dashboard ativo" data-grupo="aging">
+    <div class="painel">
+      <div class="cabecalho-painel">
+        <h2>Títulos em aberto por faixa de vencimento</h2>
+        <button class="btn secundario small" onclick="expandirGrafico('aging', 'Títulos em aberto por faixa de vencimento')">⛶ Expandir</button>
+      </div>
+      <canvas id="chart-aging"></canvas>
+    </div>
+    </div>
+    <div class="grupo-dashboard" data-grupo="fluxo">
+    <div class="painel">
+      <div class="cabecalho-painel">
+        <h2>Fluxo de caixa projetado (títulos em aberto)</h2>
+        <button class="btn secundario small" onclick="expandirGrafico('fluxo', 'Fluxo de caixa projetado (títulos em aberto)')">⛶ Expandir</button>
+      </div>
+      <canvas id="chart-fluxo"></canvas>
+    </div>
+    </div>
+    <div class="grupo-dashboard" data-grupo="status-pagamento">
+    <div class="painel">
+      <div class="cabecalho-painel">
+        <h2>Situação das baixas</h2>
+        <button class="btn secundario small" onclick="expandirGrafico('statusPagamento', 'Situação das baixas')">⛶ Expandir</button>
+      </div>
+      <canvas id="chart-status-pagamento"></canvas>
+      <div id="legenda-status-pagamento" style="text-align:center;font-size:13px;color:var(--cinza);margin-top:8px;"></div>
+    </div>
+    </div>
+    <div class="grupo-dashboard" data-grupo="valor-remessa">
+    <div class="painel">
+      <div class="cabecalho-painel">
+        <h2>Valor por Remessa (últimas 30)</h2>
+        <button class="btn secundario small" onclick="expandirGrafico('remessa', 'Valor por Remessa (últimas 30)')">⛶ Expandir</button>
+        <button class="btn secundario small" onclick="exportarXlsx('remessa')">⬇ Exportar Excel</button>
+      </div>
+      <div id="remessa-chart-wrap" style="height:300px; width:100%;">
+        <canvas id="chart-remessa"></canvas>
+      </div>
+    </div>
+    </div>
+    <div class="grupo-dashboard" data-grupo="faturado-pago">
     <div class="painel" id="painel-faturado-pago" style="display:none;">
       <div class="cabecalho-painel">
         <h2>Faturado x Pago por Medição</h2>
