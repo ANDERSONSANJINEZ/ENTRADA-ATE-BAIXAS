@@ -183,11 +183,11 @@
   /* Alça de redimensionar colunas (estilo planilha) — ver
      tornarColunasRedimensionaveis(); fica colada na borda direita do
      cabeçalho, sem atrapalhar o clique de ordenação. */
-  #tabela-lancamentos th .alca-redimensionar {
+  #tabela-lancamentos th .alca-redimensionar, #tabela-faturado-pago th .alca-redimensionar {
     position: absolute; top: 0; right: -4px; bottom: 0; width: 8px;
     cursor: col-resize; z-index: 5;
   }
-  #tabela-lancamentos th .alca-redimensionar:hover { background: rgba(31,78,120,.35); }
+  #tabela-lancamentos th .alca-redimensionar:hover, #tabela-faturado-pago th .alca-redimensionar:hover { background: rgba(31,78,120,.35); }
   .anexos-col { display: flex; gap: 4px; }
   /* #tabela-lancamentos no seletor não é enfeite — sem ele, ".btn.small"
      (2 classes) tinha mais especificidade que ".anexos-col button" (1
@@ -296,6 +296,12 @@
   #tabela-aporte td.col-valor, #tabela-abc td.col-valor, #tabela-abc-categoria td.col-valor, #tabela-creditos td.col-valor,
   #tabela-faturado-pago td.col-valor { padding: 0; }
   .valor-flex { display: flex; justify-content: space-between; align-items: center; height: 100%; box-sizing: border-box; padding: 7px 8px; }
+  /* Sem isso, numa coluna estreita o "R$" fica flexível e o número quebra
+     em 2 linhas (flex-shrink:1 é o padrão) — aí a seta/percentual de
+     tendência (que vem logo abaixo, fora do .valor-flex) ficava colada
+     em cima do número quebrado. nowrap força a coluna a crescer (ou o
+     conteúdo a estourar com scroll) em vez de empilhar tudo torto. */
+  .valor-flex .rs, .valor-flex .valor-num { white-space: nowrap; }
   /* Tabela Faturado x Pago: valores em moeda simples (R$ 1.234,56 num só
      texto, sem o componente flex .valor-flex) e tudo centralizado — pedido
      explícito, diferente do padrão alinhado-à-direita das outras tabelas. */
@@ -303,6 +309,9 @@
      (.col-valor) usam o layout "R$" à esquerda / valor à direita de
      .valor-flex, então ficam de fora daqui de propósito. */
   .tabela-centralizada th, .tabela-centralizada td:not(.col-valor) { text-align: center; }
+  /* table-layout:fixed pro <colgroup> valer e a alça de redimensionar (ver
+     tornarColunasRedimensionaveis) funcionar igual à tabela de Lançamentos. */
+  #tabela-faturado-pago { table-layout: fixed; }
   /* Linha clicável pra abrir o anexo (documento/comprovante) do título —
      mesmo comportamento do modal-detalhe genérico. */
   #tabela-detalhe-aporte tbody tr { cursor: pointer; }
@@ -568,6 +577,9 @@
         </div>
         <div class="tabela-scroll">
           <table id="tabela-faturado-pago" class="tabela-centralizada">
+            <colgroup>
+              <col style="width:15%"><col style="width:28.33%"><col style="width:28.33%"><col style="width:28.33%">
+            </colgroup>
             <thead><tr><th>Medição</th><th>Faturado</th><th>Pago</th><th>Margem</th></tr></thead>
             <tbody></tbody>
           </table>
@@ -3388,9 +3400,14 @@ function renderizarFaturadoPago_() {
     },
   });
 
-  document.querySelector('#tabela-faturado-pago tbody').innerHTML = linhas.map((l, idx) => {
+  // A tendência (▲/▼ vs a medição anterior) é sempre calculada na ordem
+  // cronológica de `linhas` (a mesma usada pelos gráficos), nunca na ordem
+  // de exibição da tabela — senão ordenar a tabela por outra coluna
+  // (Faturado, Pago…) bagunçaria o que "anterior" significa.
+  const tendenciaPorMedicao_ = {};
+  linhas.forEach((l, idx) => {
     const anterior = idx > 0 ? linhas[idx - 1] : null;
-    const tendencia = anterior && anterior.margem !== 0
+    tendenciaPorMedicao_[l.medicao] = anterior && anterior.margem !== 0
       ? (() => {
           const variacao = ((l.margem - anterior.margem) / Math.abs(anterior.margem)) * 100;
           const seta = variacao >= 0 ? '▲' : '▼';
@@ -3398,6 +3415,14 @@ function renderizarFaturadoPago_() {
           return ` <span style="color:${cor}; font-size:11px;" title="vs Medição ${anterior.medicao}">${seta} ${Math.abs(variacao).toFixed(0)}%</span>`;
         })()
       : '';
+  });
+
+  // Ordenação por clique no cabeçalho (aplicarOrdenacao devolve uma cópia —
+  // `linhas`, usado pelos gráficos e pelo acumulado, nunca é reordenado).
+  const linhasTabela = aplicarOrdenacao('tabela-faturado-pago', linhas, EXTRATORES_FATURADO_PAGO_);
+
+  document.querySelector('#tabela-faturado-pago tbody').innerHTML = linhasTabela.map((l) => {
+    const tendencia = tendenciaPorMedicao_[l.medicao] || '';
     return `<tr onclick="abrirDetalhe('Pago — Med. ${l.medicao}', ultimoItensPagosFaturadoPago_(${l.medicao}))" style="cursor:pointer" title="Clique para ver os títulos pagos nesta janela">
       <td>Medição ${l.medicao}</td>
       <td class="col-valor">${htmlMoedaAlinhada(l.faturado)}</td>
@@ -3406,7 +3431,10 @@ function renderizarFaturadoPago_() {
     </tr>`;
   }).join('') || '<tr><td colspan="4" style="color:var(--cinza)">Nenhuma medição com data de referência.</td></tr>';
   ultimoItensPagosPorMedicao_ = linhas.reduce((mapa, l) => { mapa[l.medicao] = l.itensPagos; return mapa; }, {});
+  tornarOrdenavel('tabela-faturado-pago', EXTRATORES_FATURADO_PAGO_, () => renderizarFaturadoPago());
+  tornarColunasRedimensionaveis('tabela-faturado-pago');
 }
+const EXTRATORES_FATURADO_PAGO_ = [l => l.medicao, l => l.faturado, l => l.pago, l => l.margem];
 // Usado só pelo onclick da linha da tabela acima (não dá pra referenciar o
 // array de itens direto num atributo HTML) — pega a lista já calculada na
 // última renderização.
