@@ -341,10 +341,14 @@
     z-index: 500; align-items: center; justify-content: center; padding: 20px;
   }
   .modal-overlay.aberto { display: flex; }
-  /* modal-anexo/modal-observacao/modal-categoria podem ser abertos por
-     dentro do modal-linha (que já está "aberto"); como .modal-overlay
-     compartilha z-index, precisam de um z-index maior para renderizar por
-     cima. */
+  /* modal-linha pode ser aberto por dentro do modal-detalhe genérico
+     (clique numa linha do drill-down de um card/gráfico do Dashboard — ver
+     abrirDetalheLinha em renderizarModalDetalhe); modal-anexo/
+     modal-observacao/modal-categoria podem ser abertos por dentro do
+     modal-linha. Como .modal-overlay compartilha z-index, todos precisam
+     de um z-index maior que o do modal por baixo pra sempre renderizar por
+     cima, não só confiar na ordem do DOM. */
+  #modal-linha { z-index: 550; }
   #modal-anexo, #modal-observacao, #modal-categoria { z-index: 600; }
   .modal-caixa { background: #fff; border-radius: 10px; padding: 20px; max-width: 1100px; width: 100%; max-height: 88vh; display: flex; flex-direction: column; }
   .modal-cabecalho { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
@@ -433,23 +437,33 @@
     <div class="cards" id="cards-kpi"></div>
     <div class="grid-2">
       <div class="painel">
-        <h2>Títulos em aberto por faixa de vencimento</h2>
+        <div class="cabecalho-painel">
+          <h2>Títulos em aberto por faixa de vencimento</h2>
+          <button class="btn secundario small" onclick="expandirGrafico('aging', 'Títulos em aberto por faixa de vencimento')">⛶ Expandir</button>
+        </div>
         <canvas id="chart-aging"></canvas>
       </div>
       <div class="painel">
-        <h2>Fluxo de caixa projetado (títulos em aberto)</h2>
+        <div class="cabecalho-painel">
+          <h2>Fluxo de caixa projetado (títulos em aberto)</h2>
+          <button class="btn secundario small" onclick="expandirGrafico('fluxo', 'Fluxo de caixa projetado (títulos em aberto)')">⛶ Expandir</button>
+        </div>
         <canvas id="chart-fluxo"></canvas>
       </div>
     </div>
     <div class="grid-2">
       <div class="painel">
-        <h2>Situação das baixas</h2>
+        <div class="cabecalho-painel">
+          <h2>Situação das baixas</h2>
+          <button class="btn secundario small" onclick="expandirGrafico('statusPagamento', 'Situação das baixas')">⛶ Expandir</button>
+        </div>
         <canvas id="chart-status-pagamento"></canvas>
         <div id="legenda-status-pagamento" style="text-align:center;font-size:13px;color:var(--cinza);margin-top:8px;"></div>
       </div>
       <div class="painel">
         <div class="cabecalho-painel">
           <h2>Valor por Remessa (últimas 30)</h2>
+          <button class="btn secundario small" onclick="expandirGrafico('remessa', 'Valor por Remessa (últimas 30)')">⛶ Expandir</button>
           <button class="btn secundario small" onclick="exportarXlsx('remessa')">⬇ Exportar Excel</button>
         </div>
         <div id="remessa-chart-wrap" style="height:300px; width:100%;">
@@ -460,6 +474,7 @@
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Custo por Categoria — Baixado x A Baixar</h2>
+        <button class="btn secundario small" onclick="expandirGrafico('categoriaCusto', 'Custo por Categoria — Baixado x A Baixar')">⛶ Expandir</button>
         <button class="btn secundario small" onclick="exportarXlsx('categoriaCusto')">⬇ Exportar Excel</button>
       </div>
       <div id="categoria-custo-chart-wrap" style="height:340px; width:100%;">
@@ -471,6 +486,7 @@
         <div class="cabecalho-painel">
           <h2>Curva ABC por Categoria</h2>
           <button class="btn secundario small" onclick="restaurarSelecaoPadraoCategoria()" title="Volta a mostrar as 8 categorias de maior valor no período">↺ Padrão (8 maiores)</button>
+          <button class="btn secundario small" onclick="expandirGrafico('abcCategoria', 'Curva ABC por Categoria')">⛶ Expandir</button>
           <button class="btn secundario small" onclick="exportarXlsx('abcCategoria')">⬇ Exportar Excel</button>
         </div>
         <div id="abc-categoria-vazio" style="font-size:13px; color:var(--cinza); display:none;">Nenhuma categoria selecionada.</div>
@@ -497,6 +513,7 @@
       <div class="cabecalho-painel">
         <h2>Curva ABC dos fornecedores</h2>
         <button class="btn secundario small" onclick="restaurarSelecaoPadraoAbc()" title="Volta a mostrar os 5 fornecedores de maior valor no período">↺ Padrão (5 maiores)</button>
+        <button class="btn secundario small" onclick="expandirGrafico('pagosAbc', 'Curva ABC dos fornecedores')">⛶ Expandir</button>
         <button class="btn secundario small" onclick="exportarXlsx('pagosAbc')">⬇ Exportar Excel</button>
       </div>
       <div id="pagos-abc-vazio" style="font-size:13px; color:var(--cinza); display:none;">Nenhum título baixado (pago) no período pra estes fornecedores.</div>
@@ -521,6 +538,7 @@
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Resumo por Aporte — Qtd Doc x Doc aberto</h2>
+        <button class="btn secundario small" onclick="expandirGrafico('aporte', 'Resumo por Aporte — Qtd Doc x Doc aberto')">⛶ Expandir</button>
         <button class="btn secundario small" onclick="exportarXlsx('aporte')">⬇ Exportar Excel</button>
       </div>
       <div id="aporte-chart-wrap" style="height:320px; width:100%;">
@@ -785,6 +803,18 @@
   </section>
 
 </main>
+
+<div class="modal-overlay" id="modal-grafico-expandido" onclick="if (event.target === this) fecharModalGraficoExpandido()">
+  <div class="modal-caixa" style="max-width:1400px; height:88vh;">
+    <div class="modal-cabecalho">
+      <h2 id="modal-grafico-expandido-titulo"></h2>
+      <button class="modal-fechar" onclick="fecharModalGraficoExpandido()" title="Fechar (Esc)">✕</button>
+    </div>
+    <div style="flex:1; min-height:0; position:relative;">
+      <canvas id="chart-expandido"></canvas>
+    </div>
+  </div>
+</div>
 
 <div class="modal-overlay" id="modal-detalhe" onclick="if (event.target === this) fecharModalDetalhe()">
   <div class="modal-caixa">
@@ -1166,7 +1196,11 @@ function resolverLinkAnexoConfirmar() {
   resolverLinkAnexo(document.getElementById('input-anexo').value);
 }
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && document.getElementById('modal-anexo').classList.contains('aberto')) resolverLinkAnexo(null);
+  // stopImmediatePropagation: impede que o Escape também chegue ao handler
+  // do modal-linha (registrado mais abaixo) e feche os dois de uma vez —
+  // ver o mesmo padrão nos handlers de modal-observacao/modal-categoria/
+  // modal-linha/modal-detalhe logo abaixo.
+  if (e.key === 'Escape' && document.getElementById('modal-anexo').classList.contains('aberto')) { e.stopImmediatePropagation(); resolverLinkAnexo(null); }
 });
 
 // Observação livre por lançamento (coluna "Observação") — mesmo padrão dos
@@ -1188,7 +1222,7 @@ function resolverObservacaoConfirmar() {
   resolverObservacao(document.getElementById('input-observacao').value);
 }
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && document.getElementById('modal-observacao').classList.contains('aberto')) resolverObservacao(null);
+  if (e.key === 'Escape' && document.getElementById('modal-observacao').classList.contains('aberto')) { e.stopImmediatePropagation(); resolverObservacao(null); }
 });
 
 // Clique na célula da coluna Observação (ou no botão do pop-up de
@@ -1229,7 +1263,7 @@ function resolverCategoriaConfirmar() {
   resolverCategoria(document.getElementById('input-categoria').value);
 }
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && document.getElementById('modal-categoria').classList.contains('aberto')) resolverCategoria(null);
+  if (e.key === 'Escape' && document.getElementById('modal-categoria').classList.contains('aberto')) { e.stopImmediatePropagation(); resolverCategoria(null); }
 });
 
 async function editarCategoria(id, origem, valorAtual) {
@@ -1429,7 +1463,7 @@ function fecharModalLinha() {
   linhaDetalheAtual = null;
 }
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && document.getElementById('modal-linha').classList.contains('aberto')) fecharModalLinha();
+  if (e.key === 'Escape' && document.getElementById('modal-linha').classList.contains('aberto')) { e.stopImmediatePropagation(); fecharModalLinha(); }
 });
 
 // Ponte com o backend: a tela é servida pelo mesmo Apps Script do backend,
@@ -2026,11 +2060,6 @@ function renderizarModalDetalhe() {
     const origemBadge = i.Origem === 'ERP' ? 'badge-erp' : 'badge-manual';
     const statusTxt = calcularStatusExibicaoModalDetalhe(i);
     const statusBadge = i.Status === 'Duplicado – revisar' ? 'badge-dup' : (i['Data Baixa'] ? 'badge-erp' : 'badge-ok');
-    const linkDoc = i['Link Documento'] || '';
-    const linkComp = i['Link Comprovante'] || '';
-    const tituloLinha = (linkDoc || linkComp)
-      ? `Clique para abrir o anexo (${[linkDoc ? 'documento' : '', linkComp ? 'comprovante' : ''].filter(Boolean).join(' e ')})`
-      : 'Nenhum anexo cadastrado para este título';
     // Remover só faz sentido pra lançamento Manual (um título ERP volta na
     // próxima importação diária, não existe "remover" nele — mesma regra
     // já usada na coluna Ação de "Todos os lançamentos") e só fora do modo
@@ -2038,7 +2067,11 @@ function renderizarModalDetalhe() {
     const acao = (!MODO_LEITURA && i.Origem === 'Manual')
       ? `<button class="btn perigo small" title="Remover lançamento manual" onclick="event.stopPropagation(); removerManualDoModalDetalhe('${escaparAtributo(i.ID)}')">🗑️</button>`
       : '';
-    return `<tr onclick="abrirAnexoLinhaModalDetalhe('${escaparAtributo(linkDoc)}','${escaparAtributo(linkComp)}')" title="${escaparHtml(tituloLinha)}">
+    // Clique na linha abre o pop-up de detalhamento completo (mesmo usado
+    // em "Todos os lançamentos" — ver abrirDetalheLinha), com edição (pra
+    // Manual) e os botões de anexo (documento/comprovante), em vez de só
+    // abrir o link do anexo direto como antes.
+    return `<tr onclick="abrirDetalheLinha(event, '${escaparAtributo(i.ID)}', '${i.Origem}')" title="Clique para ver o lançamento por completo">
       <td class="col-origem"><span class="badge ${origemBadge}">${i.Origem || ''}</span></td>
       <td><span class="badge ${statusBadge}">${statusTxt}</span></td>
       <td class="col-tipo">${i.Tipo || ''}</td>
@@ -2063,7 +2096,15 @@ function renderizarModalDetalhe() {
 function fecharModalDetalhe() {
   document.getElementById('modal-detalhe').classList.remove('aberto');
 }
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fecharModalDetalhe(); });
+document.addEventListener('keydown', (e) => {
+  // Guardado, igual aos outros modais (só fecha se for o que está aberto)
+  // — o stopImmediatePropagation nos handlers de modal-anexo/observação/
+  // categoria/modal-linha acima (registrados antes deste no arquivo, logo
+  // avaliados primeiro) já garante que o Escape não chega até aqui quando
+  // o modal-linha (aberto por cima deste, via abrirDetalheLinha em
+  // renderizarModalDetalhe) ainda está aberto.
+  if (e.key === 'Escape' && document.getElementById('modal-detalhe').classList.contains('aberto')) fecharModalDetalhe();
+});
 function exportarModalDetalhe() {
   // Exporta com os mesmos filtro e ordem escolhidos na tela — sem isso o
   // Excel viria com títulos e numa ordem diferentes do que a pessoa
@@ -2459,6 +2500,44 @@ let chartAging, chartFluxo, chartStatusPagamento, chartPagosAbc, chartAporte;
 let chartCategoriaCusto, chartAbcCategoria;
 let ultimoAbertos = [];
 let ultimoItensAnalise = [];
+
+// Botão "Expandir" de cada gráfico do Dashboard — em vez de duplicar a
+// lógica de montagem de cada gráfico, reaproveita a config (type/data/
+// options/plugins) já montada na instância Chart.js viva e recria numa
+// tela maior. Indireto por getter (não a instância direta) porque cada
+// gráfico é destruído e recriado (chartX.destroy(); chartX = new Chart(…))
+// sempre que os dados mudam — pegar a instância direto no momento em que o
+// botão é desenhado ficaria com uma referência velha depois da 1ª
+// atualização.
+const REGISTRO_GRAFICOS_DASHBOARD_ = {
+  aging: () => chartAging,
+  fluxo: () => chartFluxo,
+  statusPagamento: () => chartStatusPagamento,
+  remessa: () => chartRemessa,
+  categoriaCusto: () => chartCategoriaCusto,
+  abcCategoria: () => chartAbcCategoria,
+  pagosAbc: () => chartPagosAbc,
+  aporte: () => chartAporte,
+};
+let chartExpandido;
+function expandirGrafico(chave, titulo) {
+  const getter = REGISTRO_GRAFICOS_DASHBOARD_[chave];
+  const chart = getter && getter();
+  if (!chart) { toast('Gráfico ainda não carregado.'); return; }
+  document.getElementById('modal-grafico-expandido-titulo').textContent = titulo;
+  if (chartExpandido) chartExpandido.destroy();
+  chartExpandido = new Chart(document.getElementById('chart-expandido'), {
+    type: chart.config.type, data: chart.config.data, options: chart.config.options, plugins: chart.config.plugins,
+  });
+  document.getElementById('modal-grafico-expandido').classList.add('aberto');
+}
+function fecharModalGraficoExpandido() {
+  document.getElementById('modal-grafico-expandido').classList.remove('aberto');
+  if (chartExpandido) { chartExpandido.destroy(); chartExpandido = null; }
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('modal-grafico-expandido').classList.contains('aberto')) { e.stopImmediatePropagation(); fecharModalGraficoExpandido(); }
+});
 
 function renderizarDashboard() {
   const itens = combinadoParaAnalise();
