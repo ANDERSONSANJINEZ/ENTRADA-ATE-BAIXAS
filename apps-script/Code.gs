@@ -488,6 +488,81 @@ function tentarResumoConciliacaoBancaria_() {
   }
 }
 
+// Planilha externa (mantida pela skill "consolidar-faturamento-vlt") com o
+// faturamento do consórcio pro cliente — NFS-e emitidas por medição pelos 3
+// prestadores (MPE, A Gaspar, VIPETRO). Usada só pra cruzar Faturado x Pago
+// no Dashboard (ver insightsFaturadoPago_ no Index.html) — nunca escrita
+// por aqui, só lida.
+var FATURAMENTO_PLANILHA_ID_ = '1q6Q9Bc7TJsfUdShrAwJdLXGSUx-3RzfdhEE3LlVVS0A';
+var FATURAMENTO_GID_ = 786051406;
+
+// Soma o "Valor Total (R$)" de cada medição (várias linhas — uma por
+// prestador — compartilham o mesmo número de Medição) e usa a emissão mais
+// recente do grupo como data de referência daquela medição, pra dar pra
+// cruzar com o período de baixas no Dashboard. Linhas sem Medição ou sem
+// Valor Total numérico (a linha de TOTAL no fim, linhas em branco, notas
+// "PENDENTE - PDF escaneado" sem valor extraído) ficam de fora.
+function faturamentoPorMedicao_() {
+  var planilha = SpreadsheetApp.openById(FATURAMENTO_PLANILHA_ID_);
+  var aba = planilha.getSheets().filter(function (s) { return s.getSheetId() === FATURAMENTO_GID_; })[0];
+  if (!aba) throw new Error('Aba de Faturamento (gid ' + FATURAMENTO_GID_ + ') não encontrada na planilha.');
+  var dados = aba.getDataRange().getValues();
+  if (!dados.length) return [];
+  var cabecalho = dados[0];
+  var idx = {
+    medicao: cabecalho.indexOf('Medicao'),
+    dataEmissao: cabecalho.indexOf('Data de Emissao'),
+    valorTotal: cabecalho.indexOf('Valor Total (R$)'),
+    valorLiquido: cabecalho.indexOf('Valor Liquido (R$)'),
+  };
+  if (idx.medicao === -1 || idx.valorTotal === -1) {
+    throw new Error('Cabeçalho da planilha de Faturamento mudou — colunas "Medicao"/"Valor Total (R$)" não encontradas.');
+  }
+
+  var porMedicao = {};
+  for (var i = 1; i < dados.length; i++) {
+    var linha = dados[i];
+    var medicao = linha[idx.medicao];
+    var valorTotal = linha[idx.valorTotal];
+    if (medicao === '' || medicao == null || typeof valorTotal !== 'number') continue;
+    var chave = String(medicao);
+    if (!porMedicao[chave]) porMedicao[chave] = { medicao: medicao, valorTotal: 0, valorLiquido: 0, datas: [] };
+    porMedicao[chave].valorTotal += valorTotal;
+    if (typeof linha[idx.valorLiquido] === 'number') porMedicao[chave].valorLiquido += linha[idx.valorLiquido];
+    var dataEmissao = linha[idx.dataEmissao];
+    if (dataEmissao instanceof Date) porMedicao[chave].datas.push(dataEmissao.getTime());
+  }
+
+  return Object.keys(porMedicao).map(function (k) {
+    var g = porMedicao[k];
+    var dataRef = g.datas.length ? new Date(Math.max.apply(null, g.datas)) : null;
+    return {
+      medicao: g.medicao,
+      valorTotal: g.valorTotal,
+      valorLiquido: g.valorLiquido,
+      dataReferencia: dataRef ? Utilities.formatDate(dataRef, Session.getScriptTimeZone(), 'yyyy-MM-dd') : null,
+    };
+  }).sort(function (a, b) { return (a.dataReferencia || '').localeCompare(b.dataReferencia || ''); });
+}
+
+function tentarFaturamentoPorMedicao_() {
+  try {
+    return { medicoes: faturamentoPorMedicao_(), erro: null };
+  } catch (erro) {
+    return { medicoes: [], erro: erro.message };
+  }
+}
+
+// Ação própria (não dentro de api_carregar) de propósito: buscar a
+// planilha de Faturamento é uma chamada externa (SpreadsheetApp.openById
+// numa planilha diferente desta) — embuti-la em api_carregar faria TODA
+// ação de escrita (importar, lançar manual, remover…) pagar esse custo
+// extra de novo a cada vez, mesmo sem precisar do resultado. Como
+// dado, o Faturamento muda raramente — o Dashboard busca 1x ao carregar.
+function api_faturamentoPorMedicao(payload) {
+  return tentarFaturamentoPorMedicao_();
+}
+
 function api_importar(payload) {
   var nomeUsuario = validarAcessoEdicao_(payload);
   substituirErp_(payload.itens, payload.dataBase);
@@ -920,6 +995,7 @@ function doPost(e) {
     else if (acao === 'validarEdicao') resultado = api_validarEdicao(payload);
     else if (acao === 'carregarLog') resultado = api_carregarLog(payload);
     else if (acao === 'salvarConciliacao') resultado = api_salvarConciliacao(payload);
+    else if (acao === 'faturamentoPorMedicao') resultado = api_faturamentoPorMedicao(payload);
     else throw new Error('Ação desconhecida: ' + acao);
     resultado.ok = true;
     return ContentService

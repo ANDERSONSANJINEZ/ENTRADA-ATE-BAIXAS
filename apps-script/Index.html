@@ -258,7 +258,8 @@
      htmlMoedaAlinhada), que aí sim consegue herdar 100% da altura de um
      <td> comum. */
   #tabela-detalhe-aporte td.col-valor, #modal-detalhe-tabela td.col-valor, #tabela-lancamentos td.col-valor,
-  #tabela-aporte td.col-valor, #tabela-abc td.col-valor, #tabela-abc-categoria td.col-valor, #tabela-creditos td.col-valor { padding: 0; }
+  #tabela-aporte td.col-valor, #tabela-abc td.col-valor, #tabela-abc-categoria td.col-valor, #tabela-creditos td.col-valor,
+  #tabela-faturado-pago td.col-valor { padding: 0; }
   .valor-flex { display: flex; justify-content: space-between; align-items: center; height: 100%; box-sizing: border-box; padding: 7px 8px; }
   /* Linha clicável pra abrir o anexo (documento/comprovante) do título —
      mesmo comportamento do modal-detalhe genérico. */
@@ -469,6 +470,27 @@
         <div id="remessa-chart-wrap" style="height:300px; width:100%;">
           <canvas id="chart-remessa"></canvas>
         </div>
+      </div>
+    </div>
+    <div class="painel" id="painel-faturado-pago" style="display:none;">
+      <div class="cabecalho-painel">
+        <h2>Faturado x Pago por Medição</h2>
+        <button class="btn secundario small" onclick="expandirGrafico('faturadoPago', 'Faturado x Pago por Medição')">⛶ Expandir</button>
+        <button class="btn secundario small" onclick="exportarXlsx('faturadoPago')">⬇ Exportar Excel</button>
+      </div>
+      <div id="faturado-pago-aviso" style="display:none; font-size:13px; color:var(--vermelho); margin-bottom:10px;"></div>
+      <p style="font-size:12px; color:var(--cinza); margin-top:0;">
+        Faturado vem da planilha de Faturamento (NFS-e por medição dos prestadores). Pago é o total baixado no período
+        entre a medição anterior e esta. Margem = Faturado − Pago. Clique numa barra "Pago" para ver os títulos.
+      </p>
+      <div id="faturado-pago-chart-wrap" style="height:340px; width:100%;">
+        <canvas id="chart-faturado-pago"></canvas>
+      </div>
+      <div class="tabela-scroll" style="margin-top:14px;">
+        <table id="tabela-faturado-pago">
+          <thead><tr><th>Medição</th><th>Faturado</th><th>Pago</th><th>Margem</th></tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
     <div class="painel">
@@ -1077,7 +1099,7 @@ const SRC = { tipo:'B', dt_emissao:'C', no_titulo:'D', form_pagto:'E', fornecedo
   nome_fornece:'G', vencimento:'H', vencto_real:'I', vlr_titulo:'J', parcela:'K',
   dt_baixa:'L', historico:'M', aprovacao:'S', usuario:'AJ', remessa:'AW' };
 
-let state = { erp: [], manual: [], dataBase: null, resumoConciliacao: null };
+let state = { erp: [], manual: [], dataBase: null, resumoConciliacao: null, faturamento: { medicoes: [], erro: null } };
 
 // Nome do arquivo padrão da pasta do Drive: AAAA.MM.DD.xlsx (ex.: 2026.07.30.xlsx)
 function extrairDataBaseDoNome(nomeArquivo) {
@@ -1517,6 +1539,21 @@ async function carregarTudo() {
   } catch (e) {
     if (minhaRequisicao === requisicaoAtual) toast('Erro ao carregar dados: ' + e.message);
   }
+}
+
+// Busca à parte de carregarTudo (ver comentário em api_faturamentoPorMedicao
+// no Code.gs) — não passa por postarAcao porque essa resposta não tem
+// erp/manual, e postarAcao sobrescreveria o state com [] se passasse por
+// ela. Falha aqui (planilha fora do ar, sem permissão etc.) só deixa o
+// painel de Faturado x Pago escondido — nunca trava o resto do Dashboard.
+async function carregarFaturamento() {
+  try {
+    const dados = await chamarServidor('faturamentoPorMedicao', {});
+    state.faturamento = { medicoes: dados.medicoes || [], erro: dados.erro || null };
+  } catch (e) {
+    state.faturamento = { medicoes: [], erro: e.message };
+  }
+  renderizarFaturadoPago();
 }
 
 async function postarAcao(action, extra) {
@@ -2413,6 +2450,9 @@ function exportarXlsx(qual) {
   } else if (qual === 'pagosAbc') {
     const linhas = ultimoDadosPagosAbc.map(([nome, mes, valor]) => [nome, mes, fmtMoeda(valor)]);
     baixarXlsx('pagos_curva_abc.xlsx', ['Fornecedor', 'Mês', 'Valor Pago'], linhas);
+  } else if (qual === 'faturadoPago') {
+    const linhas = ultimoDadosFaturadoPago.map((l) => [`Medição ${l.medicao}`, fmtMoeda(l.faturado), fmtMoeda(l.pago), fmtMoeda(l.margem)]);
+    baixarXlsx('faturado_x_pago.xlsx', ['Medição', 'Faturado', 'Pago', 'Margem'], linhas);
   } else if (qual === 'categoriaCusto') {
     const linhas = ultimoDadosCategoriaCusto.map(([cat, baixado, aBaixar, total]) => [cat, fmtMoeda(baixado), fmtMoeda(aBaixar), fmtMoeda(total)]);
     baixarXlsx('custo_por_categoria.xlsx', ['Categoria', 'Baixado', 'A Baixar', 'Total'], linhas);
@@ -2497,7 +2537,8 @@ function atualizarSetasOrdenacao(tabelaId) {
 
 // ---------- Dashboard ----------
 let chartAging, chartFluxo, chartStatusPagamento, chartPagosAbc, chartAporte;
-let chartCategoriaCusto, chartAbcCategoria;
+let chartCategoriaCusto, chartAbcCategoria, chartFaturadoPago;
+let ultimoDadosFaturadoPago = []; // export: [{medicao, faturado, pago, margem}]
 let ultimoAbertos = [];
 let ultimoItensAnalise = [];
 
@@ -2518,6 +2559,7 @@ const REGISTRO_GRAFICOS_DASHBOARD_ = {
   abcCategoria: () => chartAbcCategoria,
   pagosAbc: () => chartPagosAbc,
   aporte: () => chartAporte,
+  faturadoPago: () => chartFaturadoPago,
 };
 let chartExpandido;
 function expandirGrafico(chave, titulo) {
@@ -2598,6 +2640,11 @@ function renderizarDashboard() {
   renderizarCustoPorCategoria(itens);
   renderizarRankingCategoria(itens);
   renderizarGraficoAbcCategoria(itens);
+  // Recalcula o Pago com o ERP/Manual atual sem buscar a planilha de
+  // Faturamento de novo — o Faturado já está em cache no state.faturamento,
+  // carregado 1x à parte (ver carregarFaturamento). Fica escondido até essa
+  // 1ª busca terminar.
+  renderizarFaturadoPago();
 }
 
 // Agrupa por mês/ano do Vencimento e acumula ao longo do tempo: somatório
@@ -2901,6 +2948,90 @@ function renderizarFluxoCaixa(abertos, hoje) {
       },
     },
   });
+}
+
+// Cruza a planilha externa de Faturamento (ver api_faturamentoPorMedicao,
+// carregarFaturamento) com o Pago daqui (ERP+Manual baixados) — uma barra
+// de Faturado e uma de Pago por Medição, mais uma linha de Margem (mesma
+// escala em R$, então cabe no mesmo eixo — nunca eixo duplo). A janela de
+// "Pago" de cada medição é do dia seguinte à medição anterior até o dia da
+// própria medição (a 1ª janela não tem limite inferior — soma tudo que já
+// foi baixado até ali): a planilha só traz uma data de emissão por
+// medição, não o período que ela cobre, então isso aproxima "o que foi
+// pago desde a última medição" sem inventar uma regra mais complexa.
+function renderizarFaturadoPago() {
+  const painel = document.getElementById('painel-faturado-pago');
+  const medicoes = (state.faturamento.medicoes || [])
+    .filter((m) => m.dataReferencia)
+    .slice()
+    .sort((a, b) => a.dataReferencia.localeCompare(b.dataReferencia));
+  if (!medicoes.length) { painel.style.display = 'none'; return; }
+  painel.style.display = '';
+
+  const avisoEl = document.getElementById('faturado-pago-aviso');
+  if (state.faturamento.erro) {
+    avisoEl.style.display = 'block';
+    avisoEl.textContent = 'Não foi possível carregar a planilha de Faturamento — mostrando a última leitura bem-sucedida (se houver). Detalhe: ' + state.faturamento.erro;
+  } else {
+    avisoEl.style.display = 'none';
+  }
+
+  const todosItens = state.erp.concat(state.manual);
+  const linhas = medicoes.map((m, idx) => {
+    const fimJanela = paraData(m.dataReferencia);
+    const inicioJanela = idx > 0 ? paraData(medicoes[idx - 1].dataReferencia) : null;
+    const itensPagos = todosItens.filter((i) => {
+      const baixa = paraData(i['Data Baixa']);
+      if (!baixa || !fimJanela) return false;
+      if (inicioJanela && baixa <= inicioJanela) return false;
+      return baixa <= fimJanela;
+    });
+    const pago = itensPagos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+    return { medicao: m.medicao, faturado: m.valorTotal, pago, margem: m.valorTotal - pago, itensPagos };
+  });
+  ultimoDadosFaturadoPago = linhas.map((l) => ({ medicao: l.medicao, faturado: l.faturado, pago: l.pago, margem: l.margem }));
+
+  const labels = linhas.map((l) => `Med. ${l.medicao}`);
+  if (chartFaturadoPago) chartFaturadoPago.destroy();
+  chartFaturadoPago = new Chart(document.getElementById('chart-faturado-pago'), {
+    data: {
+      labels,
+      datasets: [
+        { type: 'bar', label: 'Faturado', data: linhas.map((l) => l.faturado), backgroundColor: '#1f4e78' },
+        { type: 'bar', label: 'Pago', data: linhas.map((l) => l.pago), backgroundColor: '#e08e0b' },
+        { type: 'line', label: 'Margem (Faturado − Pago)', data: linhas.map((l) => l.margem), borderColor: '#1e7e34', backgroundColor: '#1e7e34', tension: 0.3, yAxisID: 'y' },
+      ],
+    },
+    options: {
+      plugins: {
+        datalabels: { display: false },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtMoeda(ctx.parsed.y)}` } },
+      },
+      scales: { y: { beginAtZero: true } },
+      onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      onClick: (ev, els) => {
+        if (!els.length) return;
+        const el = els.find((e) => e.datasetIndex === 1) || els[0];
+        if (el.datasetIndex !== 1) return; // só a barra "Pago" tem títulos pra abrir (Faturado vem de fora do app)
+        abrirDetalhe(`Pago — ${labels[el.index]}`, linhas[el.index].itensPagos);
+      },
+    },
+  });
+
+  document.querySelector('#tabela-faturado-pago tbody').innerHTML = linhas.map((l) => `<tr onclick="abrirDetalhe('Pago — Med. ${l.medicao}', ultimoItensPagosFaturadoPago_(${l.medicao}))" style="cursor:pointer" title="Clique para ver os títulos pagos nesta janela">
+      <td>Medição ${l.medicao}</td>
+      <td class="col-valor">${htmlMoedaAlinhada(l.faturado)}</td>
+      <td class="col-valor">${htmlMoedaAlinhada(l.pago)}</td>
+      <td class="col-valor">${htmlMoedaAlinhada(l.margem)}</td>
+    </tr>`).join('') || '<tr><td colspan="4" style="color:var(--cinza)">Nenhuma medição com data de referência.</td></tr>';
+  ultimoItensPagosPorMedicao_ = linhas.reduce((mapa, l) => { mapa[l.medicao] = l.itensPagos; return mapa; }, {});
+}
+// Usado só pelo onclick da linha da tabela acima (não dá pra referenciar o
+// array de itens direto num atributo HTML) — pega a lista já calculada na
+// última renderização.
+let ultimoItensPagosPorMedicao_ = {};
+function ultimoItensPagosFaturadoPago_(medicao) {
+  return ultimoItensPagosPorMedicao_[medicao] || [];
 }
 
 const EXTRATORES_ABC = [undefined, l => l.cod, l => l.nome, l => l.qtde, l => l.valor, l => l.pct, l => l.acum, l => l.classe];
@@ -5837,6 +5968,7 @@ function renderizarTudo() {
   renderizarAnalise();
 }
 carregarTudo();
+carregarFaturamento();
 </script>
 </body>
 </html>
