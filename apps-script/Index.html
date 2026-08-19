@@ -285,9 +285,13 @@
      htmlMoedaAlinhada), que aí sim consegue herdar 100% da altura de um
      <td> comum. */
   #tabela-detalhe-aporte td.col-valor, #modal-detalhe-tabela td.col-valor, #tabela-lancamentos td.col-valor,
-  #tabela-aporte td.col-valor, #tabela-abc td.col-valor, #tabela-abc-categoria td.col-valor, #tabela-creditos td.col-valor,
-  #tabela-faturado-pago td.col-valor { padding: 0; }
+  #tabela-aporte td.col-valor, #tabela-abc td.col-valor, #tabela-abc-categoria td.col-valor, #tabela-creditos td.col-valor
+  { padding: 0; }
   .valor-flex { display: flex; justify-content: space-between; align-items: center; height: 100%; box-sizing: border-box; padding: 7px 8px; }
+  /* Tabela Faturado x Pago: valores em moeda simples (R$ 1.234,56 num só
+     texto, sem o componente flex .valor-flex) e tudo centralizado — pedido
+     explícito, diferente do padrão alinhado-à-direita das outras tabelas. */
+  .tabela-centralizada th, .tabela-centralizada td { text-align: center; }
   /* Linha clicável pra abrir o anexo (documento/comprovante) do título —
      mesmo comportamento do modal-detalhe genérico. */
   #tabela-detalhe-aporte tbody tr { cursor: pointer; }
@@ -522,8 +526,6 @@
     <div class="painel" id="painel-faturado-pago" style="display:none;">
       <div class="cabecalho-painel">
         <h2>Faturado x Pago por Medição</h2>
-        <button class="btn secundario small" onclick="expandirGrafico('faturadoPago', 'Faturado x Pago por Medição')">⛶ Expandir</button>
-        <button class="btn secundario small" onclick="exportarXlsx('faturadoPago')">⬇ Exportar Excel</button>
       </div>
       <div id="faturado-pago-aviso" style="display:none; font-size:13px; color:var(--vermelho); margin-bottom:14px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:10px 12px; line-height:1.5;"></div>
       <div id="faturado-pago-conteudo">
@@ -532,30 +534,29 @@
           total baixado no período entre a medição anterior e esta. Margem = Faturado − Pago. Clique numa barra "Pago"
           ou numa linha da tabela para ver os títulos.
         </p>
-        <div class="cards" id="cards-faturamento" style="margin-bottom:16px;"></div>
-        <div style="display:flex; gap:24px; align-items:flex-start; margin-bottom:18px; flex-wrap:wrap;">
-          <div style="position:relative; width:180px; height:100px; flex-shrink:0;">
-            <canvas id="chart-margem-gauge"></canvas>
-            <div id="margem-gauge-texto" style="position:absolute; left:0; right:0; bottom:6px; text-align:center; font-size:22px; font-weight:bold; color:var(--azul);"></div>
-            <div style="position:absolute; left:0; right:0; bottom:-14px; text-align:center; font-size:11px; color:var(--cinza);">Margem de Lucro (acumulada)</div>
+        <div class="cards" id="cards-faturamento" style="margin-bottom:18px;"></div>
+        <div class="painel" style="margin-bottom:18px; width:100%;">
+          <div class="cabecalho-painel">
+            <h2>Faturado, Pago e Margem por Medição</h2>
+            <button class="btn secundario small" onclick="expandirGrafico('faturadoPago', 'Faturado x Pago por Medição')">⛶ Expandir</button>
+            <button class="btn secundario small" onclick="exportarXlsx('faturadoPago')">⬇ Exportar Excel</button>
           </div>
-          <div id="margem-gauge-stats" style="flex-shrink:0; min-width:150px; font-size:12px; color:var(--cinza); line-height:1.9; margin-top:8px;"></div>
-          <div id="faturado-pago-chart-wrap" style="height:280px; flex:1; min-width:280px;">
+          <div id="faturado-pago-chart-wrap" style="height:340px; width:100%;">
             <canvas id="chart-faturado-pago"></canvas>
           </div>
         </div>
-        <div class="painel" style="margin-bottom:18px;">
+        <div class="painel" style="margin-bottom:18px; width:100%;">
           <div class="cabecalho-painel">
             <h2>Faturamento, Pago e Saldo — Acumulado</h2>
             <button class="btn secundario small" onclick="expandirGrafico('faturadoPagoAcumulado', 'Faturamento, Pago e Saldo — Acumulado')">⛶ Expandir</button>
             <button class="btn secundario small" onclick="exportarXlsx('faturadoPagoAcumulado')">⬇ Exportar Excel</button>
           </div>
-          <div id="faturado-pago-acumulado-chart-wrap" style="height:260px; width:100%;">
+          <div id="faturado-pago-acumulado-chart-wrap" style="height:300px; width:100%;">
             <canvas id="chart-faturado-pago-acumulado"></canvas>
           </div>
         </div>
         <div class="tabela-scroll">
-          <table id="tabela-faturado-pago">
+          <table id="tabela-faturado-pago" class="tabela-centralizada">
             <thead><tr><th>Medição</th><th>Faturado</th><th>Pago</th><th>Margem</th></tr></thead>
             <tbody></tbody>
           </table>
@@ -3212,17 +3213,81 @@ function renderizarFaturadoPago_() {
   const faturadoMenor = linhas.reduce((m, l) => Math.min(m, l.faturado), Infinity);
   const totalPago = linhas.reduce((s, l) => s + l.pago, 0);
   const resultado = totalFaturado - totalPago;
-  const cardsFaturamento = [
-    { rotulo: 'Faturado — Total (líquido)', valor: fmtMoeda(totalFaturado) },
-    { rotulo: 'Faturado — Média mensal', valor: fmtMoeda(faturadoMensal) },
-    { rotulo: 'Faturado — Média por medição', valor: fmtMoeda(faturadoMedia) },
-    { rotulo: 'Faturado — Maior medição', valor: fmtMoeda(faturadoMaior) },
-    { rotulo: 'Faturado — Menor medição', valor: fmtMoeda(faturadoMenor) },
-    { rotulo: 'Resultado (Faturado − Pago)', valor: fmtMoeda(resultado), classe: resultado >= 0 ? '' : 'alerta' },
-  ];
-  document.getElementById('cards-faturamento').innerHTML = cardsFaturamento.map((c) =>
-    `<div class="card ${c.classe || ''}"><div class="rotulo">${c.rotulo}</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${c.valor}</div></div></div>`
-  ).join('');
+  // % de Margem sobre o Faturado (líquido) — mesma conta de antes, só que
+  // agora vira o "velocímetro" embutido no card Resultado em vez de um
+  // gráfico solto ao lado da tabela.
+  const margemPct = totalFaturado ? (resultado / totalFaturado) * 100 : 0;
+  const corMargem = margemPct >= 15 ? '#0ca30c' : margemPct >= 5 ? '#fab219' : '#d03b3b';
+  // Barrinha de proporção (mesma ideia do velocímetro — um número acompanhado
+  // de uma leitura visual) usada nos cards que não são o Resultado: quanto
+  // aquele valor representa do Total Faturado.
+  const barraProporcao = (valor) => {
+    const pct = totalFaturado ? Math.max(0, Math.min(100, (valor / totalFaturado) * 100)) : 0;
+    return `<div style="margin-top:9px; background:#e1e0d9; border-radius:4px; height:6px; overflow:hidden;"><div style="width:${pct}%; height:100%; background:#2a78d6; border-radius:4px;"></div></div>`;
+  };
+  const pagoPctVis = totalFaturado ? Math.max(0, Math.min(100, (totalPago / totalFaturado) * 100)) : 0;
+  const aPagar = Math.max(0, totalFaturado - totalPago);
+  document.getElementById('cards-faturamento').innerHTML = `
+    <div class="card">
+      <div class="rotulo">Faturado — Total (líquido)</div>
+      <div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(totalFaturado)}</div></div>
+      <div style="margin-top:9px; background:#e1e0d9; border-radius:4px; height:6px; overflow:hidden; display:flex;">
+        <div style="width:${pagoPctVis}%; background:#eb6834;"></div>
+        <div style="width:${100 - pagoPctVis}%; background:#2a78d6;"></div>
+      </div>
+      <div style="font-size:10px; color:var(--cinza); margin-top:4px;">Pago: ${fmtMoeda(totalPago)} · A pagar: ${fmtMoeda(aPagar)}</div>
+    </div>
+    <div class="card">
+      <div class="rotulo">Faturado — Média mensal</div>
+      <div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMensal)}</div></div>
+      ${barraProporcao(faturadoMensal)}
+    </div>
+    <div class="card">
+      <div class="rotulo">Faturado — Média por medição</div>
+      <div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMedia)}</div></div>
+      ${barraProporcao(faturadoMedia)}
+    </div>
+    <div class="card">
+      <div class="rotulo">Faturado — Maior medição</div>
+      <div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMaior)}</div></div>
+      ${barraProporcao(faturadoMaior)}
+    </div>
+    <div class="card">
+      <div class="rotulo">Faturado — Menor medição</div>
+      <div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMenor)}</div></div>
+      ${barraProporcao(faturadoMenor)}
+    </div>
+    <div class="card ${resultado >= 0 ? '' : 'alerta'}">
+      <div class="rotulo">Resultado (Faturado − Pago)</div>
+      <div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(resultado)}</div></div>
+      <div style="position:relative; width:140px; height:76px; margin:6px auto 0;">
+        <canvas id="chart-resultado-gauge"></canvas>
+        <div id="resultado-gauge-texto" style="position:absolute; left:0; right:0; bottom:0; text-align:center; font-size:18px; font-weight:bold;"></div>
+      </div>
+      <div style="font-size:10px; color:var(--cinza); margin-top:2px;">Margem de Lucro (acumulada)</div>
+    </div>
+  `;
+  // Velocímetro (meia-rosca) embutido no card Resultado — não é mais um
+  // elemento solto ao lado da tabela: o card já mostra o R$ do Resultado,
+  // e o gauge logo abaixo mostra a mesma informação em %.
+  if (chartMargemGauge) chartMargemGauge.destroy();
+  chartMargemGauge = new Chart(document.getElementById('chart-resultado-gauge'), {
+    type: 'doughnut',
+    data: {
+      datasets: [{
+        data: [Math.max(margemPct, 0), Math.max(100 - margemPct, 0)],
+        backgroundColor: [corMargem, '#e1e0d9'],
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      circumference: 180, rotation: -90, cutout: '72%',
+      plugins: { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: false } },
+      events: [],
+    },
+  });
+  document.getElementById('resultado-gauge-texto').textContent = `${margemPct.toFixed(1)}%`;
+  document.getElementById('resultado-gauge-texto').style.color = corMargem;
 
   const labels = linhas.map((l) => `Med. ${l.medicao}`);
   if (chartFaturadoPago) chartFaturadoPago.destroy();
@@ -3259,48 +3324,6 @@ function renderizarFaturadoPago_() {
       },
     },
   });
-
-  // Gauge de Margem de Lucro — meia-rosca (circumference:180/rotation:-90)
-  // com o texto centralizado por cima via HTML, não por um plugin do
-  // Chart.js (mais simples de manter). % agregada = soma de todas as
-  // margens / soma de todo o Faturado no período, não a média das
-  // margens percentuais de cada medição (evita que uma medição pequena
-  // distorça o número tanto quanto uma grande).
-  const somaFaturado = linhas.reduce((s, l) => s + l.faturado, 0);
-  const somaMargem = linhas.reduce((s, l) => s + l.margem, 0);
-  const margemPct = somaFaturado ? (somaMargem / somaFaturado) * 100 : 0;
-  // Cores fixas de status (boa/atenção/crítica) — nunca reaproveitadas
-  // como cor de série, pra não se confundir com o azul/laranja/verde-água
-  // do gráfico acima.
-  const corMargem = margemPct >= 15 ? '#0ca30c' : margemPct >= 5 ? '#fab219' : '#d03b3b';
-  if (chartMargemGauge) chartMargemGauge.destroy();
-  chartMargemGauge = new Chart(document.getElementById('chart-margem-gauge'), {
-    type: 'doughnut',
-    data: {
-      datasets: [{
-        data: [Math.max(margemPct, 0), Math.max(100 - margemPct, 0)],
-        backgroundColor: [corMargem, '#e1e0d9'],
-        borderWidth: 0,
-      }],
-    },
-    options: {
-      circumference: 180, rotation: -90, cutout: '75%',
-      plugins: { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: false } },
-      events: [],
-    },
-  });
-  document.getElementById('margem-gauge-texto').textContent = `${margemPct.toFixed(1)}%`;
-  document.getElementById('margem-gauge-texto').style.color = corMargem;
-
-  // A pagar = Faturado (líquido) ainda não coberto por Pago no período —
-  // nunca negativo (quando já pagou mais do que faturou na janela, não faz
-  // sentido mostrar "a pagar" negativo; a Margem acima já conta essa folga).
-  const aPagar = Math.max(0, somaFaturado - linhas.reduce((s, l) => s + l.pago, 0));
-  document.getElementById('margem-gauge-stats').innerHTML = `
-    <div><span style="color:#2a78d6;">●</span> Faturamento: <strong>${fmtMoeda(somaFaturado)}</strong></div>
-    <div><span style="color:#eb6834;">●</span> Pago: <strong>${fmtMoeda(linhas.reduce((s, l) => s + l.pago, 0))}</strong></div>
-    <div><span style="color:#898781;">●</span> A pagar: <strong>${fmtMoeda(aPagar)}</strong></div>
-  `;
 
   // Gráfico "Acumulado" — Faturado, Pago e Saldo somados período a período,
   // numa escala própria (ver comentário acima de `acumulados`).
@@ -3340,9 +3363,9 @@ function renderizarFaturadoPago_() {
       : '';
     return `<tr onclick="abrirDetalhe('Pago — Med. ${l.medicao}', ultimoItensPagosFaturadoPago_(${l.medicao}))" style="cursor:pointer" title="Clique para ver os títulos pagos nesta janela">
       <td>Medição ${l.medicao}</td>
-      <td class="col-valor">${htmlMoedaAlinhada(l.faturado)}</td>
-      <td class="col-valor">${htmlMoedaAlinhada(l.pago)}</td>
-      <td class="col-valor">${htmlMoedaAlinhada(l.margem)}${tendencia}</td>
+      <td>${fmtMoeda(l.faturado)}</td>
+      <td>${fmtMoeda(l.pago)}</td>
+      <td>${fmtMoeda(l.margem)}${tendencia}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="4" style="color:var(--cinza)">Nenhuma medição com data de referência.</td></tr>';
   ultimoItensPagosPorMedicao_ = linhas.reduce((mapa, l) => { mapa[l.medicao] = l.itensPagos; return mapa; }, {});
