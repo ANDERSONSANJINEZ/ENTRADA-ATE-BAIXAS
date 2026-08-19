@@ -3064,13 +3064,28 @@ function renderizarFaturadoPago() {
     conteudoEl.style.display = 'none';
     return;
   }
-  avisoEl.style.display = 'none';
-
-  const medicoes = (state.faturamento.medicoes || [])
+  const brutas = state.faturamento.medicoes || [];
+  const medicoes = brutas
     .filter((m) => m.dataReferencia)
     .slice()
     .sort((a, b) => a.dataReferencia.localeCompare(b.dataReferencia));
-  if (!medicoes.length) { painel.style.display = 'none'; return; }
+
+  // Planilha respondeu sem erro mas nenhuma medição sobrou depois do filtro
+  // por data de referência — ou está mesmo vazia (nada a mostrar, painel
+  // some quieto), ou a busca achou linhas mas nenhuma tinha uma "Data de
+  // Emissao" reconhecível (mesmo bug de antes, causa diferente: coluna
+  // formatada de um jeito que faturamentoPorMedicao_ não reconhece) — nesse
+  // 2º caso mostra um aviso em vez de só sumir de novo sem explicação.
+  if (!medicoes.length) {
+    if (!brutas.length) { painel.style.display = 'none'; avisoEl.style.display = 'none'; return; }
+    painel.style.display = '';
+    avisoEl.style.display = 'block';
+    avisoEl.innerHTML = `<strong>A planilha de Faturamento respondeu, mas nenhuma das ${brutas.length} medição(ões) encontrada(s) tinha uma "Data de Emissao" reconhecível.</strong><br>
+      Confira se a coluna "Data de Emissao" na planilha está preenchida (célula com data ou texto no formato dd/mm/aaaa) pras linhas com Medição e Valor Total preenchidos.`;
+    conteudoEl.style.display = 'none';
+    return;
+  }
+  avisoEl.style.display = 'none';
   painel.style.display = '';
   conteudoEl.style.display = '';
 

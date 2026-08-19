@@ -502,6 +502,25 @@ var FATURAMENTO_GID_ = 786051406;
 // cruzar com o período de baixas no Dashboard. Linhas sem Medição ou sem
 // Valor Total numérico (a linha de TOTAL no fim, linhas em branco, notas
 // "PENDENTE - PDF escaneado" sem valor extraído) ficam de fora.
+//
+// "Data de Emissao" pode vir como Date de verdade (célula formatada como
+// data) OU como texto "dd/mm/aaaa"/"aaaa-mm-dd" (célula formatada como
+// texto) — depende de como cada linha foi digitada na planilha de
+// Faturamento. Sem aceitar as duas formas, uma medição inteira ficava sem
+// nenhuma data de referência (todas as datas descartadas) e sumia do
+// gráfico silenciosamente, mesmo sem erro nenhum na busca.
+function paraDataFaturamento_(valor) {
+  if (valor instanceof Date) return valor;
+  if (typeof valor === 'string' && valor.trim()) {
+    var texto = valor.trim();
+    var bra = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (bra) return new Date(Number(bra[3]), Number(bra[2]) - 1, Number(bra[1]));
+    var iso = texto.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  }
+  return null;
+}
+
 function faturamentoPorMedicao_() {
   var planilha = SpreadsheetApp.openById(FATURAMENTO_PLANILHA_ID_);
   var aba = planilha.getSheets().filter(function (s) { return s.getSheetId() === FATURAMENTO_GID_; })[0];
@@ -529,8 +548,8 @@ function faturamentoPorMedicao_() {
     if (!porMedicao[chave]) porMedicao[chave] = { medicao: medicao, valorTotal: 0, valorLiquido: 0, datas: [] };
     porMedicao[chave].valorTotal += valorTotal;
     if (typeof linha[idx.valorLiquido] === 'number') porMedicao[chave].valorLiquido += linha[idx.valorLiquido];
-    var dataEmissao = linha[idx.dataEmissao];
-    if (dataEmissao instanceof Date) porMedicao[chave].datas.push(dataEmissao.getTime());
+    var dataEmissao = paraDataFaturamento_(linha[idx.dataEmissao]);
+    if (dataEmissao) porMedicao[chave].datas.push(dataEmissao.getTime());
   }
 
   return Object.keys(porMedicao).map(function (k) {
