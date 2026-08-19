@@ -218,8 +218,9 @@
     border-radius: 8px; border-left: 3px solid transparent;
     display: flex; align-items: center; justify-content: center;
   }
-  .dashboard-lateral button:hover { background: var(--azul-claro); }
-  .dashboard-lateral button.ativo { background: var(--azul-claro); border-left-color: var(--azul); }
+  .dashboard-lateral button svg { width: 21px; height: 21px; }
+  .dashboard-lateral button:hover { background: var(--azul-claro); color: var(--azul); }
+  .dashboard-lateral button.ativo { background: var(--azul-claro); border-left-color: var(--azul); color: var(--azul); }
   .dashboard-conteudo { flex: 1; min-width: 0; }
   .grupo-dashboard { display: none; }
   .grupo-dashboard.ativo { display: block; }
@@ -466,15 +467,15 @@
     <div class="cards" id="cards-kpi"></div>
     <div class="dashboard-layout">
       <div class="dashboard-lateral" id="dashboard-lateral">
-        <button class="ativo" data-grupo="aging" title="Títulos em aberto por faixa de vencimento">⏳</button>
-        <button data-grupo="fluxo" title="Fluxo de caixa projetado (títulos em aberto)">📈</button>
-        <button data-grupo="status-pagamento" title="Situação das baixas">✅</button>
-        <button data-grupo="valor-remessa" title="Valor por Remessa (últimas 30)">📦</button>
-        <button data-grupo="faturado-pago" title="Faturado x Pago por Medição">💰</button>
-        <button data-grupo="custo-categoria" title="Custo por Categoria — Baixado x A Baixar">🏷️</button>
-        <button data-grupo="abc-categoria" title="Curva ABC por Categoria">📊</button>
-        <button data-grupo="abc-fornecedores" title="Curva ABC de Fornecedores">🏢</button>
-        <button data-grupo="resumo-aporte" title="Resumo por Aporte">🗓️</button>
+        <button class="ativo" data-grupo="aging" title="Títulos em aberto por faixa de vencimento"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M10 6v4.2l3 2"/></svg></button>
+        <button data-grupo="fluxo" title="Fluxo de caixa projetado (títulos em aberto)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,14.5 8,9.5 11,12.5 17,5.5"/><polyline points="12.5,5.5 17,5.5 17,10"/></svg></button>
+        <button data-grupo="status-pagamento" title="Situação das baixas"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M6.8 10.2l2.2 2.2 4.2-4.8"/></svg></button>
+        <button data-grupo="valor-remessa" title="Valor por Remessa (últimas 30)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.2l7-2.9 7 2.9-7 2.9-7-2.9z"/><path d="M3 6.2v7.6l7 2.9 7-2.9V6.2"/><path d="M10 9.1v8.6"/></svg></button>
+        <button data-grupo="faturado-pago" title="Faturado x Pago por Medição"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="2.5" x2="10" y2="17.5"/><path d="M13.5 6H8.2a2.3 2.3 0 000 4.6h3.6a2.3 2.3 0 010 4.6H6"/></svg></button>
+        <button data-grupo="custo-categoria" title="Custo por Categoria — Baixado x A Baixar"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h6.2L17 10.8 9.8 18 2 10.2V4z"/><circle cx="6.6" cy="6.6" r="1.1" fill="currentColor" stroke="none"/></svg></button>
+        <button data-grupo="abc-categoria" title="Curva ABC por Categoria"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17V12M8 17V8M13 17V4"/><polyline points="3,9 8,5.5 13,2.5 17,1" stroke-width="1.4"/></svg></button>
+        <button data-grupo="abc-fornecedores" title="Curva ABC de Fornecedores"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="2.5" width="11" height="15"/><path d="M7.5 6h1.6M11 6h1.6M7.5 9h1.6M11 9h1.6M7.5 12h1.6M11 12h1.6"/></svg></button>
+        <button data-grupo="resumo-aporte" title="Resumo por Aporte"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.2" width="14" height="13" rx="1.5"/><path d="M3 8h14M7 2.2v4M13 2.2v4"/></svg></button>
       </div>
       <div class="dashboard-conteudo">
     <div class="grupo-dashboard ativo" data-grupo="aging">
@@ -527,17 +528,30 @@
       <div id="faturado-pago-aviso" style="display:none; font-size:13px; color:var(--vermelho); margin-bottom:14px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:10px 12px; line-height:1.5;"></div>
       <div id="faturado-pago-conteudo">
         <p style="font-size:12px; color:var(--cinza); margin-top:0;">
-          Faturado vem da planilha de Faturamento (NFS-e por medição dos prestadores). Pago é o total baixado no período
-          entre a medição anterior e esta. Margem = Faturado − Pago. Clique numa barra "Pago" para ver os títulos.
+          Faturado vem do "Valor Liquido (R$)" da planilha de Faturamento (NFS-e por medição dos prestadores). Pago é o
+          total baixado no período entre a medição anterior e esta. Margem = Faturado − Pago. Clique numa barra "Pago"
+          ou numa linha da tabela para ver os títulos.
         </p>
-        <div style="display:flex; gap:20px; align-items:center; margin-bottom:14px; flex-wrap:wrap;">
+        <div class="cards" id="cards-faturamento" style="margin-bottom:16px;"></div>
+        <div style="display:flex; gap:24px; align-items:flex-start; margin-bottom:18px; flex-wrap:wrap;">
           <div style="position:relative; width:180px; height:100px; flex-shrink:0;">
             <canvas id="chart-margem-gauge"></canvas>
             <div id="margem-gauge-texto" style="position:absolute; left:0; right:0; bottom:6px; text-align:center; font-size:22px; font-weight:bold; color:var(--azul);"></div>
             <div style="position:absolute; left:0; right:0; bottom:-14px; text-align:center; font-size:11px; color:var(--cinza);">Margem de Lucro (acumulada)</div>
           </div>
+          <div id="margem-gauge-stats" style="flex-shrink:0; min-width:150px; font-size:12px; color:var(--cinza); line-height:1.9; margin-top:8px;"></div>
           <div id="faturado-pago-chart-wrap" style="height:280px; flex:1; min-width:280px;">
             <canvas id="chart-faturado-pago"></canvas>
+          </div>
+        </div>
+        <div class="painel" style="margin-bottom:18px;">
+          <div class="cabecalho-painel">
+            <h2>Faturamento, Pago e Saldo — Acumulado</h2>
+            <button class="btn secundario small" onclick="expandirGrafico('faturadoPagoAcumulado', 'Faturamento, Pago e Saldo — Acumulado')">⛶ Expandir</button>
+            <button class="btn secundario small" onclick="exportarXlsx('faturadoPagoAcumulado')">⬇ Exportar Excel</button>
+          </div>
+          <div id="faturado-pago-acumulado-chart-wrap" style="height:260px; width:100%;">
+            <canvas id="chart-faturado-pago-acumulado"></canvas>
           </div>
         </div>
         <div class="tabela-scroll">
@@ -1626,6 +1640,11 @@ async function carregarFaturamento() {
     state.faturamento = { medicoes: [], linhasBrutas: 0, erro: e.message };
   }
   renderizarFaturadoPago();
+  // Se o Dashboard já tinha renderizado o Ranking de categorias antes desta
+  // busca terminar (as duas disparam em paralelo no carregamento inicial —
+  // ver o fim do arquivo), a série "% do Faturamento" daquele gráfico ainda
+  // não existia; re-renderiza agora que state.faturamento chegou.
+  if (ultimoItensAnalise.length) renderizarGraficoAbcCategoria(ultimoItensAnalise);
 }
 
 async function postarAcao(action, extra) {
@@ -2542,12 +2561,15 @@ function exportarXlsx(qual) {
   } else if (qual === 'faturadoPago') {
     const linhas = ultimoDadosFaturadoPago.map((l) => [`Medição ${l.medicao}`, fmtMoeda(l.faturado), fmtMoeda(l.pago), fmtMoeda(l.margem)]);
     baixarXlsx('faturado_x_pago.xlsx', ['Medição', 'Faturado', 'Pago', 'Margem'], linhas);
+  } else if (qual === 'faturadoPagoAcumulado') {
+    const linhas = ultimoDadosFaturadoPagoAcumulado.map((a) => [`Medição ${a.medicao}`, fmtMoeda(a.faturado), fmtMoeda(a.pago), fmtMoeda(a.saldo)]);
+    baixarXlsx('faturado_pago_saldo_acumulado.xlsx', ['Medição', 'Faturado acumulado', 'Pago acumulado', 'Saldo acumulado'], linhas);
   } else if (qual === 'categoriaCusto') {
     const linhas = ultimoDadosCategoriaCusto.map(([cat, baixado, aBaixar, total]) => [cat, fmtMoeda(baixado), fmtMoeda(aBaixar), fmtMoeda(total)]);
     baixarXlsx('custo_por_categoria.xlsx', ['Categoria', 'Baixado', 'A Baixar', 'Total'], linhas);
   } else if (qual === 'abcCategoria') {
-    const linhas = ultimoDadosAbcCategoria.map(([cat, pct, acum]) => [cat, `${pct.toFixed(1)}%`, `${acum.toFixed(1)}%`]);
-    baixarXlsx('curva_abc_categoria.xlsx', ['Categoria', '% do Total', '% Acumulado'], linhas);
+    const linhas = ultimoDadosAbcCategoria.map(([cat, pct, acum, pctFaturamento]) => [cat, `${pct.toFixed(1)}%`, `${acum.toFixed(1)}%`, pctFaturamento == null ? '' : `${pctFaturamento.toFixed(1)}%`]);
+    baixarXlsx('curva_abc_categoria.xlsx', ['Categoria', '% do Total', '% Acumulado', '% do Faturamento'], linhas);
   } else if (qual === 'rankingCategoria') {
     const linhas = Array.from(document.querySelectorAll('#tabela-abc-categoria tbody tr')).map((tr) =>
       Array.from(tr.querySelectorAll('td:not(.col-check-abc)')).map((td) => td.textContent.trim())
@@ -2626,8 +2648,9 @@ function atualizarSetasOrdenacao(tabelaId) {
 
 // ---------- Dashboard ----------
 let chartAging, chartFluxo, chartStatusPagamento, chartPagosAbc, chartAporte;
-let chartCategoriaCusto, chartAbcCategoria, chartFaturadoPago, chartMargemGauge;
+let chartCategoriaCusto, chartAbcCategoria, chartFaturadoPago, chartMargemGauge, chartFaturadoPagoAcumulado;
 let ultimoDadosFaturadoPago = []; // export: [{medicao, faturado, pago, margem}]
+let ultimoDadosFaturadoPagoAcumulado = []; // export: [{medicao, faturado, pago, saldo}]
 let ultimoAbertos = [];
 let ultimoItensAnalise = [];
 
@@ -2649,6 +2672,7 @@ const REGISTRO_GRAFICOS_DASHBOARD_ = {
   pagosAbc: () => chartPagosAbc,
   aporte: () => chartAporte,
   faturadoPago: () => chartFaturadoPago,
+  faturadoPagoAcumulado: () => chartFaturadoPagoAcumulado,
 };
 let chartExpandido;
 function expandirGrafico(chave, titulo) {
@@ -3147,15 +3171,58 @@ function renderizarFaturadoPago_() {
       return baixa <= fimJanela;
     });
     const pago = itensPagos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
-    return { medicao: m.medicao, faturado: m.valorTotal, pago, margem: m.valorTotal - pago, itensPagos };
+    // "Faturado" usa sempre o Valor Liquido (coluna N da planilha de
+    // Faturamento), nunca o Valor Total (bruto) — pedido explícito, pra
+    // comparar com o Pago (valor líquido de fato baixado) numa base
+    // equivalente.
+    return { medicao: m.medicao, faturado: m.valorLiquido, pago, margem: m.valorLiquido - pago, itensPagos };
   });
   ultimoDadosFaturadoPago = linhas.map((l) => ({ medicao: l.medicao, faturado: l.faturado, pago: l.pago, margem: l.margem }));
 
-  // Saldo acumulado: soma corrida da Margem período a período — mostra se a
-  // folga entre Faturado e Pago está crescendo ou encolhendo ao longo do
-  // tempo, não só medição a medição isolada.
-  let acumulado = 0;
-  const saldoAcumulado = linhas.map((l) => acumulado += l.margem);
+  // Faturado/Pago/Saldo acumulados período a período — usado no card
+  // "Resultado", no gráfico "Acumulado" logo abaixo e como base do que
+  // antes era a linha "Saldo acumulado" dentro do gráfico principal (tirada
+  // de lá porque com Faturado/Pago em R$ absoluto e Saldo em R$ acumulado
+  // no mesmo eixo, os primeiros períodos ficavam ilegíveis — comprimidos
+  // perto de zero — assim que o acumulado crescia; o gráfico dedicado
+  // abaixo usa sua própria escala).
+  let faturadoAcum = 0, pagoAcum = 0;
+  const acumulados = linhas.map((l) => {
+    faturadoAcum += l.faturado;
+    pagoAcum += l.pago;
+    return { medicao: l.medicao, faturado: faturadoAcum, pago: pagoAcum, saldo: faturadoAcum - pagoAcum };
+  });
+  ultimoDadosFaturadoPagoAcumulado = acumulados;
+
+  // Cards de resumo do Faturamento — sempre sobre o Valor Liquido (l.faturado
+  // já é o líquido, ver acima). "Mensal" divide pelo nº de meses corridos
+  // entre a 1ª e a última medição (calendário), diferente de "Média" que
+  // divide pela quantidade de medições — dois denominadores diferentes de
+  // propósito, pra responder perguntas diferentes ("quanto fatura por mês em
+  // média" x "quanto é uma medição típica").
+  const totalFaturado = linhas.reduce((s, l) => s + l.faturado, 0);
+  const primeiraData = paraData(medicoes[0].dataReferencia);
+  const ultimaData = paraData(medicoes[medicoes.length - 1].dataReferencia);
+  const mesesCorridos = primeiraData && ultimaData
+    ? Math.max(1, (ultimaData.getFullYear() - primeiraData.getFullYear()) * 12 + (ultimaData.getMonth() - primeiraData.getMonth()) + 1)
+    : 1;
+  const faturadoMensal = totalFaturado / mesesCorridos;
+  const faturadoMedia = totalFaturado / linhas.length;
+  const faturadoMaior = linhas.reduce((m, l) => Math.max(m, l.faturado), -Infinity);
+  const faturadoMenor = linhas.reduce((m, l) => Math.min(m, l.faturado), Infinity);
+  const totalPago = linhas.reduce((s, l) => s + l.pago, 0);
+  const resultado = totalFaturado - totalPago;
+  const cardsFaturamento = [
+    { rotulo: 'Faturado — Total (líquido)', valor: fmtMoeda(totalFaturado) },
+    { rotulo: 'Faturado — Média mensal', valor: fmtMoeda(faturadoMensal) },
+    { rotulo: 'Faturado — Média por medição', valor: fmtMoeda(faturadoMedia) },
+    { rotulo: 'Faturado — Maior medição', valor: fmtMoeda(faturadoMaior) },
+    { rotulo: 'Faturado — Menor medição', valor: fmtMoeda(faturadoMenor) },
+    { rotulo: 'Resultado (Faturado − Pago)', valor: fmtMoeda(resultado), classe: resultado >= 0 ? '' : 'alerta' },
+  ];
+  document.getElementById('cards-faturamento').innerHTML = cardsFaturamento.map((c) =>
+    `<div class="card ${c.classe || ''}"><div class="rotulo">${c.rotulo}</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${c.valor}</div></div></div>`
+  ).join('');
 
   const labels = linhas.map((l) => `Med. ${l.medicao}`);
   if (chartFaturadoPago) chartFaturadoPago.destroy();
@@ -3171,7 +3238,6 @@ function renderizarFaturadoPago_() {
         { type: 'bar', label: 'Faturado', data: linhas.map((l) => l.faturado), backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24, categoryPercentage: 0.6, barPercentage: 0.9 },
         { type: 'bar', label: 'Pago', data: linhas.map((l) => l.pago), backgroundColor: '#eb6834', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24, categoryPercentage: 0.6, barPercentage: 0.9 },
         { type: 'line', label: 'Margem (Faturado − Pago)', data: linhas.map((l) => l.margem), borderColor: '#1baf7a', backgroundColor: '#1baf7a', borderWidth: 2, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, yAxisID: 'y' },
-        { type: 'line', label: 'Saldo acumulado', data: saldoAcumulado, borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', borderDash: [5, 3], tension: 0.3, yAxisID: 'y' },
       ],
     },
     options: {
@@ -3225,6 +3291,42 @@ function renderizarFaturadoPago_() {
   });
   document.getElementById('margem-gauge-texto').textContent = `${margemPct.toFixed(1)}%`;
   document.getElementById('margem-gauge-texto').style.color = corMargem;
+
+  // A pagar = Faturado (líquido) ainda não coberto por Pago no período —
+  // nunca negativo (quando já pagou mais do que faturou na janela, não faz
+  // sentido mostrar "a pagar" negativo; a Margem acima já conta essa folga).
+  const aPagar = Math.max(0, somaFaturado - linhas.reduce((s, l) => s + l.pago, 0));
+  document.getElementById('margem-gauge-stats').innerHTML = `
+    <div><span style="color:#2a78d6;">●</span> Faturamento: <strong>${fmtMoeda(somaFaturado)}</strong></div>
+    <div><span style="color:#eb6834;">●</span> Pago: <strong>${fmtMoeda(linhas.reduce((s, l) => s + l.pago, 0))}</strong></div>
+    <div><span style="color:#898781;">●</span> A pagar: <strong>${fmtMoeda(aPagar)}</strong></div>
+  `;
+
+  // Gráfico "Acumulado" — Faturado, Pago e Saldo somados período a período,
+  // numa escala própria (ver comentário acima de `acumulados`).
+  const labelsAcum = acumulados.map((a) => `Med. ${a.medicao}`);
+  if (chartFaturadoPagoAcumulado) chartFaturadoPagoAcumulado.destroy();
+  chartFaturadoPagoAcumulado = new Chart(document.getElementById('chart-faturado-pago-acumulado'), {
+    data: {
+      labels: labelsAcum,
+      datasets: [
+        { type: 'line', label: 'Faturado acumulado', data: acumulados.map((a) => a.faturado), borderColor: '#2a78d6', backgroundColor: '#2a78d6', borderWidth: 2, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3 },
+        { type: 'line', label: 'Pago acumulado', data: acumulados.map((a) => a.pago), borderColor: '#eb6834', backgroundColor: '#eb6834', borderWidth: 2, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3 },
+        { type: 'line', label: 'Saldo acumulado', data: acumulados.map((a) => a.saldo), borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', borderDash: [5, 3], tension: 0.3 },
+      ],
+    },
+    options: {
+      plugins: {
+        datalabels: { display: false },
+        legend: { labels: { color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8 } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtMoeda(ctx.parsed.y)}` } },
+      },
+      scales: {
+        y: { grid: { color: '#e1e0d9' }, ticks: { color: '#898781' } },
+        x: { grid: { display: false }, ticks: { color: '#898781' } },
+      },
+    },
+  });
 
   document.querySelector('#tabela-faturado-pago tbody').innerHTML = linhas.map((l, idx) => {
     const anterior = idx > 0 ? linhas[idx - 1] : null;
@@ -3512,17 +3614,30 @@ function renderizarRankingCategoria(itens) {
 // categoria, linha = % acumulado — evita o erro clássico de eixo duplo
 // (valor bruto x %). O % acumulado é calculado sobre TODAS as categorias
 // (mesmo critério da tabela), só a exibição é filtrada pra seleção atual.
+// Soma o Valor Liquido (coluna N) de todas as medições de Faturamento com
+// data de referência reconhecida — mesmo critério usado no painel Faturado
+// x Pago. Usado só pra relacionar o Ranking de categorias (custo) com o
+// Faturamento do período; null quando a planilha de Faturamento não
+// carregou ainda ou não tem nenhuma medição válida.
+function totalFaturamentoLiquido_() {
+  const medicoes = (state.faturamento.medicoes || []).filter((m) => m.dataReferencia);
+  if (!medicoes.length) return null;
+  return medicoes.reduce((s, m) => s + (m.valorLiquido || 0), 0);
+}
+
 function renderizarGraficoAbcCategoria(itens) {
   const totalGeral = itens.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   const ordenadoBase = calcularRankingAbcCategoria(itens);
   const categoriasPadrao = ordenadoBase.slice(0, TOP_N_PADRAO_CATEGORIA).map(([cat]) => cat);
   const selecaoAtual = selecaoCategoriaGrafico === null ? new Set(categoriasPadrao) : selecaoCategoriaGrafico;
+  const totalFaturamento = totalFaturamentoLiquido_();
 
   let acumulado = 0;
   const todasLinhas = ordenadoBase.map(([cat, g]) => {
     const pct = totalGeral ? (g.valor / totalGeral) * 100 : 0;
     acumulado += pct;
-    return { cat, valor: g.valor, pct, acum: acumulado };
+    const pctFaturamento = totalFaturamento ? (g.valor / totalFaturamento) * 100 : null;
+    return { cat, valor: g.valor, pct, acum: acumulado, pctFaturamento };
   });
   const linhas = todasLinhas.filter(l => selecaoAtual.has(l.cat));
 
@@ -3530,7 +3645,7 @@ function renderizarGraficoAbcCategoria(itens) {
 
   const vazio = document.getElementById('abc-categoria-vazio');
   const wrap = document.getElementById('abc-categoria-chart-wrap');
-  ultimoDadosAbcCategoria = linhas.map(l => [l.cat, l.pct, l.acum]);
+  ultimoDadosAbcCategoria = linhas.map(l => [l.cat, l.pct, l.acum, l.pctFaturamento]);
 
   if (!linhas.length) {
     vazio.style.display = 'block';
@@ -3543,14 +3658,20 @@ function renderizarGraficoAbcCategoria(itens) {
   const itensPorCategoria = {};
   linhas.forEach(l => { itensPorCategoria[l.cat] = itens.filter(i => (categoriaFornecedor_(i) || '(sem categoria)') === l.cat); });
 
+  // Terceira série (% que o custo da categoria representa do Faturamento
+  // líquido do período) só entra quando a planilha de Faturamento carregou
+  // — relaciona graficamente Ranking de categorias x Faturamento sem
+  // travar o gráfico quando esse dado ainda não está disponível.
+  const datasets = [
+    { type: 'bar', label: '% do total (categoria)', data: linhas.map(l => l.pct), backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24 },
+  ];
+  if (totalFaturamento) {
+    datasets.push({ type: 'bar', label: '% do Faturamento (líquido)', data: linhas.map(l => l.pctFaturamento), backgroundColor: '#eb6834', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24 });
+  }
+  datasets.push({ type: 'line', label: '% acumulado', data: linhas.map(l => l.acum), borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2, tension: 0.25, pointRadius: 3, pointHoverRadius: 5 });
+
   chartAbcCategoria = new Chart(document.getElementById('chart-abc-categoria'), {
-    data: {
-      labels: linhas.map(l => l.cat),
-      datasets: [
-        { type: 'bar', label: '% do total (categoria)', data: linhas.map(l => l.pct), backgroundColor: '#1f4e78' },
-        { type: 'line', label: '% acumulado', data: linhas.map(l => l.acum), borderColor: '#c0392b', backgroundColor: '#c0392b', tension: 0.25, pointRadius: 3, pointHoverRadius: 5 },
-      ],
-    },
+    data: { labels: linhas.map(l => l.cat), datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -3560,7 +3681,7 @@ function renderizarGraficoAbcCategoria(itens) {
         tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` } },
       },
       scales: {
-        y: { beginAtZero: true, max: 100, title: { display: true, text: '% do total' } },
+        y: { beginAtZero: true, suggestedMax: 100, title: { display: true, text: '%' } },
         x: { ticks: { autoSkip: true, maxRotation: 30, minRotation: 0 } },
       },
       onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
