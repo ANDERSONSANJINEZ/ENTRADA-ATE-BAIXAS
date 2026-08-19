@@ -1156,6 +1156,12 @@ let usuariosConfiguradosNoServidor = null; // null = ainda não sabemos (primeir
 // padrão em cada gráfico (options.plugins.datalabels.display:false),
 // ligando explicitamente só onde o rótulo por ponto é útil (Valor por Remessa).
 Chart.register(ChartDataLabels);
+// Chrome recessivo (grade fina, texto de eixo em tom secundário) em todo
+// gráfico que não sobrescrever explicitamente — deixa o dado ser a única
+// coisa "alta" na tela, em vez das linhas de grade padrão do Chart.js.
+Chart.defaults.color = '#898781';
+Chart.defaults.borderColor = '#e1e0d9';
+Chart.defaults.font.family = "system-ui, -apple-system, 'Segoe UI', sans-serif";
 
 const HEADERS = ['ID','Tipo','Data Emissão','Nº Documento','Vencimento Real','Forma Pagamento',
   'Código Fornecedor','Parcela','Data Baixa','Vencimento','R$ Valor','Usuário Inclusor',
@@ -3156,19 +3162,28 @@ function renderizarFaturadoPago_() {
   chartFaturadoPago = new Chart(document.getElementById('chart-faturado-pago'), {
     data: {
       labels,
+      // Paleta validada (contraste + daltonismo) pro conjunto das 4 séries —
+      // ver skill de dataviz: azul/laranja/verde-água/violeta passam em
+      // todos os pares (worst-case ΔE 9.2 daltônico / 16.3 visão normal),
+      // diferente do azul-marinho/verde escuros usados antes (que falhavam
+      // no piso de contraste/croma).
       datasets: [
-        { type: 'bar', label: 'Faturado', data: linhas.map((l) => l.faturado), backgroundColor: '#1f4e78' },
-        { type: 'bar', label: 'Pago', data: linhas.map((l) => l.pago), backgroundColor: '#e08e0b' },
-        { type: 'line', label: 'Margem (Faturado − Pago)', data: linhas.map((l) => l.margem), borderColor: '#1e7e34', backgroundColor: '#1e7e34', tension: 0.3, yAxisID: 'y' },
-        { type: 'line', label: 'Saldo acumulado', data: saldoAcumulado, borderColor: '#5b21b6', backgroundColor: '#5b21b6', borderDash: [5, 3], tension: 0.3, yAxisID: 'y' },
+        { type: 'bar', label: 'Faturado', data: linhas.map((l) => l.faturado), backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24, categoryPercentage: 0.6, barPercentage: 0.9 },
+        { type: 'bar', label: 'Pago', data: linhas.map((l) => l.pago), backgroundColor: '#eb6834', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24, categoryPercentage: 0.6, barPercentage: 0.9 },
+        { type: 'line', label: 'Margem (Faturado − Pago)', data: linhas.map((l) => l.margem), borderColor: '#1baf7a', backgroundColor: '#1baf7a', borderWidth: 2, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, yAxisID: 'y' },
+        { type: 'line', label: 'Saldo acumulado', data: saldoAcumulado, borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', borderDash: [5, 3], tension: 0.3, yAxisID: 'y' },
       ],
     },
     options: {
       plugins: {
         datalabels: { display: false },
+        legend: { labels: { color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8 } },
         tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtMoeda(ctx.parsed.y)}` } },
       },
-      scales: { y: { beginAtZero: true } },
+      scales: {
+        y: { beginAtZero: true, grid: { color: '#e1e0d9' }, ticks: { color: '#898781' } },
+        x: { grid: { display: false }, ticks: { color: '#898781' } },
+      },
       onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
       onClick: (ev, els) => {
         if (!els.length) return;
@@ -3188,14 +3203,17 @@ function renderizarFaturadoPago_() {
   const somaFaturado = linhas.reduce((s, l) => s + l.faturado, 0);
   const somaMargem = linhas.reduce((s, l) => s + l.margem, 0);
   const margemPct = somaFaturado ? (somaMargem / somaFaturado) * 100 : 0;
-  const corMargem = margemPct >= 15 ? '#1e7e34' : margemPct >= 5 ? '#e08e0b' : '#c0392b';
+  // Cores fixas de status (boa/atenção/crítica) — nunca reaproveitadas
+  // como cor de série, pra não se confundir com o azul/laranja/verde-água
+  // do gráfico acima.
+  const corMargem = margemPct >= 15 ? '#0ca30c' : margemPct >= 5 ? '#fab219' : '#d03b3b';
   if (chartMargemGauge) chartMargemGauge.destroy();
   chartMargemGauge = new Chart(document.getElementById('chart-margem-gauge'), {
     type: 'doughnut',
     data: {
       datasets: [{
         data: [Math.max(margemPct, 0), Math.max(100 - margemPct, 0)],
-        backgroundColor: [corMargem, '#e5e7eb'],
+        backgroundColor: [corMargem, '#e1e0d9'],
         borderWidth: 0,
       }],
     },
