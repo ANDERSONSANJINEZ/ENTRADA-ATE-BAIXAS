@@ -100,7 +100,11 @@
   .painel { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 16px; margin-bottom: 24px; min-width: 0; }
   .painel h2 { font-size: 15px; margin: 0 0 12px; color: var(--azul); }
   .cabecalho-painel { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-  .cabecalho-painel h2 { margin: 0; }
+  /* margin-right:auto no h2 consome todo o espaço livre do flex, então os
+     botões que vêm depois (Padrão/Expandir/Exportar etc.) ficam colados uns
+     nos outros lá no canto superior direito, em vez de espalhados pelo
+     cabeçalho por causa do justify-content:space-between acima. */
+  .cabecalho-painel h2 { margin: 0; margin-right: auto; }
   /* Histórico: texto bem mais longo que as outras colunas — quebra normal
      com largura máxima em vez de "nowrap", pra não esticar a linha inteira
      nem parecer com fonte diferente das demais colunas. */
@@ -1161,7 +1165,7 @@ const SRC = { tipo:'B', dt_emissao:'C', no_titulo:'D', form_pagto:'E', fornecedo
   nome_fornece:'G', vencimento:'H', vencto_real:'I', vlr_titulo:'J', parcela:'K',
   dt_baixa:'L', historico:'M', aprovacao:'S', usuario:'AJ', remessa:'AW' };
 
-let state = { erp: [], manual: [], dataBase: null, resumoConciliacao: null, faturamento: { medicoes: [], erro: null } };
+let state = { erp: [], manual: [], dataBase: null, resumoConciliacao: null, faturamento: { medicoes: [], linhasBrutas: 0, erro: null } };
 
 // Nome do arquivo padrão da pasta do Drive: AAAA.MM.DD.xlsx (ex.: 2026.07.30.xlsx)
 function extrairDataBaseDoNome(nomeArquivo) {
@@ -1611,9 +1615,9 @@ async function carregarTudo() {
 async function carregarFaturamento() {
   try {
     const dados = await chamarServidor('faturamentoPorMedicao', {});
-    state.faturamento = { medicoes: dados.medicoes || [], erro: dados.erro || null };
+    state.faturamento = { medicoes: dados.medicoes || [], linhasBrutas: dados.linhasBrutas || 0, erro: dados.erro || null };
   } catch (e) {
-    state.faturamento = { medicoes: [], erro: e.message };
+    state.faturamento = { medicoes: [], linhasBrutas: 0, erro: e.message };
   }
   renderizarFaturadoPago();
 }
@@ -3099,7 +3103,22 @@ function renderizarFaturadoPago_() {
   // formatada de um jeito que faturamentoPorMedicao_ não reconhece) — nesse
   // 2º caso mostra um aviso em vez de só sumir de novo sem explicação.
   if (!medicoes.length) {
-    if (!brutas.length) { painel.style.display = 'none'; avisoEl.style.display = 'none'; return; }
+    if (!brutas.length) {
+      // Planilha respondeu sem erro e sem nenhuma medição agrupada — pode
+      // ser mesmo vazia (painel some quieto) ou ter linhas que nenhuma
+      // virou medição válida (Medicao vazia, ou "Valor Total (R$)" numa
+      // célula formatada como texto em vez de número). linhasBrutas conta
+      // as linhas de dado da planilha ANTES desse filtro, então dá pra
+      // distinguir os dois casos em vez de sumir sempre calado.
+      const linhasBrutas = state.faturamento.linhasBrutas || 0;
+      if (!linhasBrutas) { painel.style.display = 'none'; avisoEl.style.display = 'none'; return; }
+      painel.style.display = '';
+      avisoEl.style.display = 'block';
+      avisoEl.innerHTML = `<strong>A planilha de Faturamento respondeu com ${linhasBrutas} linha(s) de dado, mas nenhuma virou uma medição válida.</strong><br>
+        Confira se a coluna "Medicao" está preenchida e se "Valor Total (R$)" está como número (não como texto) nessas linhas.`;
+      conteudoEl.style.display = 'none';
+      return;
+    }
     painel.style.display = '';
     avisoEl.style.display = 'block';
     avisoEl.innerHTML = `<strong>A planilha de Faturamento respondeu, mas nenhuma das ${brutas.length} medição(ões) encontrada(s) tinha uma "Data de Emissao" reconhecível.</strong><br>

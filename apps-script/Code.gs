@@ -526,7 +526,7 @@ function faturamentoPorMedicao_() {
   var aba = planilha.getSheets().filter(function (s) { return s.getSheetId() === FATURAMENTO_GID_; })[0];
   if (!aba) throw new Error('Aba de Faturamento (gid ' + FATURAMENTO_GID_ + ') não encontrada na planilha.');
   var dados = aba.getDataRange().getValues();
-  if (!dados.length) return [];
+  if (!dados.length) return { medicoes: [], linhasBrutas: 0, linhasIgnoradas: 0 };
   var cabecalho = dados[0];
   var idx = {
     medicao: cabecalho.indexOf('Medicao'),
@@ -538,12 +538,22 @@ function faturamentoPorMedicao_() {
     throw new Error('Cabeçalho da planilha de Faturamento mudou — colunas "Medicao"/"Valor Total (R$)" não encontradas.');
   }
 
+  // Conta quantas linhas de dado existem e quantas foram ignoradas (sem
+  // Medicao, ou "Valor Total (R$)" não numérico — célula formatada como
+  // texto, por exemplo) — sem isso, uma planilha com linhas mas nenhuma
+  // aproveitável vira silenciosamente medicoes:[], indistinguível de uma
+  // planilha realmente vazia do lado do front-end.
+  var linhasBrutas = 0;
+  var linhasIgnoradas = 0;
   var porMedicao = {};
   for (var i = 1; i < dados.length; i++) {
     var linha = dados[i];
     var medicao = linha[idx.medicao];
     var valorTotal = linha[idx.valorTotal];
-    if (medicao === '' || medicao == null || typeof valorTotal !== 'number') continue;
+    var linhaEmBranco = linha.every(function (v) { return v === '' || v == null; });
+    if (linhaEmBranco) continue;
+    linhasBrutas++;
+    if (medicao === '' || medicao == null || typeof valorTotal !== 'number') { linhasIgnoradas++; continue; }
     var chave = String(medicao);
     if (!porMedicao[chave]) porMedicao[chave] = { medicao: medicao, valorTotal: 0, valorLiquido: 0, datas: [] };
     porMedicao[chave].valorTotal += valorTotal;
@@ -552,7 +562,7 @@ function faturamentoPorMedicao_() {
     if (dataEmissao) porMedicao[chave].datas.push(dataEmissao.getTime());
   }
 
-  return Object.keys(porMedicao).map(function (k) {
+  var medicoes = Object.keys(porMedicao).map(function (k) {
     var g = porMedicao[k];
     var dataRef = g.datas.length ? new Date(Math.max.apply(null, g.datas)) : null;
     return {
@@ -562,13 +572,16 @@ function faturamentoPorMedicao_() {
       dataReferencia: dataRef ? Utilities.formatDate(dataRef, Session.getScriptTimeZone(), 'yyyy-MM-dd') : null,
     };
   }).sort(function (a, b) { return (a.dataReferencia || '').localeCompare(b.dataReferencia || ''); });
+
+  return { medicoes: medicoes, linhasBrutas: linhasBrutas, linhasIgnoradas: linhasIgnoradas };
 }
 
 function tentarFaturamentoPorMedicao_() {
   try {
-    return { medicoes: faturamentoPorMedicao_(), erro: null };
+    var r = faturamentoPorMedicao_();
+    return { medicoes: r.medicoes, linhasBrutas: r.linhasBrutas, linhasIgnoradas: r.linhasIgnoradas, erro: null };
   } catch (erro) {
-    return { medicoes: [], erro: erro.message };
+    return { medicoes: [], linhasBrutas: 0, linhasIgnoradas: 0, erro: erro.message };
   }
 }
 
