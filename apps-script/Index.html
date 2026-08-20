@@ -557,6 +557,7 @@
           total com vencimento no período entre a medição anterior e esta. Margem = Faturado − Pago. Clique numa barra "Pago"
           ou numa linha da tabela para ver os títulos.
         </p>
+        <table id="tabela-resumo-faturamento" style="width:100%; max-width:560px; border-collapse:collapse; font-size:13px; margin-bottom:18px;"></table>
         <div class="cards" id="cards-faturamento" style="margin-bottom:18px;"></div>
         <div class="painel" style="margin-bottom:18px; width:100%;">
           <div class="cabecalho-painel">
@@ -3270,6 +3271,25 @@ function renderizarFaturadoPago_() {
   // Faturado − Pago (que misturava faturamento líquido com títulos brutos
   // do ERP e gerava um valor sem relação com o que está de fato em aberto).
   const aPagar = ultimoItensAnalise.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  // Resumo financeiro no formato pedido: Faturamento total, Total pago,
+  // Saldo bruto (Faturado − Pago), A pagar (reserva pros títulos ainda em
+  // aberto, ver aPagar acima) e Saldo disponível (Saldo bruto − A pagar) —
+  // o que sobra de fato livre depois de reservar o que ainda será pago.
+  const saldoBruto = totalFaturado - totalPago;
+  const saldoDisponivel = saldoBruto - aPagar;
+  const hoje = new Date();
+  const dataHojeFmt = `${String(hoje.getDate()).padStart(2, '0')}/${String(hoje.getMonth() + 1).padStart(2, '0')}/${hoje.getFullYear()}`;
+  const linhaResumo = (rotulo, valor, destaque) => `<tr${destaque ? ' style="color:var(--azul); font-weight:600;"' : ''}>
+    <td style="padding:6px 8px; border-bottom:1px solid #eee;">${rotulo}</td>
+    <td style="padding:0; border-bottom:1px solid #eee; width:180px;">${htmlMoedaAlinhada(valor)}</td>
+  </tr>`;
+  document.getElementById('tabela-resumo-faturamento').innerHTML = [
+    linhaResumo('Somatório das medições / Faturamento total', totalFaturado, false),
+    linhaResumo(`Total dos pagamentos realizados até dia ${dataHojeFmt}`, totalPago, false),
+    linhaResumo('Saldo bruto', saldoBruto, true),
+    linhaResumo('A pagar / Reserva obrigação futura', aPagar, true),
+    linhaResumo('Saldo disponível / Caixa livre', saldoDisponivel, false),
+  ].join('');
   document.getElementById('cards-faturamento').innerHTML = `
     <div class="card">
       <div class="card-topo-fixo"><div class="rotulo">Faturado — Total (líquido)</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(totalFaturado)}</div></div></div>
