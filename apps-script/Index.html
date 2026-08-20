@@ -614,6 +614,7 @@
               <select id="filtro-medicao-faturado-pago">
                 <option value="">Medição: todas</option>
               </select>
+              <button type="button" class="btn secundario small" onclick="limparFiltroMedicaoFaturadoPago()">✕ Limpar Filtro</button>
             </div>
             <div id="total-faturado-pago" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
             <div class="tabela-scroll tabela-scroll-par">
@@ -3531,6 +3532,10 @@ function renderizarFaturadoPago_() {
 }
 const EXTRATORES_FATURADO_PAGO_ = [l => l.medicao, l => l.faturado, l => l.pago, l => l.margem];
 document.getElementById('filtro-medicao-faturado-pago').addEventListener('change', () => renderizarFaturadoPago());
+function limparFiltroMedicaoFaturadoPago() {
+  document.getElementById('filtro-medicao-faturado-pago').value = '';
+  renderizarFaturadoPago();
+}
 // Usado só pelo onclick da linha da tabela acima (não dá pra referenciar o
 // array de itens direto num atributo HTML) — pega a lista já calculada na
 // última renderização.
