@@ -553,9 +553,11 @@
       <div id="faturado-pago-aviso" style="display:none; font-size:13px; color:var(--vermelho); margin-bottom:14px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:10px 12px; line-height:1.5;"></div>
       <div id="faturado-pago-conteudo">
         <p style="font-size:12px; color:var(--cinza); margin-top:0;">
-          Faturado vem do "Valor Liquido (R$)" da planilha de Faturamento (NFS-e por medição dos prestadores). Pago é o
-          total com vencimento no período entre a medição anterior e esta. Margem = Faturado − Pago. Clique numa barra "Pago"
-          ou numa linha da tabela para ver os títulos.
+          Faturado vem do "Valor Líquido (R$)" da planilha de Faturamento (NFS-e por medição dos prestadores). Pago é o
+          total com Vencimento no período entre a medição anterior e esta. Saldo Bruto = Faturado − Pago (na tabela "Por
+          medição" essa mesma conta aparece como Margem). A Pagar é a soma dos títulos com Vencimento após a última
+          medição; Saldo Disponível = Saldo Bruto − A Pagar. Clique numa barra "Pago" ou numa linha da tabela para ver os
+          títulos.
         </p>
         <div class="cards" id="cards-faturamento" style="margin-bottom:18px;"></div>
         <div class="painel" style="margin-bottom:18px; width:100%;">
@@ -580,7 +582,16 @@
         </div>
         <div class="grid-2">
           <div>
-            <h3 style="font-size:13px; color:var(--azul); margin:0 0 8px;">Por medição</h3>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <h3 style="font-size:13px; color:var(--azul); margin:0;">Por medição</h3>
+              <button class="btn secundario small" onclick="exportarXlsx('faturadoPago')">⬇ Exportar Excel</button>
+            </div>
+            <div class="filtros" style="margin-bottom:8px;">
+              <select id="filtro-medicao-faturado-pago">
+                <option value="">Medição: todas</option>
+              </select>
+            </div>
+            <div id="total-faturado-pago" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
             <div class="tabela-scroll tabela-scroll-par">
               <table id="tabela-faturado-pago" class="tabela-centralizada">
                 <colgroup>
@@ -592,7 +603,16 @@
             </div>
           </div>
           <div>
-            <h3 style="font-size:13px; color:var(--azul); margin:0 0 8px;" title="Quanto o custo de cada categoria (Custo por Categoria/Ranking de categorias) representa do Faturamento líquido do período">Por categoria de custo</h3>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <h3 style="font-size:13px; color:var(--azul); margin:0;" title="Quanto o custo de cada categoria (Custo por Categoria/Ranking de categorias) representa do Faturamento líquido do período">Por categoria de custo</h3>
+              <button class="btn secundario small" onclick="exportarXlsx('faturamentoCategorias')">⬇ Exportar Excel</button>
+            </div>
+            <div class="filtros" style="margin-bottom:8px;">
+              <select id="filtro-categoria-faturamento">
+                <option value="">Categoria: todas</option>
+              </select>
+            </div>
+            <div id="total-faturamento-categorias" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
             <div class="tabela-scroll tabela-scroll-par">
               <table id="tabela-faturamento-categorias" class="tabela-centralizada">
                 <colgroup>
@@ -2592,8 +2612,15 @@ function exportarXlsx(qual) {
     const linhas = ultimoDadosPagosAbc.map(([nome, mes, valor]) => [nome, mes, fmtMoeda(valor)]);
     baixarXlsx('pagos_curva_abc.xlsx', ['Fornecedor', 'Mês', 'Valor Pago'], linhas);
   } else if (qual === 'faturadoPago') {
-    const linhas = ultimoDadosFaturadoPago.map((l) => [`Medição ${l.medicao}`, fmtMoeda(l.faturado), fmtMoeda(l.pago), fmtMoeda(l.margem)]);
+    // Respeita o filtro "Medição: todas/N" da tabela "Por medição" — exporta
+    // só o que está sendo mostrado na tela, igual ao padrão de Lançamentos.
+    const fMedicao = document.getElementById('filtro-medicao-faturado-pago').value;
+    const dados = fMedicao ? ultimoDadosFaturadoPago.filter((l) => String(l.medicao) === fMedicao) : ultimoDadosFaturadoPago;
+    const linhas = dados.map((l) => [`Medição ${l.medicao}`, fmtMoeda(l.faturado), fmtMoeda(l.pago), fmtMoeda(l.margem)]);
     baixarXlsx('faturado_x_pago.xlsx', ['Medição', 'Faturado', 'Pago', 'Margem'], linhas);
+  } else if (qual === 'faturamentoCategorias') {
+    const linhas = ultimoDadosFaturamentoCategorias.map((l) => [l.cat, fmtMoeda(l.valor), l.pctFaturamento == null ? '' : `${l.pctFaturamento.toFixed(1)}%`]);
+    baixarXlsx('faturamento_categorias.xlsx', ['Categoria', 'Custo no período', '% do Faturamento'], linhas);
   } else if (qual === 'faturadoPagoAcumulado') {
     const linhas = ultimoDadosFaturadoPagoAcumulado.map((a) => [`Medição ${a.medicao}`, fmtMoeda(a.faturado), fmtMoeda(a.pago), fmtMoeda(a.saldo)]);
     baixarXlsx('faturado_pago_saldo_acumulado.xlsx', ['Medição', 'Faturado acumulado', 'Pago acumulado', 'Saldo Bruto acumulado'], linhas);
@@ -3428,7 +3455,27 @@ function renderizarFaturadoPago_() {
 
   // Ordenação por clique no cabeçalho (aplicarOrdenacao devolve uma cópia —
   // `linhas`, usado pelos gráficos e pelo acumulado, nunca é reordenado).
-  const linhasTabela = aplicarOrdenacao('tabela-faturado-pago', linhas, EXTRATORES_FATURADO_PAGO_);
+  let linhasTabela = aplicarOrdenacao('tabela-faturado-pago', linhas, EXTRATORES_FATURADO_PAGO_);
+
+  // Filtro "Medição: todas/N" — só afeta a tabela (e sua exportação em
+  // Excel, ver exportarXlsx); os gráficos acima continuam mostrando a
+  // série completa, e a tendência (▲/▼) já foi calculada em cima de
+  // `linhas` (não filtrada) logo acima, então não é afetada.
+  const selectMedicao = document.getElementById('filtro-medicao-faturado-pago');
+  const medicoesDisponiveis = linhas.map((l) => String(l.medicao));
+  if (selectMedicao.dataset.opcoes !== medicoesDisponiveis.join(',')) {
+    selectMedicao.dataset.opcoes = medicoesDisponiveis.join(',');
+    const selecionada = selectMedicao.value;
+    selectMedicao.innerHTML = '<option value="">Medição: todas</option>' +
+      medicoesDisponiveis.map((m) => `<option value="${m}">Medição ${m}</option>`).join('');
+    selectMedicao.value = medicoesDisponiveis.includes(selecionada) ? selecionada : '';
+  }
+  const fMedicao = selectMedicao.value;
+  if (fMedicao) linhasTabela = linhasTabela.filter((l) => String(l.medicao) === fMedicao);
+
+  const totalFaturadoTabela = linhasTabela.reduce((s, l) => s + l.faturado, 0);
+  document.getElementById('total-faturado-pago').textContent =
+    `${linhasTabela.length.toLocaleString('pt-BR')} medição(ões) · Total Faturado: ${fmtMoeda(totalFaturadoTabela)}`;
 
   document.querySelector('#tabela-faturado-pago tbody').innerHTML = linhasTabela.map((l) => {
     const tendencia = tendenciaPorMedicao_[l.medicao] || '';
@@ -3458,6 +3505,7 @@ function renderizarFaturadoPago_() {
   tornarColunasRedimensionaveis('tabela-faturado-pago');
 }
 const EXTRATORES_FATURADO_PAGO_ = [l => l.medicao, l => l.faturado, l => l.pago, l => l.margem];
+document.getElementById('filtro-medicao-faturado-pago').addEventListener('change', () => renderizarFaturadoPago());
 // Usado só pelo onclick da linha da tabela acima (não dá pra referenciar o
 // array de itens direto num atributo HTML) — pega a lista já calculada na
 // última renderização.
@@ -3811,6 +3859,9 @@ function renderizarGraficoAbcCategoria(itens) {
 // Lançamentos/Curva ABC). Fica ao lado da tabela "Por medição" no painel
 // Faturamento.
 const EXTRATORES_FATURAMENTO_CATEGORIAS_ = [l => l.cat, l => l.valor, l => l.pctFaturamento];
+// Guarda o conjunto exibido (já filtrado/ordenado) pra exportarXlsx ler
+// direto, mesmo padrão de ultimoDadosFaturadoPago/ultimoDadosCategoriaCusto.
+let ultimoDadosFaturamentoCategorias = [];
 function renderizarTabelaFaturamentoCategorias(itens) {
   const ordenadoBase = calcularRankingAbcCategoria(itens);
   const totalFaturamento = totalFaturamentoLiquido_();
@@ -3821,7 +3872,29 @@ function renderizarTabelaFaturamentoCategorias(itens) {
   }));
   const busca = (document.getElementById('busca-dashboard').value || '').trim().toLowerCase();
   if (busca) linhas = linhas.filter(l => contemBusca([l.cat, fmtMoeda(l.valor)], busca));
+
+  // Filtro "Categoria: todas/X" — separado da busca acima (busca é texto
+  // livre e compartilhada com outras planilhas do Dashboard; este é um
+  // seletor exato só desta tabela, mesmo padrão do filtro de Categoria em
+  // Todos os lançamentos).
+  const selectCategoria = document.getElementById('filtro-categoria-faturamento');
+  const categoriasDisponiveis = linhas.map((l) => l.cat);
+  if (selectCategoria.dataset.opcoes !== categoriasDisponiveis.join('|')) {
+    selectCategoria.dataset.opcoes = categoriasDisponiveis.join('|');
+    const selecionada = selectCategoria.value;
+    selectCategoria.innerHTML = '<option value="">Categoria: todas</option>' +
+      categoriasDisponiveis.map((c) => `<option value="${escaparAtributo(c)}">${escaparHtml(c)}</option>`).join('');
+    selectCategoria.value = categoriasDisponiveis.includes(selecionada) ? selecionada : '';
+  }
+  const fCategoria = selectCategoria.value;
+  if (fCategoria) linhas = linhas.filter((l) => l.cat === fCategoria);
+
   linhas = aplicarOrdenacao('tabela-faturamento-categorias', linhas, EXTRATORES_FATURAMENTO_CATEGORIAS_);
+  ultimoDadosFaturamentoCategorias = linhas;
+
+  const totalCategoriaTabela = linhas.reduce((s, l) => s + l.valor, 0);
+  document.getElementById('total-faturamento-categorias').textContent =
+    `${linhas.length.toLocaleString('pt-BR')} categoria(s) · Total: ${fmtMoeda(totalCategoriaTabela)}`;
 
   document.querySelector('#tabela-faturamento-categorias tbody').innerHTML = linhas.map(l => `
     <tr onclick="abrirDetalheCategoria('${escaparAtributo(l.cat)}')" title="Clique para ver os títulos desta categoria">
@@ -3833,6 +3906,7 @@ function renderizarTabelaFaturamentoCategorias(itens) {
   tornarOrdenavel('tabela-faturamento-categorias', EXTRATORES_FATURAMENTO_CATEGORIAS_, () => renderizarTabelaFaturamentoCategorias(ultimoItensAnalise));
   tornarColunasRedimensionaveis('tabela-faturamento-categorias');
 }
+document.getElementById('filtro-categoria-faturamento').addEventListener('change', () => renderizarTabelaFaturamentoCategorias(ultimoItensAnalise));
 
 // Quantas categorias entram como barra individual no gráfico de Custo por
 // Categoria — o resto vira uma barra "Outras" só. Com o DE-PARA de
