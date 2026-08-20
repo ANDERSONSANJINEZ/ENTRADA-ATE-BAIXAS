@@ -2682,6 +2682,7 @@ function atualizarSetasOrdenacao(tabelaId) {
 // ---------- Dashboard ----------
 let chartAging, chartFluxo, chartStatusPagamento, chartPagosAbc, chartAporte;
 let chartCategoriaCusto, chartAbcCategoria, chartFaturadoPago, chartMargemGauge, chartFaturadoPagoAcumulado;
+let chartPagoApagarGauge, chartApagarGauge, chartSaldoDisponivelGauge;
 let ultimoDadosFaturadoPago = []; // export: [{medicao, faturado, pago, margem}]
 let ultimoDadosFaturadoPagoAcumulado = []; // export: [{medicao, faturado, pago, saldo}]
 let ultimoAbertos = [];
@@ -3229,41 +3230,18 @@ function renderizarFaturadoPago_() {
   ultimoDadosFaturadoPagoAcumulado = acumulados;
 
   // Cards de resumo do Faturamento — sempre sobre o Valor Liquido (l.faturado
-  // já é o líquido, ver acima). "Mensal" divide pelo nº de meses corridos
-  // entre a 1ª e a última medição (calendário), diferente de "Média" que
-  // divide pela quantidade de medições — dois denominadores diferentes de
-  // propósito, pra responder perguntas diferentes ("quanto fatura por mês em
-  // média" x "quanto é uma medição típica").
+  // já é o líquido, ver acima).
   const totalFaturado = linhas.reduce((s, l) => s + l.faturado, 0);
-  const primeiraData = paraData(medicoes[0].dataReferencia);
   const ultimaData = paraData(medicoes[medicoes.length - 1].dataReferencia);
-  const mesesCorridos = primeiraData && ultimaData
-    ? Math.max(1, (ultimaData.getFullYear() - primeiraData.getFullYear()) * 12 + (ultimaData.getMonth() - primeiraData.getMonth()) + 1)
-    : 1;
-  const faturadoMensal = totalFaturado / mesesCorridos;
-  const faturadoMedia = totalFaturado / linhas.length;
-  const faturadoMaior = linhas.reduce((m, l) => Math.max(m, l.faturado), -Infinity);
-  const faturadoMenor = linhas.reduce((m, l) => Math.min(m, l.faturado), Infinity);
   const totalPago = linhas.reduce((s, l) => s + l.pago, 0);
   const resultado = totalFaturado - totalPago;
-  // % de Margem sobre o Faturado (líquido) — mesma conta de antes, só que
-  // agora vira o "velocímetro" embutido no card Resultado em vez de um
-  // gráfico solto ao lado da tabela.
+  // Faixa de cor por percentual (verde/amarelo/vermelho) — reaproveitada
+  // pelos 3 velocímetros que expressam "quanto disso é saudável", cada um
+  // com seu próprio percentual de base (ver corMargem/corSaldoDisponivel).
+  const corPorFaixa = (pct) => pct >= 15 ? '#0ca30c' : pct >= 5 ? '#fab219' : '#d03b3b';
+  // % de Margem sobre o Faturado (líquido) — velocímetro do card Saldo Bruto.
   const margemPct = totalFaturado ? (resultado / totalFaturado) * 100 : 0;
-  const corMargem = margemPct >= 15 ? '#0ca30c' : margemPct >= 5 ? '#fab219' : '#d03b3b';
-  // Barrinha de proporção (mesma ideia do velocímetro — um número acompanhado
-  // de uma leitura visual) usada nos cards que não são o Resultado: quanto
-  // aquele valor representa do Total Faturado.
-  const barraProporcao = (valor) => {
-    const pct = totalFaturado ? Math.max(0, Math.min(100, (valor / totalFaturado) * 100)) : 0;
-    // margin-top:auto (não um valor fixo) empurra a barra pro fundo do
-    // card — como .card é flex-column, isso alinha a barra de todos os 6
-    // cards na mesma linha horizontal (a de baixo), em vez de cada uma
-    // ficar coladinha ao valor com uma sobra de espaço em branco variável
-    // abaixo dela.
-    return `<div style="margin:auto 0; background:#e1e0d9; border-radius:4px; height:6px; overflow:hidden;"><div style="width:${pct}%; height:100%; background:#2a78d6; border-radius:4px;"></div></div>`;
-  };
-  const pagoPctVis = totalFaturado ? Math.max(0, Math.min(100, (totalPago / totalFaturado) * 100)) : 0;
+  const corMargem = corPorFaixa(margemPct);
   // "A pagar" = soma do R$ Valor de todos os títulos (ERP + manual) cujo
   // Vencimento é POSTERIOR à última medição (ultimaData) — ou seja, ainda
   // não foi capturado por nenhuma janela de Pago acima (que só cobre até a
@@ -3279,32 +3257,26 @@ function renderizarFaturadoPago_() {
   // menos A Pagar (reserva pros títulos ainda em aberto, ver aPagar acima)
   // — o que sobra de fato livre depois de reservar o que ainda será pago.
   const saldoDisponivel = resultado - aPagar;
+  // Os 2 velocímetros abaixo decompõem o Saldo Bruto (resultado) em duas
+  // fatias complementares — quanto dele está reservado pra pagar (A Pagar)
+  // e quanto sobra livre (Saldo Disponível) — por isso os dois percentuais
+  // sempre somam 100% entre si.
+  const aPagarPct = resultado ? Math.max(0, Math.min(100, (aPagar / resultado) * 100)) : 0;
+  const saldoDisponivelPct = resultado ? Math.max(0, Math.min(100, (saldoDisponivel / resultado) * 100)) : 0;
+  const corSaldoDisponivel = corPorFaixa(saldoDisponivelPct);
+  // % de Pago dentro de (Pago + A Pagar) — velocímetro do card "Faturado —
+  // Total (líquido)", no lugar da barra horizontal laranja/azul anterior.
+  const pagoDoTotalPct = (totalPago + aPagar) ? (totalPago / (totalPago + aPagar)) * 100 : 0;
   document.getElementById('cards-faturamento').innerHTML = `
     <div class="card">
       <div class="card-topo-fixo"><div class="rotulo">Faturado — Total (líquido)</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(totalFaturado)}</div></div></div>
       <div style="margin:auto 0;">
-        <div style="background:#e1e0d9; border-radius:4px; height:6px; overflow:hidden; display:flex;">
-          <div style="width:${pagoPctVis}%; background:#eb6834;"></div>
-          <div style="width:${100 - pagoPctVis}%; background:#2a78d6;"></div>
+        <div style="position:relative; width:140px; height:76px; margin:0 auto;">
+          <canvas id="chart-total-pago-gauge"></canvas>
+          <div id="total-pago-gauge-texto" style="position:absolute; left:0; right:0; bottom:0; text-align:center; font-size:18px; font-weight:bold; color:var(--azul);"></div>
         </div>
-        <div style="font-size:10px; color:var(--cinza); margin-top:4px;">Pago: ${fmtMoeda(totalPago)} · A pagar: ${fmtMoeda(aPagar)}</div>
+        <div style="font-size:10px; color:var(--cinza); margin-top:2px; text-align:center;">Pago: ${fmtMoeda(totalPago)} · A pagar: ${fmtMoeda(aPagar)}</div>
       </div>
-    </div>
-    <div class="card">
-      <div class="card-topo-fixo"><div class="rotulo">Faturado — Média mensal</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMensal)}</div></div></div>
-      ${barraProporcao(faturadoMensal)}
-    </div>
-    <div class="card">
-      <div class="card-topo-fixo"><div class="rotulo">Faturado — Média por medição</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMedia)}</div></div></div>
-      ${barraProporcao(faturadoMedia)}
-    </div>
-    <div class="card">
-      <div class="card-topo-fixo"><div class="rotulo">Faturado — Maior medição</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMaior)}</div></div></div>
-      ${barraProporcao(faturadoMaior)}
-    </div>
-    <div class="card">
-      <div class="card-topo-fixo"><div class="rotulo">Faturado — Menor medição</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(faturadoMenor)}</div></div></div>
-      ${barraProporcao(faturadoMenor)}
     </div>
     <div class="card ${resultado >= 0 ? '' : 'alerta'}">
       <div class="card-topo-fixo"><div class="rotulo">Saldo Bruto (Faturado − Pago)</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(resultado)}</div></div></div>
@@ -3318,34 +3290,54 @@ function renderizarFaturadoPago_() {
     </div>
     <div class="card">
       <div class="card-topo-fixo"><div class="rotulo">A Pagar / Reserva Obrigação Futura</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(aPagar)}</div></div></div>
-      ${barraProporcao(aPagar)}
+      <div style="margin:auto 0;">
+        <div style="position:relative; width:140px; height:76px; margin:0 auto;">
+          <canvas id="chart-apagar-gauge"></canvas>
+          <div id="apagar-gauge-texto" style="position:absolute; left:0; right:0; bottom:0; text-align:center; font-size:18px; font-weight:bold; color:#2a78d6;"></div>
+        </div>
+        <div style="font-size:10px; color:var(--cinza); margin-top:2px; text-align:center;">% do Saldo Bruto reservado</div>
+      </div>
     </div>
     <div class="card ${saldoDisponivel >= 0 ? '' : 'alerta'}">
       <div class="card-topo-fixo"><div class="rotulo">Saldo Disponível / Caixa Livre</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(saldoDisponivel)}</div></div></div>
-      ${barraProporcao(saldoDisponivel)}
+      <div style="margin:auto 0;">
+        <div style="position:relative; width:140px; height:76px; margin:0 auto;">
+          <canvas id="chart-saldo-disponivel-gauge"></canvas>
+          <div id="saldo-disponivel-gauge-texto" style="position:absolute; left:0; right:0; bottom:0; text-align:center; font-size:18px; font-weight:bold;"></div>
+        </div>
+        <div style="font-size:10px; color:var(--cinza); margin-top:2px; text-align:center;">% do Saldo Bruto disponível</div>
+      </div>
     </div>
   `;
-  // Velocímetro (meia-rosca) embutido no card Resultado — não é mais um
-  // elemento solto ao lado da tabela: o card já mostra o R$ do Resultado,
-  // e o gauge logo abaixo mostra a mesma informação em %.
-  if (chartMargemGauge) chartMargemGauge.destroy();
-  chartMargemGauge = new Chart(document.getElementById('chart-resultado-gauge'), {
+  // Velocímetros (meia-rosca) embutidos nos cards — cada um já mostra o R$
+  // no topo do card, e o gauge logo abaixo mostra a mesma informação em %.
+  const criarGaugeMeiaRosca = (canvasId, valores, cores) => new Chart(document.getElementById(canvasId), {
     type: 'doughnut',
-    data: {
-      datasets: [{
-        data: [Math.max(margemPct, 0), Math.max(100 - margemPct, 0)],
-        backgroundColor: [corMargem, '#e1e0d9'],
-        borderWidth: 0,
-      }],
-    },
+    data: { datasets: [{ data: valores, backgroundColor: cores, borderWidth: 0 }] },
     options: {
       circumference: 180, rotation: -90, cutout: '72%',
       plugins: { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: false } },
       events: [],
     },
   });
+
+  if (chartPagoApagarGauge) chartPagoApagarGauge.destroy();
+  chartPagoApagarGauge = criarGaugeMeiaRosca('chart-total-pago-gauge', [totalPago, aPagar], ['#eb6834', '#2a78d6']);
+  document.getElementById('total-pago-gauge-texto').textContent = `${pagoDoTotalPct.toFixed(1)}%`;
+
+  if (chartMargemGauge) chartMargemGauge.destroy();
+  chartMargemGauge = criarGaugeMeiaRosca('chart-resultado-gauge', [Math.max(margemPct, 0), Math.max(100 - margemPct, 0)], [corMargem, '#e1e0d9']);
   document.getElementById('resultado-gauge-texto').textContent = `${margemPct.toFixed(1)}%`;
   document.getElementById('resultado-gauge-texto').style.color = corMargem;
+
+  if (chartApagarGauge) chartApagarGauge.destroy();
+  chartApagarGauge = criarGaugeMeiaRosca('chart-apagar-gauge', [aPagarPct, Math.max(100 - aPagarPct, 0)], ['#2a78d6', '#e1e0d9']);
+  document.getElementById('apagar-gauge-texto').textContent = `${aPagarPct.toFixed(1)}%`;
+
+  if (chartSaldoDisponivelGauge) chartSaldoDisponivelGauge.destroy();
+  chartSaldoDisponivelGauge = criarGaugeMeiaRosca('chart-saldo-disponivel-gauge', [saldoDisponivelPct, Math.max(100 - saldoDisponivelPct, 0)], [corSaldoDisponivel, '#e1e0d9']);
+  document.getElementById('saldo-disponivel-gauge-texto').textContent = `${saldoDisponivelPct.toFixed(1)}%`;
+  document.getElementById('saldo-disponivel-gauge-texto').style.color = corSaldoDisponivel;
 
   const labels = linhas.map((l) => `Med. ${l.medicao}`);
   if (chartFaturadoPago) chartFaturadoPago.destroy();
