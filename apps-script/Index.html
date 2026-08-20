@@ -3264,12 +3264,17 @@ function renderizarFaturadoPago_() {
     return `<div style="margin:auto 0; background:#e1e0d9; border-radius:4px; height:6px; overflow:hidden;"><div style="width:${pct}%; height:100%; background:#2a78d6; border-radius:4px;"></div></div>`;
   };
   const pagoPctVis = totalFaturado ? Math.max(0, Math.min(100, (totalPago / totalFaturado) * 100)) : 0;
-  // "A pagar" usa o mesmo "Valor total" do card de "Títulos em aberto por
-  // faixa de vencimento" (soma do R$ Valor de todos os títulos do período
-  // filtrado, ultimoItensAnalise) — pedido explícito, no lugar da conta
-  // Faturado − Pago (que misturava faturamento líquido com títulos brutos
-  // do ERP e gerava um valor sem relação com o que está de fato em aberto).
-  const aPagar = ultimoItensAnalise.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+  // "A pagar" = soma do R$ Valor de todos os títulos (ERP + manual) cujo
+  // Vencimento é POSTERIOR à última medição (ultimaData) — ou seja, ainda
+  // não foi capturado por nenhuma janela de Pago acima (que só cobre até a
+  // data da última medição). 100% baseado em Vencimento, igual ao cálculo
+  // de Pago — não usa Data Baixa (pedido explícito). Como Pago cobre só
+  // Vencimento ≤ ultimaData e A Pagar cobre só Vencimento > ultimaData, os
+  // dois nunca se sobrepõem (evita o bug anterior de contar título já
+  // pago dentro de "A Pagar" também).
+  const aPagar = todosItens
+    .filter((i) => { const v = paraData(i['Vencimento']); return v && ultimaData && v > ultimaData; })
+    .reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   // Saldo Disponível/Caixa Livre = Saldo Bruto (resultado = Faturado − Pago)
   // menos A Pagar (reserva pros títulos ainda em aberto, ver aPagar acima)
   // — o que sobra de fato livre depois de reservar o que ainda será pago.
