@@ -554,7 +554,7 @@
       <div id="faturado-pago-conteudo">
         <p style="font-size:12px; color:var(--cinza); margin-top:0;">
           Faturado vem do "Valor Liquido (R$)" da planilha de Faturamento (NFS-e por medição dos prestadores). Pago é o
-          total baixado no período entre a medição anterior e esta. Margem = Faturado − Pago. Clique numa barra "Pago"
+          total com vencimento no período entre a medição anterior e esta. Margem = Faturado − Pago. Clique numa barra "Pago"
           ou numa linha da tabela para ver os títulos.
         </p>
         <div class="cards" id="cards-faturamento" style="margin-bottom:18px;"></div>
@@ -3199,10 +3199,10 @@ function renderizarFaturadoPago_() {
     const fimJanela = paraData(m.dataReferencia);
     const inicioJanela = idx > 0 ? paraData(medicoes[idx - 1].dataReferencia) : null;
     const itensPagos = todosItens.filter((i) => {
-      const baixa = paraData(i['Data Baixa']);
-      if (!baixa || !fimJanela) return false;
-      if (inicioJanela && baixa <= inicioJanela) return false;
-      return baixa <= fimJanela;
+      const vencimento = paraData(i['Vencimento']);
+      if (!vencimento || !fimJanela) return false;
+      if (inicioJanela && vencimento <= inicioJanela) return false;
+      return vencimento <= fimJanela;
     });
     const pago = itensPagos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
     // "Faturado" usa sempre o Valor Liquido (coluna N da planilha de
