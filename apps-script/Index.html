@@ -212,21 +212,40 @@
   /* Navegação lateral do Dashboard — agrupa os painéis por tipo de gráfico
      (cada botão = 1 grupo, sempre exatamente 1 ativo por vez — ver o
      forEach de #dashboard-lateral button mais abaixo) pra não precisar
-     rolar a aba inteira pra achar um gráfico específico. Só ícone + title
-     (tooltip nativo do navegador ao passar o mouse), sem rótulo de texto —
-     trilho estreito, igual ao padrão de sidebar de ícones. */
+     rolar a aba inteira pra achar um gráfico específico. Trilho estreito
+     (só ícone) em repouso; ao passar o mouse, expande mostrando o rótulo
+     de cada item — mesmo padrão do menu lateral do Internet Banking do
+     Banco do Brasil (referência trazida pelo usuário em vídeo). O trilho
+     (.dashboard-lateral, largura fixa reservada no flex) nunca muda de
+     tamanho — quem cresce é o painel interno (.dashboard-lateral-trilho),
+     que estoura a borda direita do trilho e sobrepõe o conteúdo ao lado
+     (por isso o z-index e o box-shadow no hover), sem empurrar/reformatar
+     .dashboard-conteudo.  */
   .dashboard-layout { display: flex; align-items: flex-start; gap: 20px; }
   .dashboard-lateral {
-    flex: 0 0 56px; display: flex; flex-direction: column; gap: 4px;
-    position: sticky; top: 12px;
+    flex: 0 0 56px; position: sticky; top: 12px; z-index: 20;
+  }
+  .dashboard-lateral-trilho {
+    display: flex; flex-direction: column; gap: 4px;
+    width: 56px; background: #fff; border-radius: 8px;
+    overflow: hidden; transition: width .16s ease, box-shadow .16s ease;
+  }
+  .dashboard-lateral:hover .dashboard-lateral-trilho {
+    width: 250px; box-shadow: 3px 4px 16px rgba(30, 40, 60, .2);
   }
   .dashboard-lateral button {
     border: none; background: none; cursor: pointer;
-    width: 56px; height: 48px; font-size: 22px; line-height: 1; color: var(--cinza);
+    width: 100%; height: 48px; font-size: 22px; line-height: 1; color: var(--cinza);
     border-radius: 8px; border-left: 3px solid transparent;
-    display: flex; align-items: center; justify-content: center;
+    display: flex; align-items: center; justify-content: flex-start;
+    padding: 0 0 0 17px; gap: 14px; white-space: nowrap;
   }
-  .dashboard-lateral button svg { width: 21px; height: 21px; }
+  .dashboard-lateral button svg { width: 21px; height: 21px; flex: 0 0 21px; }
+  .dashboard-lateral button .rotulo-lateral {
+    font-size: 13px; opacity: 0; transition: opacity .1s;
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding-right: 12px;
+  }
+  .dashboard-lateral:hover .dashboard-lateral-trilho button .rotulo-lateral { opacity: 1; }
   .dashboard-lateral button:hover { background: var(--azul-claro); color: var(--azul); }
   .dashboard-lateral button.ativo { background: var(--azul-claro); border-left-color: var(--azul); color: var(--azul); }
   .dashboard-conteudo { flex: 1; min-width: 0; }
@@ -443,7 +462,10 @@
     form.manual { grid-template-columns: repeat(2, 1fr); }
     .linha-tipo-razao { grid-template-columns: repeat(2, 1fr); }
     .dashboard-layout { flex-direction: column; }
-    .dashboard-lateral { flex-direction: row; flex-wrap: wrap; position: static; width: 100%; }
+    .dashboard-lateral { position: static; width: 100%; }
+    .dashboard-lateral-trilho, .dashboard-lateral:hover .dashboard-lateral-trilho {
+      flex-direction: row; flex-wrap: wrap; width: 100%; box-shadow: none;
+    }
   }
   @media (max-width: 600px) {
     form.manual { grid-template-columns: 1fr; }
@@ -493,15 +515,17 @@
     <input id="busca-dashboard" class="busca-tabela" placeholder="Buscar em Remessa, Aporte, Curva ABC e Categoria…" style="max-width:420px; margin-bottom:16px;">
     <div class="dashboard-layout">
       <div class="dashboard-lateral" id="dashboard-lateral">
-        <button class="ativo" data-grupo="aging" title="Títulos em aberto por faixa de vencimento"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M10 6v4.2l3 2"/></svg></button>
-        <button data-grupo="fluxo" title="Fluxo de caixa projetado (títulos em aberto)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,14.5 8,9.5 11,12.5 17,5.5"/><polyline points="12.5,5.5 17,5.5 17,10"/></svg></button>
-        <button data-grupo="status-pagamento" title="Situação das baixas"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M6.8 10.2l2.2 2.2 4.2-4.8"/></svg></button>
-        <button data-grupo="valor-remessa" title="Valor por Remessa (últimas 30)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.2l7-2.9 7 2.9-7 2.9-7-2.9z"/><path d="M3 6.2v7.6l7 2.9 7-2.9V6.2"/><path d="M10 9.1v8.6"/></svg></button>
-        <button data-grupo="faturado-pago" title="Faturamento"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="2.5" x2="10" y2="17.5"/><path d="M13.5 6H8.2a2.3 2.3 0 000 4.6h3.6a2.3 2.3 0 010 4.6H6"/></svg></button>
-        <button data-grupo="custo-categoria" title="Custo por Categoria — Baixado x A Baixar"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h6.2L17 10.8 9.8 18 2 10.2V4z"/><circle cx="6.6" cy="6.6" r="1.1" fill="currentColor" stroke="none"/></svg></button>
-        <button data-grupo="abc-categoria" title="Curva ABC por Categoria"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17V12M8 17V8M13 17V4"/><polyline points="3,9 8,5.5 13,2.5 17,1" stroke-width="1.4"/></svg></button>
-        <button data-grupo="abc-fornecedores" title="Curva ABC de Fornecedores"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="2.5" width="11" height="15"/><path d="M7.5 6h1.6M11 6h1.6M7.5 9h1.6M11 9h1.6M7.5 12h1.6M11 12h1.6"/></svg></button>
-        <button data-grupo="resumo-aporte" title="Resumo por Aporte"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.2" width="14" height="13" rx="1.5"/><path d="M3 8h14M7 2.2v4M13 2.2v4"/></svg></button>
+        <div class="dashboard-lateral-trilho">
+        <button class="ativo" data-grupo="aging" title="Títulos em aberto por faixa de vencimento"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M10 6v4.2l3 2"/></svg><span class="rotulo-lateral">Títulos em aberto por faixa de vencimento</span></button>
+        <button data-grupo="fluxo" title="Fluxo de caixa projetado (títulos em aberto)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,14.5 8,9.5 11,12.5 17,5.5"/><polyline points="12.5,5.5 17,5.5 17,10"/></svg><span class="rotulo-lateral">Fluxo de caixa projetado</span></button>
+        <button data-grupo="status-pagamento" title="Situação das baixas"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M6.8 10.2l2.2 2.2 4.2-4.8"/></svg><span class="rotulo-lateral">Situação das baixas</span></button>
+        <button data-grupo="valor-remessa" title="Valor por Remessa (últimas 30)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.2l7-2.9 7 2.9-7 2.9-7-2.9z"/><path d="M3 6.2v7.6l7 2.9 7-2.9V6.2"/><path d="M10 9.1v8.6"/></svg><span class="rotulo-lateral">Valor por Remessa</span></button>
+        <button data-grupo="faturado-pago" title="Faturamento"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="2.5" x2="10" y2="17.5"/><path d="M13.5 6H8.2a2.3 2.3 0 000 4.6h3.6a2.3 2.3 0 010 4.6H6"/></svg><span class="rotulo-lateral">Faturamento</span></button>
+        <button data-grupo="custo-categoria" title="Custo por Categoria — Baixado x A Baixar"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h6.2L17 10.8 9.8 18 2 10.2V4z"/><circle cx="6.6" cy="6.6" r="1.1" fill="currentColor" stroke="none"/></svg><span class="rotulo-lateral">Custo por Categoria</span></button>
+        <button data-grupo="abc-categoria" title="Curva ABC por Categoria"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17V12M8 17V8M13 17V4"/><polyline points="3,9 8,5.5 13,2.5 17,1" stroke-width="1.4"/></svg><span class="rotulo-lateral">Curva ABC por Categoria</span></button>
+        <button data-grupo="abc-fornecedores" title="Curva ABC de Fornecedores"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="2.5" width="11" height="15"/><path d="M7.5 6h1.6M11 6h1.6M7.5 9h1.6M11 9h1.6M7.5 12h1.6M11 12h1.6"/></svg><span class="rotulo-lateral">Curva ABC de Fornecedores</span></button>
+        <button data-grupo="resumo-aporte" title="Resumo por Aporte"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.2" width="14" height="13" rx="1.5"/><path d="M3 8h14M7 2.2v4M13 2.2v4"/></svg><span class="rotulo-lateral">Resumo por Aporte</span></button>
+        </div>
       </div>
       <div class="dashboard-conteudo">
     <div class="grupo-dashboard ativo" data-grupo="aging">
@@ -611,6 +635,7 @@
               <select id="filtro-categoria-faturamento">
                 <option value="">Categoria: todas</option>
               </select>
+              <button type="button" class="btn secundario small" onclick="limparFiltroCategoriaFaturamento()">✕ Limpar Filtro</button>
             </div>
             <div id="total-faturamento-categorias" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
             <div class="tabela-scroll tabela-scroll-par">
@@ -3878,7 +3903,7 @@ function renderizarTabelaFaturamentoCategorias(itens) {
   // seletor exato só desta tabela, mesmo padrão do filtro de Categoria em
   // Todos os lançamentos).
   const selectCategoria = document.getElementById('filtro-categoria-faturamento');
-  const categoriasDisponiveis = linhas.map((l) => l.cat);
+  const categoriasDisponiveis = linhas.map((l) => l.cat).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   if (selectCategoria.dataset.opcoes !== categoriasDisponiveis.join('|')) {
     selectCategoria.dataset.opcoes = categoriasDisponiveis.join('|');
     const selecionada = selectCategoria.value;
@@ -3907,6 +3932,10 @@ function renderizarTabelaFaturamentoCategorias(itens) {
   tornarColunasRedimensionaveis('tabela-faturamento-categorias');
 }
 document.getElementById('filtro-categoria-faturamento').addEventListener('change', () => renderizarTabelaFaturamentoCategorias(ultimoItensAnalise));
+function limparFiltroCategoriaFaturamento() {
+  document.getElementById('filtro-categoria-faturamento').value = '';
+  renderizarTabelaFaturamentoCategorias(ultimoItensAnalise);
+}
 
 // Quantas categorias entram como barra individual no gráfico de Custo por
 // Categoria — o resto vira uma barra "Outras" só. Com o DE-PARA de
@@ -4334,17 +4363,35 @@ const CATEGORIA_POR_FORNECEDOR_ = {
   "VALE TRANSPORTE": "VALE-TRANSPORTE (INTERNO)",
   "PREVISAO LOCACAO IMOVEIS": "ALUGUEL DE IMÓVEL (INTERNO)",
 };
+// De-para fixo por NOME do fornecedor (Razão Social) — pra casos avulsos
+// sem Código Fornecedor cadastrado em CATEGORIA_POR_FORNECEDOR_ acima.
+// Comparação por "contém" (não exige igualdade exata), pois a Razão Social
+// completa pode vir com sufixos/variações (ex.: "NORDBRITA LTDA").
+const CATEGORIA_POR_NOME_FORNECEDOR_ = {
+  'NORDBRITA': 'AGREGADO',
+  '49.054.895 PALOMA DE ARAUJO': 'PRESTACAO SERVICO',
+};
 // Chave pra bater com CATEGORIA_POR_FORNECEDOR_: Código Fornecedor sem
 // zeros à esquerda (mesma normalização feita na importação — ver
 // removerZerosEsquerda_ no Code.gs), independente de como foi digitado.
 function chaveCategoriaFornecedor_(i) {
   return String(i['Código Fornecedor'] == null ? '' : i['Código Fornecedor']).trim().replace(/^0+(?=\d)/, '');
 }
+// Categoria fixa aplicável a este lançamento (por nome do fornecedor ou por
+// Código Fornecedor), ou undefined se nenhuma das duas bater — usada tanto
+// por categoriaFornecedor_ (valor exibido) quanto por categoriaEhFixa_
+// (bloqueia edição manual da categoria).
+function categoriaFixaPara_(i) {
+  const nomeNorm = String(i['Razão Social'] || '').trim().toUpperCase();
+  const chaveNome = nomeNorm && Object.keys(CATEGORIA_POR_NOME_FORNECEDOR_).find((k) => nomeNorm.includes(k));
+  if (chaveNome) return CATEGORIA_POR_NOME_FORNECEDOR_[chaveNome];
+  return CATEGORIA_POR_FORNECEDOR_[chaveCategoriaFornecedor_(i)];
+}
 // true quando o fornecedor está no "de-para" fixo — nesse caso a célula
 // não é editável (a categoria vem de um cadastro conferido, não deve ser
 // sobrescrita linha a linha).
 function categoriaEhFixa_(i) {
-  return !!CATEGORIA_POR_FORNECEDOR_[chaveCategoriaFornecedor_(i)];
+  return !!categoriaFixaPara_(i);
 }
 // Alguns Tipos já dizem sozinhos, e com mais certeza do que qualquer
 // palavra-chave no Histórico, que categoria é essa — são guias/retenções
@@ -4444,7 +4491,8 @@ const DE_PARA_CATEGORIA_ = {
   'CHAPA ACO 31,50 X 2440 X 3000MM': 'ACO',
   'CHAPA DE AÇO': 'ACO TELA TELHA',
   'CIMENTO': 'MATERIAL CONSTRUCAO',
-  'CINTAS/ACESSÓRIOS DE IÇAMENTO': 'CINTA',
+  'CINTA': 'EPI/EPC',
+  'CINTAS/ACESSÓRIOS DE IÇAMENTO': 'EPI/EPC',
   'COLETA DE RESÍDUOS': 'RESIDUOS',
   'COMBUSTÍVEL': 'COMBUSTIVEL',
   'COMBUSTÍVEL (CARTÃO FROTA)': 'COMBUSTIVEL',
@@ -4469,13 +4517,15 @@ const DE_PARA_CATEGORIA_ = {
   'ENGENHARIA/PLANEJAMENTO': 'PRESTACAO SERVICO',
   'ENGENHARIA/PROJETO': 'PROJETO',
   'ENSAIO DE PIT EM ESTACAS': 'PRESTACAO SERVICO',
-  'EPIs': 'EPI',
-  'EPIs E FERRAMENTAS': 'EPI',
-  'EPIs E MATERIAIS': 'EPI',
+  'EPI': 'EPI/EPC',
+  'EPC': 'EPI/EPC',
+  'EPIs': 'EPI/EPC',
+  'EPIs E FERRAMENTAS': 'EPI/EPC',
+  'EPIs E MATERIAIS': 'EPI/EPC',
   'EQUIPAMENTOS DE INFORMÁTICA': 'INFORMATICA',
   'ESTRUTURA METÁLICA': 'ESTRUTURA METALICA',
   'EXECUÇÃO DE ESTACAS': 'ESTACAS',
-  'EXTINTORES': 'EPC',
+  'EXTINTORES': 'EPI/EPC',
   'FARDAMENTO': 'FARDAMENTO',
   'FERRAMENTAS': 'FERRAMENTA',
   'FERRAMENTAS E EQUIPAMENTOS': 'FERRAMENTA',
@@ -4558,6 +4608,7 @@ const DE_PARA_CATEGORIA_ = {
   'PEÇAS PARA EQUIPAMENTOS': 'MANUTENCAO EQUIPAMENTO',
   'PEÇAS PARA MÁQUINAS': 'MANUTENCAO EQUIPAMENTO',
   'PEÇAS PARA MÁQUINAS E VEÍCULOS': 'MANUTENCAO VEICULO',
+  'PECAS P/VEICULO AUTOMOTIVO': 'MANUTENCAO VEICULO',
   'PEÇAS PARA VEÍCULOS': 'MANUTENCAO VEICULO',
   'PLANTIO DE ÁRVORES': 'PRESTACAO SERVICO',
   'PNEUS': 'MANUTENCAO EQUIPAMENTO',
@@ -4632,7 +4683,7 @@ const DE_PARA_CATEGORIA_ = {
 // preencher na mão — ver editarCategoria). O resultado passa por
 // DE_PARA_CATEGORIA_ antes de voltar, consolidando nos grupos canônicos.
 function categoriaFornecedor_(i) {
-  const fixa = CATEGORIA_POR_FORNECEDOR_[chaveCategoriaFornecedor_(i)];
+  const fixa = categoriaFixaPara_(i);
   const bruta = fixa || (i['Categoria'] ? i['Categoria'] : categoriaDoHistorico_(i));
   return DE_PARA_CATEGORIA_[bruta] || bruta;
 }
