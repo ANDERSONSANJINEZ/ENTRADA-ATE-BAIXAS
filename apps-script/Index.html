@@ -249,6 +249,18 @@
   .dashboard-lateral button:hover { background: var(--azul-claro); color: var(--azul); }
   .dashboard-lateral button.ativo { background: var(--azul-claro); border-left-color: var(--azul); color: var(--azul); }
   .dashboard-conteudo { flex: 1; min-width: 0; }
+  /* Altura dos gráficos "de página única" do Dashboard (um por item do
+     menu lateral) relativa à janela — antes eram alturas fixas em px que
+     nem sempre cabiam na tela inteira sem rolar (ou sobravam vazias em
+     monitores maiores); calc(100vh - Npx) desconta cabeçalho + abas +
+     busca + cabeçalho do painel, então o gráfico + o resto da página
+     cabem numa tela só. min/max evitam ficar pequeno ou gigante demais.
+     Os 2 gráficos internos da aba Faturamento (Faturado x Pago e o
+     Acumulado) ficam de fora de propósito — aquele painel é uma rolagem
+     longa com vários blocos, não uma "página" de gráfico único. */
+  .grafico-altura-tela { height: calc(100vh - 260px); min-height: 260px; max-height: 520px; width: 100%; }
+  .grafico-altura-tela--com-cards { height: calc(100vh - 400px); min-height: 220px; max-height: 460px; }
+  .grafico-altura-tela--com-legenda { height: calc(100vh - 300px); min-height: 260px; max-height: 500px; }
   .grupo-dashboard { display: none; }
   .grupo-dashboard.ativo { display: block; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -535,7 +547,9 @@
         <button class="btn secundario small" onclick="expandirGrafico('aging', 'Títulos em aberto por faixa de vencimento')">⛶ Expandir</button>
       </div>
       <div class="cards" id="cards-kpi" style="margin-bottom:18px;"></div>
-      <canvas id="chart-aging"></canvas>
+      <div id="aging-chart-wrap" class="grafico-altura-tela grafico-altura-tela--com-cards">
+        <canvas id="chart-aging"></canvas>
+      </div>
     </div>
     </div>
     <div class="grupo-dashboard" data-grupo="fluxo">
@@ -544,7 +558,9 @@
         <h2>Fluxo de caixa projetado (títulos em aberto)</h2>
         <button class="btn secundario small" onclick="expandirGrafico('fluxo', 'Fluxo de caixa projetado (títulos em aberto)')">⛶ Expandir</button>
       </div>
-      <canvas id="chart-fluxo"></canvas>
+      <div id="fluxo-chart-wrap" class="grafico-altura-tela">
+        <canvas id="chart-fluxo"></canvas>
+      </div>
     </div>
     </div>
     <div class="grupo-dashboard" data-grupo="status-pagamento">
@@ -553,7 +569,9 @@
         <h2>Situação das baixas</h2>
         <button class="btn secundario small" onclick="expandirGrafico('statusPagamento', 'Situação das baixas')">⛶ Expandir</button>
       </div>
-      <canvas id="chart-status-pagamento"></canvas>
+      <div id="status-pagamento-chart-wrap" class="grafico-altura-tela grafico-altura-tela--com-legenda">
+        <canvas id="chart-status-pagamento"></canvas>
+      </div>
       <div id="legenda-status-pagamento" style="text-align:center;font-size:13px;color:var(--cinza);margin-top:8px;"></div>
     </div>
     </div>
@@ -564,7 +582,7 @@
         <button class="btn secundario small" onclick="expandirGrafico('remessa', 'Valor por Remessa (últimas 30)')">⛶ Expandir</button>
         <button class="btn secundario small" onclick="exportarXlsx('remessa')">⬇ Exportar Excel</button>
       </div>
-      <div id="remessa-chart-wrap" style="height:300px; width:100%;">
+      <div id="remessa-chart-wrap" class="grafico-altura-tela">
         <canvas id="chart-remessa"></canvas>
       </div>
     </div>
@@ -660,7 +678,7 @@
         <button class="btn secundario small" onclick="expandirGrafico('categoriaCusto', 'Custo por Categoria — Baixado x A Baixar')">⛶ Expandir</button>
         <button class="btn secundario small" onclick="exportarXlsx('categoriaCusto')">⬇ Exportar Excel</button>
       </div>
-      <div id="categoria-custo-chart-wrap" style="height:340px; width:100%;">
+      <div id="categoria-custo-chart-wrap" class="grafico-altura-tela">
         <canvas id="chart-categoria-custo"></canvas>
       </div>
     </div>
@@ -675,7 +693,7 @@
           <button class="btn secundario small" onclick="exportarXlsx('abcCategoria')">⬇ Exportar Excel</button>
         </div>
         <div id="abc-categoria-vazio" style="font-size:13px; color:var(--cinza); display:none;">Nenhuma categoria selecionada.</div>
-        <div id="abc-categoria-chart-wrap" style="height:340px; width:100%;">
+        <div id="abc-categoria-chart-wrap" class="grafico-altura-tela">
           <canvas id="chart-abc-categoria"></canvas>
         </div>
       </div>
@@ -696,6 +714,7 @@
     </div>
     </div>
     <div class="grupo-dashboard" data-grupo="abc-fornecedores">
+    <div class="grid-2">
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Curva ABC dos fornecedores</h2>
@@ -704,7 +723,7 @@
         <button class="btn secundario small" onclick="exportarXlsx('pagosAbc')">⬇ Exportar Excel</button>
       </div>
       <div id="pagos-abc-vazio" style="font-size:13px; color:var(--cinza); display:none;">Nenhum título baixado (pago) no período pra estes fornecedores.</div>
-      <div id="pagos-abc-chart-wrap" style="height:380px; width:100%;">
+      <div id="pagos-abc-chart-wrap" class="grafico-altura-tela">
         <canvas id="chart-pagos-abc"></canvas>
       </div>
     </div>
@@ -723,14 +742,16 @@
       </div>
     </div>
     </div>
+    </div>
     <div class="grupo-dashboard" data-grupo="resumo-aporte">
+    <div class="grid-2">
     <div class="painel">
       <div class="cabecalho-painel">
         <h2>Resumo por Aporte — Qtd Doc x Doc aberto</h2>
         <button class="btn secundario small" onclick="expandirGrafico('aporte', 'Resumo por Aporte — Qtd Doc x Doc aberto')">⛶ Expandir</button>
         <button class="btn secundario small" onclick="exportarXlsx('aporte')">⬇ Exportar Excel</button>
       </div>
-      <div id="aporte-chart-wrap" style="height:320px; width:100%;">
+      <div id="aporte-chart-wrap" class="grafico-altura-tela">
         <canvas id="chart-aporte"></canvas>
       </div>
     </div>
@@ -746,6 +767,7 @@
           <tbody></tbody>
         </table>
       </div>
+    </div>
     </div>
     </div>
       </div>
@@ -2884,6 +2906,8 @@ function renderizarStatusPagamento(itens) {
       ],
     },
     options: {
+      responsive: true,
+      maintainAspectRatio: false,
       plugins: {
         legend: { position: 'bottom' },
         datalabels: { display: false },
@@ -3096,6 +3120,8 @@ function renderizarAging(abertos, hoje) {
     data: { labels: faixas.map(f => f.nome), datasets: [{ label: 'Valor em aberto (R$)', data: valores,
       backgroundColor: ['#1f4e78', '#e08e0b', '#e08e0b', '#c0392b', '#c0392b'] }] },
     options: {
+      responsive: true,
+      maintainAspectRatio: false,
       plugins: { legend: { display: false }, datalabels: { display: false } },
       scales: { y: { beginAtZero: true } },
       onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
@@ -3139,6 +3165,8 @@ function renderizarFluxoCaixa(abertos, hoje) {
       ],
     },
     options: {
+      responsive: true,
+      maintainAspectRatio: false,
       plugins: { datalabels: { display: false } },
       scales: { y: { beginAtZero: true } },
       onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
