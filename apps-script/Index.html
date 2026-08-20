@@ -557,12 +557,11 @@
           total com vencimento no período entre a medição anterior e esta. Margem = Faturado − Pago. Clique numa barra "Pago"
           ou numa linha da tabela para ver os títulos.
         </p>
-        <table id="tabela-resumo-faturamento" style="width:100%; max-width:560px; border-collapse:collapse; font-size:13px; margin-bottom:18px;"></table>
         <div class="cards" id="cards-faturamento" style="margin-bottom:18px;"></div>
         <div class="painel" style="margin-bottom:18px; width:100%;">
           <div class="cabecalho-painel">
-            <h2>Faturado, Pago e Margem por Medição</h2>
-            <button class="btn secundario small" onclick="expandirGrafico('faturadoPago', 'Faturado, Pago e Margem por Medição')">⛶ Expandir</button>
+            <h2>Faturado, Pago e Saldo Bruto por Medição</h2>
+            <button class="btn secundario small" onclick="expandirGrafico('faturadoPago', 'Faturado, Pago e Saldo Bruto por Medição')">⛶ Expandir</button>
             <button class="btn secundario small" onclick="exportarXlsx('faturadoPago')">⬇ Exportar Excel</button>
           </div>
           <div id="faturado-pago-chart-wrap" style="height:340px; width:100%;">
@@ -571,8 +570,8 @@
         </div>
         <div class="painel" style="margin-bottom:18px; width:100%;">
           <div class="cabecalho-painel">
-            <h2>Faturamento, Pago e Saldo — Acumulado</h2>
-            <button class="btn secundario small" onclick="expandirGrafico('faturadoPagoAcumulado', 'Faturamento, Pago e Saldo — Acumulado')">⛶ Expandir</button>
+            <h2>Faturamento, Pago e Saldo Bruto — Acumulado</h2>
+            <button class="btn secundario small" onclick="expandirGrafico('faturadoPagoAcumulado', 'Faturamento, Pago e Saldo Bruto — Acumulado')">⛶ Expandir</button>
             <button class="btn secundario small" onclick="exportarXlsx('faturadoPagoAcumulado')">⬇ Exportar Excel</button>
           </div>
           <div id="faturado-pago-acumulado-chart-wrap" style="height:300px; width:100%;">
@@ -2597,7 +2596,7 @@ function exportarXlsx(qual) {
     baixarXlsx('faturado_x_pago.xlsx', ['Medição', 'Faturado', 'Pago', 'Margem'], linhas);
   } else if (qual === 'faturadoPagoAcumulado') {
     const linhas = ultimoDadosFaturadoPagoAcumulado.map((a) => [`Medição ${a.medicao}`, fmtMoeda(a.faturado), fmtMoeda(a.pago), fmtMoeda(a.saldo)]);
-    baixarXlsx('faturado_pago_saldo_acumulado.xlsx', ['Medição', 'Faturado acumulado', 'Pago acumulado', 'Saldo acumulado'], linhas);
+    baixarXlsx('faturado_pago_saldo_acumulado.xlsx', ['Medição', 'Faturado acumulado', 'Pago acumulado', 'Saldo Bruto acumulado'], linhas);
   } else if (qual === 'categoriaCusto') {
     const linhas = ultimoDadosCategoriaCusto.map(([cat, baixado, aBaixar, total]) => [cat, fmtMoeda(baixado), fmtMoeda(aBaixar), fmtMoeda(total)]);
     baixarXlsx('custo_por_categoria.xlsx', ['Categoria', 'Baixado', 'A Baixar', 'Total'], linhas);
@@ -3271,25 +3270,10 @@ function renderizarFaturadoPago_() {
   // Faturado − Pago (que misturava faturamento líquido com títulos brutos
   // do ERP e gerava um valor sem relação com o que está de fato em aberto).
   const aPagar = ultimoItensAnalise.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
-  // Resumo financeiro no formato pedido: Faturamento total, Total pago,
-  // Saldo bruto (Faturado − Pago), A pagar (reserva pros títulos ainda em
-  // aberto, ver aPagar acima) e Saldo disponível (Saldo bruto − A pagar) —
-  // o que sobra de fato livre depois de reservar o que ainda será pago.
-  const saldoBruto = totalFaturado - totalPago;
-  const saldoDisponivel = saldoBruto - aPagar;
-  const hoje = new Date();
-  const dataHojeFmt = `${String(hoje.getDate()).padStart(2, '0')}/${String(hoje.getMonth() + 1).padStart(2, '0')}/${hoje.getFullYear()}`;
-  const linhaResumo = (rotulo, valor, destaque) => `<tr${destaque ? ' style="color:var(--azul); font-weight:600;"' : ''}>
-    <td style="padding:6px 8px; border-bottom:1px solid #eee;">${rotulo}</td>
-    <td style="padding:0; border-bottom:1px solid #eee; width:180px;">${htmlMoedaAlinhada(valor)}</td>
-  </tr>`;
-  document.getElementById('tabela-resumo-faturamento').innerHTML = [
-    linhaResumo('Somatório das medições / Faturamento total', totalFaturado, false),
-    linhaResumo(`Total dos pagamentos realizados até dia ${dataHojeFmt}`, totalPago, false),
-    linhaResumo('Saldo bruto', saldoBruto, true),
-    linhaResumo('A pagar / Reserva obrigação futura', aPagar, true),
-    linhaResumo('Saldo disponível / Caixa livre', saldoDisponivel, false),
-  ].join('');
+  // Saldo Disponível/Caixa Livre = Saldo Bruto (resultado = Faturado − Pago)
+  // menos A Pagar (reserva pros títulos ainda em aberto, ver aPagar acima)
+  // — o que sobra de fato livre depois de reservar o que ainda será pago.
+  const saldoDisponivel = resultado - aPagar;
   document.getElementById('cards-faturamento').innerHTML = `
     <div class="card">
       <div class="card-topo-fixo"><div class="rotulo">Faturado — Total (líquido)</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(totalFaturado)}</div></div></div>
@@ -3318,7 +3302,7 @@ function renderizarFaturadoPago_() {
       ${barraProporcao(faturadoMenor)}
     </div>
     <div class="card ${resultado >= 0 ? '' : 'alerta'}">
-      <div class="card-topo-fixo"><div class="rotulo">Resultado (Faturado − Pago)</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(resultado)}</div></div></div>
+      <div class="card-topo-fixo"><div class="rotulo">Saldo Bruto (Faturado − Pago)</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(resultado)}</div></div></div>
       <div style="margin:auto 0;">
         <div style="position:relative; width:140px; height:76px; margin:0 auto;">
           <canvas id="chart-resultado-gauge"></canvas>
@@ -3326,6 +3310,14 @@ function renderizarFaturadoPago_() {
         </div>
         <div style="font-size:10px; color:var(--cinza); margin-top:2px; text-align:center;">Margem de Lucro (acumulada)</div>
       </div>
+    </div>
+    <div class="card">
+      <div class="card-topo-fixo"><div class="rotulo">A Pagar / Reserva Obrigação Futura</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(aPagar)}</div></div></div>
+      ${barraProporcao(aPagar)}
+    </div>
+    <div class="card ${saldoDisponivel >= 0 ? '' : 'alerta'}">
+      <div class="card-topo-fixo"><div class="rotulo">Saldo Disponível / Caixa Livre</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(saldoDisponivel)}</div></div></div>
+      ${barraProporcao(saldoDisponivel)}
     </div>
   `;
   // Velocímetro (meia-rosca) embutido no card Resultado — não é mais um
@@ -3363,7 +3355,7 @@ function renderizarFaturadoPago_() {
       datasets: [
         { type: 'bar', label: 'Faturado', data: linhas.map((l) => l.faturado), backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24, categoryPercentage: 0.6, barPercentage: 0.9 },
         { type: 'bar', label: 'Pago', data: linhas.map((l) => l.pago), backgroundColor: '#eb6834', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24, categoryPercentage: 0.6, barPercentage: 0.9 },
-        { type: 'line', label: 'Margem (Faturado − Pago)', data: linhas.map((l) => l.margem), borderColor: '#1baf7a', backgroundColor: '#1baf7a', borderWidth: 2, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, yAxisID: 'y' },
+        { type: 'line', label: 'Saldo Bruto (Faturado − Pago)', data: linhas.map((l) => l.margem), borderColor: '#1baf7a', backgroundColor: '#1baf7a', borderWidth: 2, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, yAxisID: 'y' },
       ],
     },
     options: {
@@ -3402,7 +3394,7 @@ function renderizarFaturadoPago_() {
       datasets: [
         { type: 'line', label: 'Faturado acumulado', data: acumulados.map((a) => a.faturado), borderColor: '#2a78d6', backgroundColor: '#2a78d6', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3 },
         { type: 'line', label: 'Pago acumulado', data: acumulados.map((a) => a.pago), borderColor: '#eb6834', backgroundColor: '#eb6834', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3 },
-        { type: 'line', label: 'Saldo acumulado', data: acumulados.map((a) => a.saldo), borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', borderDash: [5, 3], tension: 0.3 },
+        { type: 'line', label: 'Saldo Bruto acumulado', data: acumulados.map((a) => a.saldo), borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', borderDash: [5, 3], tension: 0.3 },
       ],
     },
     options: {
