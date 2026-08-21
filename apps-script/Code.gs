@@ -598,8 +598,53 @@ function api_faturamentoPorMedicao(payload) {
 function api_importar(payload) {
   var nomeUsuario = validarAcessoEdicao_(payload);
   substituirErp_(payload.itens, payload.dataBase);
-  registrarLog_(nomeUsuario, 'Importar (upload)', (payload.itens || []).length + ' título(s), base ' + (payload.dataBase || 'não identificada'));
+  // payload.driveChave só vem preenchido quando esta importação veio do
+  // Google Drive (ver api_buscarArquivoDriveNovo) — marca o arquivo como já
+  // processado só agora, depois que a gravação deu certo, pra não perder um
+  // arquivo se a importação falhar no meio do caminho.
+  if (payload.driveChave) {
+    PropertiesService.getScriptProperties().setProperty(PROP_ULTIMO_ARQUIVO_DRIVE_, payload.driveChave);
+  }
+  registrarLog_(nomeUsuario, 'Importar (' + (payload.driveChave ? 'Google Drive' : 'upload') + ')',
+    (payload.itens || []).length + ' título(s), base ' + (payload.dataBase || 'não identificada'));
   return api_carregar();
+}
+
+// Pasta do Drive com o export do Protheus (Títulos/baixas) — o app checa
+// aqui, na aba Extrator de Comprovante, se existe um .xlsx mais novo que o
+// último já importado por este caminho (qualquer nome de arquivo, ver
+// getFilesByType). Não baixa/processa a planilha aqui: só devolve o
+// conteúdo em base64 pro navegador ler com o mesmo parser client-side já
+// usado no upload manual (processarArquivo/parseArquivoProtheus, ver
+// Index.html) — reaproveita 100% da lógica de leitura/normalização que já
+// existia, em vez de duplicá-la aqui no servidor.
+var PASTA_DRIVE_TITULOS_ID_ = '1sVlF29VGWDzHelgBGIeFvVK3OCpMjGmD';
+var PROP_ULTIMO_ARQUIVO_DRIVE_ = 'drive_ultimo_arquivo_titulos';
+
+function api_buscarArquivoDriveNovo(payload) {
+  validarAcessoEdicao_(payload);
+  var pasta = DriveApp.getFolderById(PASTA_DRIVE_TITULOS_ID_);
+  var arquivos = pasta.getFilesByType(MimeType.MICROSOFT_EXCEL);
+  var maisRecente = null;
+  while (arquivos.hasNext()) {
+    var arquivo = arquivos.next();
+    if (!maisRecente || arquivo.getLastUpdated().getTime() > maisRecente.getLastUpdated().getTime()) {
+      maisRecente = arquivo;
+    }
+  }
+  if (!maisRecente) return { encontrado: false };
+
+  var chaveAtual = maisRecente.getId() + '|' + maisRecente.getLastUpdated().getTime();
+  var ultimaChave = PropertiesService.getScriptProperties().getProperty(PROP_ULTIMO_ARQUIVO_DRIVE_);
+  if (chaveAtual === ultimaChave) return { encontrado: false };
+
+  var blob = maisRecente.getBlob();
+  return {
+    encontrado: true,
+    nomeArquivo: maisRecente.getName(),
+    conteudoBase64: Utilities.base64Encode(blob.getBytes()),
+    driveChave: chaveAtual,
+  };
 }
 
 function api_adicionarManual(payload) {
@@ -1016,6 +1061,7 @@ function doPost(e) {
   try {
     var resultado;
     if (acao === 'importar') resultado = api_importar(payload);
+    else if (acao === 'buscarArquivoDriveNovo') resultado = api_buscarArquivoDriveNovo(payload);
     else if (acao === 'adicionarManual') resultado = api_adicionarManual(payload);
     else if (acao === 'editarManual') resultado = api_editarManual(payload);
     else if (acao === 'removerManual') resultado = api_removerManual(payload);

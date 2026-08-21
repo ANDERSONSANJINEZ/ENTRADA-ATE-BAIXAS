@@ -517,7 +517,7 @@
   <button data-aba="detalhe-aporte">Aporte</button>
   <button data-aba="analise">Análise</button>
   <button data-aba="historico">Histórico</button>
-  <button data-aba="atualizar" id="nav-atualizar">Atualizar Dados</button>
+  <button data-aba="atualizar" id="nav-atualizar">Extrator de Comprovante</button>
 </nav>
 </div>
 
@@ -909,15 +909,6 @@
   <section id="aba-atualizar" class="aba">
     <div class="painel" id="painel-atualizar-baixas">
       <h2>Títulos (baixas) — TOTVS Protheus</h2>
-      <p style="font-size:13px;color:var(--cinza)">
-        Envie o export do Protheus em .xlsx (qualquer nome de arquivo). Os
-        títulos importados substituem a última importação salva; os
-        lançamentos manuais não são afetados — apenas recomparados para
-        sinalizar duplicidade.
-      </p>
-      <div id="dropzone">Arraste o arquivo .xlsx aqui ou clique para selecionar
-        <input type="file" id="arquivo-erp" accept=".xlsx" style="display:none">
-      </div>
       <div id="resumo-importacao"></div>
     </div>
     <div class="painel">
@@ -1721,6 +1712,11 @@ document.querySelectorAll('nav button').forEach(btn => {
     // com uma leitura que quase ninguém abre) — busca só quando a aba é
     // clicada, e só a primeira vez (cache em ultimoLogCarregado).
     if (btn.dataset.aba === 'historico' && !ultimoLogCarregado) carregarHistorico();
+    // Extrator de Comprovante: só faz sentido checar o Drive com edição
+    // habilitada (o painel "Títulos (baixas)" fica escondido em modo
+    // leitura, ver atualizarUiModoLeitura) — reconfere toda vez que a aba é
+    // aberta, não só na primeira, pra sempre pegar um arquivo novo.
+    if (btn.dataset.aba === 'atualizar' && !MODO_LEITURA) verificarEImportarDoDrive();
   };
 });
 
@@ -6475,37 +6471,52 @@ async function separarComprovantesBancarios() {
   }
 }
 
-async function processarArquivo(file) {
-  const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+// Substitui o antigo upload manual (arraste/selecione o .xlsx): a aba
+// Extrator de Comprovante, ao ser aberta (ver o forEach de "nav button" mais
+// abaixo), checa sozinha se existe um arquivo mais novo do que o último já
+// importado na pasta do Google Drive do Protheus (api_buscarArquivoDriveNovo,
+// qualquer nome de arquivo) e importa automaticamente. O parser continua
+// 100% client-side (parseArquivoProtheus/XLSX), só que lendo o conteúdo em
+// base64 devolvido pelo servidor em vez de um File do input — mesmo
+// resultado final de processarArquivo, que existia antes disso.
+function base64ParaArrayBuffer_(base64) {
+  const binario = atob(base64);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+  return bytes.buffer;
+}
+
+async function verificarEImportarDoDrive() {
+  const resumoEl = document.getElementById('resumo-importacao');
+  resumoEl.innerHTML = `<div class="aviso">Verificando a pasta do Google Drive por um arquivo novo…</div>`;
+  let resposta;
+  try {
+    resposta = await chamarServidor('buscarArquivoDriveNovo', {});
+  } catch (e) {
+    resumoEl.innerHTML = `<div class="aviso">Falha ao verificar a pasta do Google Drive: ${e.message}</div>`;
+    return;
+  }
+  if (!resposta.encontrado) {
+    resumoEl.innerHTML = `<div class="aviso">Nenhum arquivo novo na pasta do Google Drive — os títulos já estão com a última importação.</div>`;
+    return;
+  }
+  const wb = XLSX.read(base64ParaArrayBuffer_(resposta.conteudoBase64), { type: 'array', cellDates: true });
   const itens = parseArquivoProtheus(wb);
-  const dataBase = extrairDataBaseDoNome(file.name);
+  const dataBase = extrairDataBaseDoNome(resposta.nomeArquivo);
   const avisoData = dataBase
     ? `Data base identificada pelo nome do arquivo: ${fmtData(dataBase)}.`
     : `Não foi possível identificar a data pelo nome do arquivo (esperado AAAA.MM.DD.xlsx) — a base de dados ficará marcada como "não identificada".`;
-  document.getElementById('resumo-importacao').innerHTML =
-    `<div class="aviso">${itens.length} títulos lidos de "${file.name}". ${avisoData} Enviando para a planilha…</div>`;
+  resumoEl.innerHTML =
+    `<div class="aviso">${itens.length} títulos lidos de "${resposta.nomeArquivo}" (Google Drive). ${avisoData} Enviando para a planilha…</div>`;
   try {
-    await postarAcao('importar', { itens, dataBase });
-    document.getElementById('resumo-importacao').innerHTML =
-      `<div class="aviso">${itens.length} títulos importados com sucesso. Veja o resultado no Dashboard e em Lançamentos.</div>`;
+    await postarAcao('importar', { itens, dataBase, driveChave: resposta.driveChave });
+    resumoEl.innerHTML =
+      `<div class="aviso">${itens.length} títulos importados com sucesso a partir de "${resposta.nomeArquivo}" (Google Drive). Veja o resultado no Dashboard e em Lançamentos.</div>`;
     toast('Importação concluída.');
   } catch (e) {
-    document.getElementById('resumo-importacao').innerHTML = `<div class="aviso">Falha ao importar: ${e.message}</div>`;
+    resumoEl.innerHTML = `<div class="aviso">Falha ao importar: ${e.message}</div>`;
   }
 }
-
-const dropzone = document.getElementById('dropzone');
-const inputArquivo = document.getElementById('arquivo-erp');
-dropzone.onclick = () => inputArquivo.click();
-inputArquivo.onchange = (e) => { if (e.target.files[0]) processarArquivo(e.target.files[0]); };
-['dragover', 'dragleave', 'drop'].forEach(evt => dropzone.addEventListener(evt, (e) => e.preventDefault()));
-dropzone.addEventListener('dragover', () => dropzone.classList.add('sobre'));
-dropzone.addEventListener('dragleave', () => dropzone.classList.remove('sobre'));
-dropzone.addEventListener('drop', (e) => {
-  dropzone.classList.remove('sobre');
-  if (e.dataTransfer.files[0]) processarArquivo(e.dataTransfer.files[0]);
-});
 
 // ---------- Modo somente leitura / edição ----------
 // Diferente do antigo modo=leitura (só escondia botões), a senha de edição
@@ -6561,6 +6572,10 @@ function prefillUsuarioInclusor() {
 
 function atualizarUiModoLeitura() {
   document.getElementById('painel-atualizar-baixas').style.display = MODO_LEITURA ? 'none' : '';
+  // Cobre o caso de habilitar a edição enquanto já se está na aba Extrator
+  // de Comprovante (o clique na aba, mais acima, só dispara a checagem se a
+  // edição já estava habilitada nesse momento).
+  if (!MODO_LEITURA && document.getElementById('aba-atualizar').classList.contains('ativa')) verificarEImportarDoDrive();
   document.getElementById('btn-abrir-lancamento-manual').style.display = MODO_LEITURA ? 'none' : '';
   if (MODO_LEITURA) fecharModalLancamentoManual(); // voltar pra leitura com o pop-up aberto não deveria deixar editar
   const btnRemoverDuplicados = document.getElementById('btn-remover-duplicados');
