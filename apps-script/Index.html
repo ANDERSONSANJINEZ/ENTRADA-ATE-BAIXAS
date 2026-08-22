@@ -597,9 +597,9 @@
         <p style="font-size:12px; color:var(--cinza); margin-top:0;">
           Faturado vem do "Valor Líquido (R$)" da planilha de Faturamento (NFS-e por medição dos prestadores). Pago é o
           total com Vencimento no período entre a medição anterior e esta. Saldo Bruto = Faturado − Pago (na tabela "Por
-          medição" essa mesma conta aparece como Margem). A Pagar é a soma dos títulos com Vencimento após a última
-          medição; Saldo Disponível = Saldo Bruto − A Pagar. Clique numa barra "Pago" ou numa linha da tabela para ver os
-          títulos.
+          medição" essa mesma conta aparece como Margem). A Pagar é a soma dos títulos com Vencimento a partir de hoje
+          até o último título; Saldo Disponível = Saldo Bruto − A Pagar. Clique numa barra "Pago" ou numa linha da
+          tabela para ver os títulos.
         </p>
         <div class="cards" id="cards-faturamento" style="margin-bottom:18px;"></div>
         <div class="painel" style="margin-bottom:18px; width:100%;">
@@ -1754,14 +1754,18 @@ if (ABAS_PERMITIDAS_RESTRITO) {
 // quem. Diferente do PERFIS_RESTRITOS acima (link ?usuario=... só-leitura
 // pra compartilhar com terceiros), esta é gente com senha de edição normal;
 // só abas/seções somem da navegação, o resto do acesso (inclusive editar)
-// continua igual. Duas regras independentes:
+// continua igual. Três regras independentes:
 //   1) Dayana Sousa/Francisco Gilderlan: sem Dashboard nem Análise.
 //   2) Faturamento (dentro do Dashboard) e Análise: só Anderson e Zico —
 //      qualquer outro nome (Dayana/Francisco inclusive, e também ninguém
 //      ainda logado) não vê essas duas, mesmo mantendo o resto do
 //      Dashboard visível.
+//   3) Extrator de Comprovante e Histórico: só Anderson e Dayana Sousa —
+//      vale até pra quem nunca digitou nome nenhum (modo leitura padrão),
+//      mesmo padrão da regra 2 acima.
 const USUARIOS_SEM_DASHBOARD_ANALISE_ = ['dayana sousa', 'francisco gilderlan'];
 const USUARIOS_COM_FATURAMENTO_ANALISE_ = ['anderson', 'zico'];
+const USUARIOS_COM_EXTRATOR_HISTORICO_ = ['anderson', 'dayana sousa'];
 function aplicarRestricaoAbasPorUsuario_() {
   const nome = (usuarioEdicaoNome || '').trim().toLowerCase();
 
@@ -1769,7 +1773,7 @@ function aplicarRestricaoAbasPorUsuario_() {
   // valerem pro nome atual) — sem isso, alguém restrito logar e depois sair
   // (ou uma pessoa diferente logar em seguida, no mesmo navegador) deixava
   // Dashboard/Análise escondidos pra sempre, mesmo pra quem tem acesso.
-  ['dashboard', 'analise'].forEach((chave) => {
+  ['dashboard', 'analise', 'atualizar', 'historico'].forEach((chave) => {
     const btn = document.querySelector(`nav button[data-aba="${chave}"]`);
     if (btn) btn.style.display = '';
   });
@@ -1788,6 +1792,13 @@ function aplicarRestricaoAbasPorUsuario_() {
     if (btnAnalise) btnAnalise.style.display = 'none';
     const btnFaturamento = document.querySelector('#dashboard-lateral button[data-grupo="faturado-pago"]');
     if (btnFaturamento) btnFaturamento.style.display = 'none';
+  }
+
+  if (!USUARIOS_COM_EXTRATOR_HISTORICO_.includes(nome)) {
+    ['atualizar', 'historico'].forEach((chave) => {
+      const btn = document.querySelector(`nav button[data-aba="${chave}"]`);
+      if (btn) btn.style.display = 'none';
+    });
   }
 
   // Se a aba ativa é uma das que acabou de ficar escondida (botão de nav
@@ -3320,15 +3331,15 @@ function renderizarFaturadoPago_() {
   const margemPct = totalFaturado ? (resultado / totalFaturado) * 100 : 0;
   const corMargem = corPorFaixa(margemPct);
   // "A pagar" = soma do R$ Valor de todos os títulos (ERP + manual) cujo
-  // Vencimento é POSTERIOR à última medição (ultimaData) — ou seja, ainda
-  // não foi capturado por nenhuma janela de Pago acima (que só cobre até a
-  // data da última medição). 100% baseado em Vencimento, igual ao cálculo
-  // de Pago — não usa Data Baixa (pedido explícito). Como Pago cobre só
-  // Vencimento ≤ ultimaData e A Pagar cobre só Vencimento > ultimaData, os
-  // dois nunca se sobrepõem (evita o bug anterior de contar título já
-  // pago dentro de "A Pagar" também).
+  // Vencimento é a partir de hoje (data presente) até o último título —
+  // pedido explícito, pra refletir o que falta pagar dali pra frente (e,
+  // por consequência, o Saldo Disponível abaixo virar de fato o líquido em
+  // caixa hoje), em vez de usar a data da última medição como referência
+  // (que podia ficar defasada da data real). 100% baseado em Vencimento,
+  // igual ao cálculo de Pago — não usa Data Baixa (pedido explícito).
+  const hojeParaAPagar_ = hojeCalendario();
   const aPagar = todosItens
-    .filter((i) => { const v = paraData(i['Vencimento']); return v && ultimaData && v > ultimaData; })
+    .filter((i) => { const v = paraData(i['Vencimento']); return v && diaCalendario(v) >= hojeParaAPagar_; })
     .reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
   // Saldo Disponível/Caixa Livre = Saldo Bruto (resultado = Faturado − Pago)
   // menos A Pagar (reserva pros títulos ainda em aberto, ver aPagar acima)
