@@ -596,10 +596,11 @@
       <div id="faturado-pago-conteudo">
         <p style="font-size:12px; color:var(--cinza); margin-top:0;">
           Faturado vem do "Valor Líquido (R$)" da planilha de Faturamento (NFS-e por medição dos prestadores). Pago é o
-          total com Vencimento no período entre a medição anterior e esta. Saldo Bruto = Faturado − Pago (na tabela "Por
-          medição" essa mesma conta aparece como Margem). A Pagar é a soma dos títulos com Vencimento a partir de hoje
-          até o último título; Saldo Disponível = Saldo Bruto − A Pagar. Clique numa barra "Pago" ou numa linha da
-          tabela para ver os títulos.
+          total com Vencimento no período entre a medição anterior e esta — na última medição, esse período vai até
+          ontem, pra emendar direto com o "A Pagar" (ver abaixo) sem deixar lacuna nem duplicar título nenhum. Saldo
+          Bruto = Faturado − Pago (na tabela "Por medição" essa mesma conta aparece como Margem). A Pagar é a soma dos
+          títulos com Vencimento a partir de hoje até o último título; Saldo Disponível = Saldo Bruto − A Pagar.
+          Clique numa barra "Pago" ou numa linha da tabela para ver os títulos.
         </p>
         <div class="cards" id="cards-faturamento" style="margin-bottom:18px;"></div>
         <div class="painel" style="margin-bottom:18px; width:100%;">
@@ -3284,8 +3285,21 @@ function renderizarFaturadoPago_() {
   conteudoEl.style.display = '';
 
   const todosItens = state.erp.concat(state.manual);
+  // Véspera de hoje (Date à meia-noite UTC, mesmo formato de paraData) —
+  // usada só pra estender a janela da ÚLTIMA medição (ver abaixo). Pedido
+  // explícito: como "A Pagar" (mais abaixo) agora conta títulos com
+  // Vencimento a partir de HOJE, a janela de "Pago" da última medição
+  // precisa ir até ONTEM (não até hoje) pra não faltar nem duplicar título
+  // nenhum entre as duas contas.
+  const vesperaDeHoje_ = new Date(hojeCalendario() - 86400000);
   const linhas = medicoes.map((m, idx) => {
-    const fimJanela = paraData(m.dataReferencia);
+    let fimJanela = paraData(m.dataReferencia);
+    // Só a última medição da lista tem sua janela estendida até ontem —
+    // fecha a lacuna que existiria entre a data da última medição e hoje
+    // (títulos vencidos nesse intervalo antes ficavam de fora tanto do
+    // "Pago" quanto do "A Pagar"). As medições anteriores continuam
+    // fechando exatamente na própria data de referência.
+    if (idx === medicoes.length - 1 && fimJanela && vesperaDeHoje_ > fimJanela) fimJanela = vesperaDeHoje_;
     const inicioJanela = idx > 0 ? paraData(medicoes[idx - 1].dataReferencia) : null;
     const itensPagos = todosItens.filter((i) => {
       const vencimento = paraData(i['Vencimento']);
