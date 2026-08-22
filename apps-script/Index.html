@@ -3285,27 +3285,38 @@ function renderizarFaturadoPago_() {
   conteudoEl.style.display = '';
 
   const todosItens = state.erp.concat(state.manual);
-  // Véspera de hoje (Date à meia-noite UTC, mesmo formato de paraData) —
-  // usada só pra estender a janela da ÚLTIMA medição (ver abaixo). Pedido
-  // explícito: como "A Pagar" (mais abaixo) agora conta títulos com
-  // Vencimento a partir de HOJE, a janela de "Pago" da última medição
-  // precisa ir até ONTEM (não até hoje) pra não faltar nem duplicar título
-  // nenhum entre as duas contas.
-  const vesperaDeHoje_ = new Date(hojeCalendario() - 86400000);
+  // Dia calendário de ontem (número, mesmo formato de diaCalendario/
+  // hojeCalendario) — usado só pra estender a janela da ÚLTIMA medição (ver
+  // abaixo). Pedido explícito: como "A Pagar" (mais abaixo) agora conta
+  // títulos com Vencimento a partir de HOJE, a janela de "Pago" da última
+  // medição precisa ir até ONTEM (não até hoje) pra não faltar nem duplicar
+  // título nenhum entre as duas contas.
+  //
+  // As comparações abaixo usam SEMPRE diaCalendario() (dia calendário em
+  // UTC puro), nunca Date bruto: "Vencimento" chega do servidor como Date
+  // cru da célula da planilha (lerAba_ não normaliza), que ao virar JSON
+  // carrega o fuso do script embutido (meia-noite local no Brasil vira
+  // "...T03:00:00Z"); já "dataReferencia" chega como string 'yyyy-MM-dd'
+  // pura (meia-noite UTC exata, sem esse deslocamento). Comparar os dois
+  // direto por milissegundo (Date <= Date) excluía por engano títulos
+  // vencidos exatamente no dia-limite (ex.: título vencido ontem ficava de
+  // fora tanto do "Pago" quanto do "A Pagar"). diaCalendario() elimina o
+  // deslocamento de hora/fuso e compara só o dia de fato.
+  const ontemDia_ = hojeCalendario() - 86400000;
   const linhas = medicoes.map((m, idx) => {
-    let fimJanela = paraData(m.dataReferencia);
+    let fimJanelaDia = diaCalendario(paraData(m.dataReferencia));
     // Só a última medição da lista tem sua janela estendida até ontem —
     // fecha a lacuna que existiria entre a data da última medição e hoje
     // (títulos vencidos nesse intervalo antes ficavam de fora tanto do
     // "Pago" quanto do "A Pagar"). As medições anteriores continuam
     // fechando exatamente na própria data de referência.
-    if (idx === medicoes.length - 1 && fimJanela && vesperaDeHoje_ > fimJanela) fimJanela = vesperaDeHoje_;
-    const inicioJanela = idx > 0 ? paraData(medicoes[idx - 1].dataReferencia) : null;
+    if (idx === medicoes.length - 1 && fimJanelaDia != null && ontemDia_ > fimJanelaDia) fimJanelaDia = ontemDia_;
+    const inicioJanelaDia = idx > 0 ? diaCalendario(paraData(medicoes[idx - 1].dataReferencia)) : null;
     const itensPagos = todosItens.filter((i) => {
-      const vencimento = paraData(i['Vencimento']);
-      if (!vencimento || !fimJanela) return false;
-      if (inicioJanela && vencimento <= inicioJanela) return false;
-      return vencimento <= fimJanela;
+      const vencimentoDia = diaCalendario(paraData(i['Vencimento']));
+      if (vencimentoDia == null || fimJanelaDia == null) return false;
+      if (inicioJanelaDia != null && vencimentoDia <= inicioJanelaDia) return false;
+      return vencimentoDia <= fimJanelaDia;
     });
     const pago = itensPagos.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
     // "Faturado" usa sempre o Valor Liquido (coluna N da planilha de
