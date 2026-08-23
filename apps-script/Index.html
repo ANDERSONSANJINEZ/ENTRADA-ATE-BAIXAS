@@ -3323,7 +3323,7 @@ function renderizarFaturadoPago_() {
     // Faturamento), nunca o Valor Total (bruto) — pedido explícito, pra
     // comparar com o Pago (valor líquido de fato baixado) numa base
     // equivalente.
-    return { medicao: m.medicao, faturado: m.valorLiquido, pago, margem: m.valorLiquido - pago, itensPagos, fimJanelaDia };
+    return { medicao: m.medicao, faturado: m.valorLiquido, pago, margem: m.valorLiquido - pago, itensPagos };
   });
   ultimoDadosFaturadoPago = linhas.map((l) => ({ medicao: l.medicao, faturado: l.faturado, pago: l.pago, margem: l.margem }));
 
@@ -3373,32 +3373,27 @@ function renderizarFaturadoPago_() {
   // assim que o acumulado crescia; o gráfico dedicado abaixo usa sua
   // própria escala).
   //
-  // "Saldo Disponível acumulado" é recalculado medição a medição (pedido
-  // explícito) — pra cada ponto do histórico, é o Saldo Bruto acumulado até
-  // ali menos o que ainda estava em aberto NAQUELE momento (títulos com
-  // Vencimento depois da janela de Pago daquela medição especificamente,
-  // usando fimJanelaDia salvo em cada linha) — mostra como o caixa
-  // disponível evoluiu de fato ao longo do tempo, não só o retrato de hoje.
+  // "Saldo Disponível acumulado" = Faturado acumulado − Pago/A Pagar
+  // acumulado (pedido explícito), mês a mês — as duas outras linhas deste
+  // mesmo gráfico, sem recalcular nada à parte. Nas medições (Faturado −
+  // Pago puro) isso é exatamente o Saldo Bruto acumulado de cada uma; só no
+  // ponto extra "Hoje" (ver abaixo, onde "Pago" já soma A Pagar) o
+  // resultado passa a ser o Saldo Disponível de fato.
   let faturadoAcum = 0, pagoAcum = 0;
   const acumulados = linhas.map((l) => {
     faturadoAcum += l.faturado;
     pagoAcum += l.pago;
-    const emAbertoNaquelePonto = todosItens
-      .filter((i) => { const v = diaCalendario(paraData(i['Vencimento'])); return v != null && l.fimJanelaDia != null && v > l.fimJanelaDia; })
-      .reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
-    return { medicao: l.medicao, faturado: faturadoAcum, pago: pagoAcum, saldoDisponivel: (faturadoAcum - pagoAcum) - emAbertoNaquelePonto };
+    return { medicao: l.medicao, faturado: faturadoAcum, pago: pagoAcum, saldoDisponivel: faturadoAcum - pagoAcum };
   });
   // Ponto extra "Hoje" — pedido explícito, pra fazer a linha "Pago"
   // terminar somando "A Pagar" por cima, numa mesma linha (em vez de duas
   // linhas separadas). Os pontos de cada medição continuam com o Pago
   // "puro" (igual à tabela "Por medição"); só este ponto final soma A
-  // Pagar. Faturado e Saldo Disponível seguem retos até aqui: nada muda
-  // entre a última medição (já com a janela estendida até ontem) e hoje
-  // além do que "A Pagar" já cobre — aliás, saldoDisponivel do último
-  // ponto real já bate exatamente com a variável `saldoDisponivel` acima
-  // (mesma janela, mesmos títulos em aberto).
+  // Pagar — e, por consequência (mesma fórmula Faturado − Pago acima), é
+  // aqui que "Saldo Disponível acumulado" bate com a variável
+  // `saldoDisponivel` do card (resultado − aPagar).
   if (acumulados.length) {
-    acumulados.push({ medicao: 'hoje', faturado: faturadoAcum, pago: pagoAcum + aPagar, saldoDisponivel });
+    acumulados.push({ medicao: 'hoje', faturado: faturadoAcum, pago: pagoAcum + aPagar, saldoDisponivel: faturadoAcum - (pagoAcum + aPagar) });
   }
   ultimoDadosFaturadoPagoAcumulado = acumulados;
   document.getElementById('cards-faturamento').innerHTML = `
