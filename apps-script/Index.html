@@ -2678,8 +2678,8 @@ function exportarXlsx(qual) {
     const linhas = ultimoDadosFaturamentoCategorias.map((l) => [l.cat, fmtMoeda(l.valor), l.pctFaturamento == null ? '' : `${l.pctFaturamento.toFixed(1)}%`]);
     baixarXlsx('faturamento_categorias.xlsx', ['Categoria', 'Custo no período', '% do Faturamento'], linhas);
   } else if (qual === 'faturadoPagoAcumulado') {
-    const linhas = ultimoDadosFaturadoPagoAcumulado.map((a) => [`Medição ${a.medicao}`, fmtMoeda(a.faturado), fmtMoeda(a.pago), fmtMoeda(a.saldo)]);
-    baixarXlsx('faturado_pago_saldo_acumulado.xlsx', ['Medição', 'Faturado acumulado', 'Pago acumulado', 'Saldo Bruto acumulado'], linhas);
+    const linhas = ultimoDadosFaturadoPagoAcumulado.map((a) => [a.medicao === 'hoje' ? 'Hoje' : `Medição ${a.medicao}`, fmtMoeda(a.faturado), fmtMoeda(a.pago), fmtMoeda(a.saldoDisponivel)]);
+    baixarXlsx('faturado_pago_saldo_acumulado.xlsx', ['Medição', 'Faturado acumulado', 'Pago / A Pagar acumulado', 'Saldo Disponível acumulado'], linhas);
   } else if (qual === 'categoriaCusto') {
     const linhas = ultimoDadosCategoriaCusto.map(([cat, baixado, aBaixar, total]) => [cat, fmtMoeda(baixado), fmtMoeda(aBaixar), fmtMoeda(total)]);
     baixarXlsx('custo_por_categoria.xlsx', ['Categoria', 'Baixado', 'A Baixar', 'Total'], linhas);
@@ -2767,7 +2767,7 @@ let chartAging, chartFluxo, chartStatusPagamento, chartPagosAbc, chartAporte;
 let chartCategoriaCusto, chartAbcCategoria, chartFaturadoPago, chartMargemGauge, chartFaturadoPagoAcumulado;
 let chartPagoApagarGauge, chartApagarGauge, chartSaldoDisponivelGauge;
 let ultimoDadosFaturadoPago = []; // export: [{medicao, faturado, pago, margem}]
-let ultimoDadosFaturadoPagoAcumulado = []; // export: [{medicao, faturado, pago, saldo}]
+let ultimoDadosFaturadoPagoAcumulado = []; // export: [{medicao, faturado, pago, saldoDisponivel}]
 let ultimoAbertos = [];
 let ultimoItensAnalise = [];
 
@@ -3323,24 +3323,9 @@ function renderizarFaturadoPago_() {
     // Faturamento), nunca o Valor Total (bruto) — pedido explícito, pra
     // comparar com o Pago (valor líquido de fato baixado) numa base
     // equivalente.
-    return { medicao: m.medicao, faturado: m.valorLiquido, pago, margem: m.valorLiquido - pago, itensPagos };
+    return { medicao: m.medicao, faturado: m.valorLiquido, pago, margem: m.valorLiquido - pago, itensPagos, fimJanelaDia };
   });
   ultimoDadosFaturadoPago = linhas.map((l) => ({ medicao: l.medicao, faturado: l.faturado, pago: l.pago, margem: l.margem }));
-
-  // Faturado/Pago/Saldo acumulados período a período — usado no card
-  // "Resultado", no gráfico "Acumulado" logo abaixo e como base do que
-  // antes era a linha "Saldo acumulado" dentro do gráfico principal (tirada
-  // de lá porque com Faturado/Pago em R$ absoluto e Saldo em R$ acumulado
-  // no mesmo eixo, os primeiros períodos ficavam ilegíveis — comprimidos
-  // perto de zero — assim que o acumulado crescia; o gráfico dedicado
-  // abaixo usa sua própria escala).
-  let faturadoAcum = 0, pagoAcum = 0;
-  const acumulados = linhas.map((l) => {
-    faturadoAcum += l.faturado;
-    pagoAcum += l.pago;
-    return { medicao: l.medicao, faturado: faturadoAcum, pago: pagoAcum, saldo: faturadoAcum - pagoAcum };
-  });
-  ultimoDadosFaturadoPagoAcumulado = acumulados;
 
   // Cards de resumo do Faturamento — sempre sobre o Valor Liquido (l.faturado
   // já é o líquido, ver acima).
@@ -3380,6 +3365,42 @@ function renderizarFaturadoPago_() {
   // % de Pago dentro de (Pago + A Pagar) — velocímetro do card "Faturado —
   // Total (líquido)", no lugar da barra horizontal laranja/azul anterior.
   const pagoDoTotalPct = (totalPago + aPagar) ? (totalPago / (totalPago + aPagar)) * 100 : 0;
+
+  // Faturado/Pago acumulados período a período — usado no gráfico
+  // "Acumulado" logo abaixo (tirado do gráfico principal porque com
+  // Faturado/Pago em R$ absoluto e Saldo em R$ acumulado no mesmo eixo, os
+  // primeiros períodos ficavam ilegíveis — comprimidos perto de zero —
+  // assim que o acumulado crescia; o gráfico dedicado abaixo usa sua
+  // própria escala).
+  //
+  // "Saldo Disponível acumulado" é recalculado medição a medição (pedido
+  // explícito) — pra cada ponto do histórico, é o Saldo Bruto acumulado até
+  // ali menos o que ainda estava em aberto NAQUELE momento (títulos com
+  // Vencimento depois da janela de Pago daquela medição especificamente,
+  // usando fimJanelaDia salvo em cada linha) — mostra como o caixa
+  // disponível evoluiu de fato ao longo do tempo, não só o retrato de hoje.
+  let faturadoAcum = 0, pagoAcum = 0;
+  const acumulados = linhas.map((l) => {
+    faturadoAcum += l.faturado;
+    pagoAcum += l.pago;
+    const emAbertoNaquelePonto = todosItens
+      .filter((i) => { const v = diaCalendario(paraData(i['Vencimento'])); return v != null && l.fimJanelaDia != null && v > l.fimJanelaDia; })
+      .reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
+    return { medicao: l.medicao, faturado: faturadoAcum, pago: pagoAcum, saldoDisponivel: (faturadoAcum - pagoAcum) - emAbertoNaquelePonto };
+  });
+  // Ponto extra "Hoje" — pedido explícito, pra fazer a linha "Pago"
+  // terminar somando "A Pagar" por cima, numa mesma linha (em vez de duas
+  // linhas separadas). Os pontos de cada medição continuam com o Pago
+  // "puro" (igual à tabela "Por medição"); só este ponto final soma A
+  // Pagar. Faturado e Saldo Disponível seguem retos até aqui: nada muda
+  // entre a última medição (já com a janela estendida até ontem) e hoje
+  // além do que "A Pagar" já cobre — aliás, saldoDisponivel do último
+  // ponto real já bate exatamente com a variável `saldoDisponivel` acima
+  // (mesma janela, mesmos títulos em aberto).
+  if (acumulados.length) {
+    acumulados.push({ medicao: 'hoje', faturado: faturadoAcum, pago: pagoAcum + aPagar, saldoDisponivel });
+  }
+  ultimoDadosFaturadoPagoAcumulado = acumulados;
   document.getElementById('cards-faturamento').innerHTML = `
     <div class="card">
       <div class="card-topo-fixo"><div class="rotulo">Faturado — Total (líquido)</div><div class="card-valores"><div class="card-qtde" style="font-size:16px;">${fmtMoeda(totalFaturado)}</div></div></div>
@@ -3494,17 +3515,22 @@ function renderizarFaturadoPago_() {
     },
   });
 
-  // Gráfico "Acumulado" — Faturado, Pago e Saldo somados período a período,
-  // numa escala própria (ver comentário acima de `acumulados`).
-  const labelsAcum = acumulados.map((a) => `Med. ${a.medicao}`);
+  // Gráfico "Acumulado" — Faturado, Pago/A Pagar e Saldo Disponível somados
+  // período a período, numa escala própria (ver comentário acima de
+  // `acumulados`). O último segmento (última medição → "Hoje") vem
+  // tracejado nas 3 linhas — sinaliza que aquele trecho é o retrato de
+  // hoje, não mais uma medição fechada.
+  const labelsAcum = acumulados.map((a) => a.medicao === 'hoje' ? 'Hoje' : `Med. ${a.medicao}`);
+  const idxHojeAcum_ = acumulados.length && acumulados[acumulados.length - 1].medicao === 'hoje' ? acumulados.length - 1 : -1;
+  const segmentoAteHoje_ = { borderDash: (ctx) => ctx.p1DataIndex === idxHojeAcum_ ? [6, 4] : undefined };
   if (chartFaturadoPagoAcumulado) chartFaturadoPagoAcumulado.destroy();
   chartFaturadoPagoAcumulado = new Chart(document.getElementById('chart-faturado-pago-acumulado'), {
     data: {
       labels: labelsAcum,
       datasets: [
-        { type: 'line', label: 'Faturado acumulado', data: acumulados.map((a) => a.faturado), borderColor: '#2a78d6', backgroundColor: '#2a78d6', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3 },
-        { type: 'line', label: 'Pago acumulado', data: acumulados.map((a) => a.pago), borderColor: '#eb6834', backgroundColor: '#eb6834', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3 },
-        { type: 'line', label: 'Saldo Bruto acumulado', data: acumulados.map((a) => a.saldo), borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', borderDash: [5, 3], tension: 0.3 },
+        { type: 'line', label: 'Faturado acumulado', data: acumulados.map((a) => a.faturado), borderColor: '#2a78d6', backgroundColor: '#2a78d6', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
+        { type: 'line', label: 'Pago / A Pagar acumulado', data: acumulados.map((a) => a.pago), borderColor: '#eb6834', backgroundColor: '#eb6834', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
+        { type: 'line', label: 'Saldo Disponível acumulado', data: acumulados.map((a) => a.saldoDisponivel), borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', borderDash: [5, 3], tension: 0.3 },
       ],
     },
     options: {
