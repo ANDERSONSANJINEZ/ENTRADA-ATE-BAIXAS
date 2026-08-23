@@ -198,10 +198,11 @@
   #tabela-lancamentos .anexos-col button.anexo-doc.anexo-definido { background: var(--azul); color: #fff; border-color: var(--azul); }
   #tabela-lancamentos .anexos-col button.anexo-comp { border-color: var(--verde); color: var(--verde); }
   #tabela-lancamentos .anexos-col button.anexo-comp.anexo-definido-verde { background: var(--verde); color: #fff; border-color: var(--verde); }
-  /* Botão Remover (coluna Ação) do mesmo tamanho dos botões de anexo, só que vermelho. */
-  #tabela-lancamentos td.col-acao button { padding: 3px 6px; font-size: 11px; }
-  /* Separador visual fixo entre Anexos e Ação. */
-  #tabela-lancamentos td.col-acao { border-left: 1px solid var(--borda); padding-left: 10px; }
+  /* Remover mora junto com os botões de anexo (mesmo .anexos-col, ver
+     renderizarLancamentos) — já herda o padding/fonte pequenos e o gap de
+     4px da regra "#tabela-lancamentos .anexos-col button" acima; a coluna
+     Ação em si fica vazia (só existe pra manter a contagem de colunas do
+     cabeçalho/redimensionamento). */
   tr.separador-grupo td { border-top: 2px solid #1e2430; }
   #conteudo-analise ul { margin: 0 0 14px; padding-left: 22px; }
   #conteudo-analise h3 { font-size: 14px; color: var(--azul); margin: 18px 0 6px; }
@@ -5059,17 +5060,21 @@ function renderizarLancamentos() {
       ? (linkComp ? 'Abrir comprovante' : 'Nenhum comprovante cadastrado')
       : (linkComp ? 'Abrir/editar link do comprovante' : 'Adicionar link do comprovante');
     // Documento = azul, Comprovante = verde (cores diferentes pra distinguir
-    // rápido qual botão é qual) — Remover, na coluna Ação, é vermelho.
+    // rápido qual botão é qual) — Remover é vermelho. Os 3 ficam juntos no
+    // mesmo grupo flex (mesmo espaçamento entre eles), em vez de Remover
+    // morar numa coluna própria separada por uma linha divisória — pedido
+    // explícito, pra aproximar o botão dos outros dois.
     const anexos = `<td class="col-anexos"><div class="anexos-col">
         <button class="btn secundario small anexo-doc ${linkDoc ? 'anexo-definido' : ''}" title="${tituloDoc}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','documento','${escaparAtributo(linkDoc)}')">📄</button>
         <button class="btn secundario small anexo-comp ${linkComp ? 'anexo-definido-verde' : ''}" title="${tituloComp}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','comprovante','${escaparAtributo(linkComp)}')">🧾</button>
+        ${acao}
       </div></td>`;
     const celulasDados = colunasEmOrdem.map((chave) => celulaLancamento_(chave, i)).join('');
     const classeDuplicado = i.Status === 'Duplicado – revisar' ? ' class="linha-duplicada"' : '';
     return `<tr${classeDuplicado} onclick="abrirDetalheLinha(event, '${idEsc}', '${i.Origem}')" title="Clique para ver o lançamento por completo">
       ${celulasDados}
       ${anexos}
-      <td class="col-acao">${acao}</td>
+      <td class="col-acao"></td>
     </tr>`;
   }).join('');
   definirTotalizador('total-lancamentos', itens);
