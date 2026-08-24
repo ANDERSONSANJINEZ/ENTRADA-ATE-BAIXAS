@@ -45,6 +45,12 @@
   #topo-fixo {
     position: sticky;
     top: 0;
+    /* left:0 — sem efeito nenhum enquanto a página só rola na vertical
+       (a maioria do tempo); só entra em ação se "Todos os lançamentos"
+       empurrar a página pra rolagem horizontal também (tabela mais larga
+       que a tela, ver #tabela-lancamentos), pra esta barra do topo não
+       "andar" junto pros lados com o resto da página. */
+    left: 0;
     z-index: 200;
   }
   header {
@@ -120,8 +126,11 @@
      em telas estreitas — sem isso, table-layout:fixed + width:100% espreme
      tudo pra caber na tela do celular, já que min-width sempre vence width
      quando o container é menor. Com o min-width, a tabela passa a ficar
-     maior que a tela nesse caso e .tabela-scroll (que já tem overflow:auto)
-     vira scroll horizontal — o padrão normal pra tabela larga no celular. */
+     maior que a tela nesse caso; como .tabela-scroll-fluida usa
+     overflow:visible (ver mais abaixo — precisa, pra não recriar uma 2ª
+     barra de rolagem vertical própria), quem rola pra ver as colunas que
+     não couberem é a PÁGINA inteira (rolagem horizontal do documento,
+     igual à vertical) — não mais uma caixa interna só da tabela. */
   #tabela-lancamentos { table-layout: fixed; min-width: 1100px; }
   /* Versão simplificada (ver TABELA_LANCAMENTOS_SIMPLIFICADA/PERFIS_RESTRITOS)
      — some com as colunas Origem/Aporte/Remessa e a largura delas é
@@ -305,6 +314,38 @@
      max-height) faz as duas terminarem na mesma linha, mesmo tendo números
      bem diferentes de linhas (medições são poucas; categorias, muitas). */
   .tabela-scroll-par { height: 380px; }
+  /* "Todos os lançamentos" — pedido explícito: uma única barra de rolagem
+     (a da página), não duas. Cancela o max-height/overflow:auto padrão de
+     .tabela-scroll (que criava uma 2ª rolagem própria, vertical, só pra
+     esta tabela). overflow:visible nos dois eixos, não só vertical: um
+     "overflow-x:auto" aqui, sozinho, faria o overflow-y computado virar
+     "auto" de qualquer jeito (regra do CSS: eixo "visible" ao lado de eixo
+     diferente de "visible" vira "auto") — recriando a 2ª rolagem por
+     baixo do pano. Sem container próprio de rolagem, quem rola pra ver as
+     colunas que não couberem na tela (a tabela tem min-width:1100px, ver
+     #tabela-lancamentos) é a PÁGINA inteira, na horizontal — mesmo padrão
+     já usado hoje pra rolagem vertical do documento. */
+  .tabela-scroll-fluida { max-height: none; overflow: visible; }
+  /* Painel de "Todos os lançamentos" ocupa a largura inteira da tela (não só
+     a de .main, que tem max-width:1600px + padding) — a margem/largura de
+     verdade é calculada em JS (ajustarLayoutLancamentos), porque depende da
+     posição real do <main> na tela (varia com o tamanho da janela e com a
+     barra de rolagem vertical, que 100vw calcularia errado). Sem cantos
+     arredondados nas bordas que agora encostam na tela. */
+  .painel-lancamentos-full { border-radius: 0; }
+  /* Cabeçalho da aba "Todos os lançamentos" fixo na rolagem — 3 camadas
+     empilhadas (cabecalho-painel, filtros, cabeçalho da tabela), cada uma
+     sticky com o "top" calculado em JS (ajustarLayoutLancamentos) somando a
+     altura de tudo que já é fixo acima dela (#topo-fixo + camadas
+     anteriores). Sem isso as 3 ficariam sticky todas coladas no topo da
+     tela (top:0), sobrepostas umas nas outras. z-index decrescente:
+     cabecalho-painel > filtros > cabeçalho da tabela (que já tem z-index:3
+     próprio, ver #tabela-lancamentos th) > linhas de dado (sem z-index). */
+  #aba-lancamentos .cabecalho-painel, #aba-lancamentos .filtros {
+    position: sticky; left: 0; background: #fff;
+  }
+  #aba-lancamentos .cabecalho-painel { z-index: 12; }
+  #aba-lancamentos .filtros { z-index: 11; }
   .paginacao { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--cinza); }
   .paginacao button { background: #fff; color: var(--azul); border: 1px solid var(--azul); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
   .paginacao button:disabled { opacity: .45; cursor: default; }
@@ -777,10 +818,11 @@
   </section>
 
   <section id="aba-lancamentos" class="aba">
-    <div class="painel">
+    <div class="painel painel-lancamentos-full">
       <div class="cabecalho-painel">
         <h2>Todos os lançamentos</h2>
         <div style="display:flex; gap:8px;">
+          <button class="btn small" id="btn-abrir-lancamento-manual" onclick="abrirModalLancamentoManual()">+ Adicionar lançamento manual</button>
           <button class="btn perigo small" id="btn-remover-duplicados" onclick="removerDuplicados()">🗑 Excluir duplicados</button>
           <button class="btn secundario small" id="btn-exportar-lancamentos" onclick="exportarXlsx('lancamentos')">⬇ Exportar Excel</button>
         </div>
@@ -806,7 +848,7 @@
         <button type="button" class="btn secundario small" onclick="limparFiltrosLancamentos()">✕ Limpar filtros</button>
       </div>
       <div id="total-lancamentos" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
-      <div class="tabela-scroll">
+      <div class="tabela-scroll tabela-scroll-fluida">
         <table id="tabela-lancamentos">
           <!-- #tabela-lancamentos usa table-layout:fixed (ver <style>), então as
                larguras vêm só destas % do <colgroup> — min-width em td/th das
@@ -837,8 +879,6 @@
       </div>
       <div id="paginacao-lancamentos" class="paginacao"></div>
     </div>
-
-    <button class="btn" id="btn-abrir-lancamento-manual" onclick="abrirModalLancamentoManual()" style="margin-top:4px;">+ Adicionar lançamento manual</button>
   </section>
 
   <section id="aba-detalhe-aporte" class="aba">
@@ -1719,6 +1759,16 @@ document.querySelectorAll('nav button').forEach(btn => {
     // leitura, ver atualizarUiModoLeitura) — reconfere toda vez que a aba é
     // aberta, não só na primeira, pra sempre pegar um arquivo novo.
     if (btn.dataset.aba === 'atualizar' && !MODO_LEITURA) verificarEImportarDoDrive();
+    // "Lançamentos" some com display:none quando não é a aba ativa — as
+    // medidas de altura/largura usadas pelo cabeçalho fixo e pelo painel de
+    // largura total (ver ajustarLayoutLancamentos) só valem depois que a
+    // aba volta a ficar visível. Zera o transform horizontal (ver
+    // seguirRolagemHorizontalLancamentos_) sempre que troca de aba — sem
+    // isso, sair de "Lançamentos" rolado pros lados deixava a barra do
+    // topo "presa" deslocada nas outras abas, que não tratam esse eixo.
+    document.getElementById('topo-fixo').style.transform = '';
+    document.querySelectorAll('#aba-lancamentos .cabecalho-painel, #aba-lancamentos .filtros').forEach((el) => { el.style.transform = ''; });
+    if (btn.dataset.aba === 'lancamentos') { ajustarLayoutLancamentos(); seguirRolagemHorizontalLancamentos_(); }
   };
 });
 
@@ -2637,10 +2687,11 @@ async function baixarXlsxAporte_(numeroAporte, itens) {
 // aplicados no momento).
 function exportarXlsx(qual) {
   if (qual === 'lancamentos') {
-    // Não lê mais da tabela no DOM: com a paginação (ver
-    // TAMANHO_PAGINA_LANCAMENTOS), só a página atual fica renderizada ali —
-    // ultimoItensLancamentosFiltrados guarda o conjunto completo (todas as
-    // páginas) já filtrado/ordenado, exatamente como era exportado antes.
+    // Não lê mais da tabela no DOM: com o carregamento incremental (ver
+    // TAMANHO_PAGINA_LANCAMENTOS/carregarMaisLancamentos), só o que já foi
+    // rolado até agora fica no <tbody> — ultimoItensLancamentosFiltrados
+    // guarda o conjunto completo (carregado ou não) já filtrado/ordenado,
+    // exatamente como era exportado antes.
     const linhas = ultimoItensLancamentosFiltrados.map((i) => [
       i.Origem, i.Status, i.Aporte || '', i.Tipo || '', fmtData(i['Data Emissão']), i['Nº Documento'] || '',
       i['Forma Pagamento'] || '', i['Chave Pix'] || '', i['Código Fornecedor'] || '', i['Razão Social'] || '',
@@ -4969,31 +5020,69 @@ if (!TABELA_LANCAMENTOS_SIMPLIFICADA) reconstruirCabecalhoLancamentos();
 // Renderizar milhares de <tr> de uma vez (innerHTML com o dataset inteiro)
 // é, sozinho, a maior fatia do tempo de carregamento da tela com o volume
 // atual de títulos — o navegador precisa criar todos os nós no DOM mesmo
-// que só uma fração caiba na tela. Por isso a tabela é paginada: só os
-// itens da página atual entram no HTML gerado; o restante (totalizador,
-// exportação, contagem) continua considerando TODOS os itens filtrados.
+// que só uma fração caiba na tela. Por isso a tabela carrega aos poucos:
+// só um bloco de cada vez entra no HTML gerado, e mais blocos são
+// ANEXADOS (não recriados do zero) conforme o usuário rola a página pra
+// perto do fim — ver carregarMaisLancamentos()/listener de scroll mais
+// abaixo. O totalizador/exportação/contagem continuam considerando TODOS
+// os itens filtrados, carregados ou não (ultimoItensLancamentosFiltrados).
 const TAMANHO_PAGINA_LANCAMENTOS = 300;
-let paginaLancamentos = 1;
-// Guarda o último conjunto completo (filtrado/ordenado, todas as páginas)
+// Quantos itens de ultimoItensLancamentosFiltrados já estão de fato no
+// <tbody> agora — cresce de TAMANHO_PAGINA_LANCAMENTOS em
+// TAMANHO_PAGINA_LANCAMENTOS a cada carregarMaisLancamentos(), e volta a
+// ser recontado do zero toda vez que renderizarLancamentos() roda de novo
+// (filtro/busca/ordenação mudou o conjunto inteiro).
+let quantidadeCarregadaLancamentos = 0;
+// Guarda o último conjunto completo (filtrado/ordenado, carregado ou não)
 // pra exportarXlsx('lancamentos') não depender de ler a tabela no DOM, que
-// agora só tem a página atual.
+// pode não estar com tudo carregado ainda.
 let ultimoItensLancamentosFiltrados = [];
 
-function mudarPaginaLancamentos(delta) {
-  paginaLancamentos += delta;
-  renderizarLancamentos();
+// Substitui a antiga paginação com botões "Anterior/Próxima" por um texto
+// de status — pedido explícito, já que a rolagem única da página assume
+// esse papel agora.
+function atualizarStatusLancamentos(totalItens) {
+  const el = document.getElementById('paginacao-lancamentos');
+  if (!totalItens) { el.textContent = ''; return; }
+  el.textContent = quantidadeCarregadaLancamentos >= totalItens
+    ? `Mostrando todos os ${totalItens.toLocaleString('pt-BR')} título(s)`
+    : `Mostrando ${quantidadeCarregadaLancamentos.toLocaleString('pt-BR')} de ${totalItens.toLocaleString('pt-BR')} — role a página para carregar mais`;
 }
 
-function renderizarPaginacaoLancamentos(totalItens, totalPaginas) {
-  const el = document.getElementById('paginacao-lancamentos');
-  if (totalItens === 0) { el.innerHTML = ''; return; }
-  const inicio = (paginaLancamentos - 1) * TAMANHO_PAGINA_LANCAMENTOS + 1;
-  const fim = Math.min(paginaLancamentos * TAMANHO_PAGINA_LANCAMENTOS, totalItens);
-  el.innerHTML = `
-    <button type="button" ${paginaLancamentos <= 1 ? 'disabled' : ''} onclick="mudarPaginaLancamentos(-1)">‹ Anterior</button>
-    <span>Mostrando ${inicio}–${fim} de ${totalItens}${totalPaginas > 1 ? ` (página ${paginaLancamentos} de ${totalPaginas})` : ''}</span>
-    <button type="button" ${paginaLancamentos >= totalPaginas ? 'disabled' : ''} onclick="mudarPaginaLancamentos(1)">Próxima ›</button>
-  `;
+// Gera o <tr> de um lançamento — usado tanto pelo render completo
+// (renderizarLancamentos) quanto pelo carregamento incremental
+// (carregarMaisLancamentos), pra nunca duplicar a lógica das 2 colunas
+// fixas (Anexos/Ação) e das colunas reordenáveis.
+function linhaLancamentoHtml_(i, colunasEmOrdem) {
+  const acao = (!MODO_LEITURA && i.Origem === 'Manual')
+    ? `<button class="btn perigo small" title="Remover lançamento manual" onclick="removerManual('${i.ID}')">🗑️</button>`
+    : '';
+  const idEsc = escaparAtributo(i.ID);
+  const linkDoc = i['Link Documento'] || '';
+  const linkComp = i['Link Comprovante'] || '';
+  const tituloDoc = MODO_LEITURA
+    ? (linkDoc ? 'Abrir documento' : 'Nenhum documento cadastrado')
+    : (linkDoc ? 'Abrir/editar link do documento' : 'Adicionar link do documento');
+  const tituloComp = MODO_LEITURA
+    ? (linkComp ? 'Abrir comprovante' : 'Nenhum comprovante cadastrado')
+    : (linkComp ? 'Abrir/editar link do comprovante' : 'Adicionar link do comprovante');
+  // Documento = azul, Comprovante = verde (cores diferentes pra distinguir
+  // rápido qual botão é qual) — Remover é vermelho. Os 3 ficam juntos no
+  // mesmo grupo flex (mesmo espaçamento entre eles), em vez de Remover
+  // morar numa coluna própria separada por uma linha divisória — pedido
+  // explícito, pra aproximar o botão dos outros dois.
+  const anexos = `<td class="col-anexos"><div class="anexos-col">
+      <button class="btn secundario small anexo-doc ${linkDoc ? 'anexo-definido' : ''}" title="${tituloDoc}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','documento','${escaparAtributo(linkDoc)}')">📄</button>
+      <button class="btn secundario small anexo-comp ${linkComp ? 'anexo-definido-verde' : ''}" title="${tituloComp}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','comprovante','${escaparAtributo(linkComp)}')">🧾</button>
+      ${acao}
+    </div></td>`;
+  const celulasDados = colunasEmOrdem.map((chave) => celulaLancamento_(chave, i)).join('');
+  const classeDuplicado = i.Status === 'Duplicado – revisar' ? ' class="linha-duplicada"' : '';
+  return `<tr${classeDuplicado} onclick="abrirDetalheLinha(event, '${idEsc}', '${i.Origem}')" title="Clique para ver o lançamento por completo">
+    ${celulasDados}
+    ${anexos}
+    <td class="col-acao"></td>
+  </tr>`;
 }
 
 function renderizarLancamentos() {
@@ -5040,55 +5129,116 @@ function renderizarLancamentos() {
   itens = aplicarOrdenacao('tabela-lancamentos', itens, extratoresLancamentosEmOrdem());
   ultimoItensLancamentosFiltrados = itens;
 
-  const totalPaginas = Math.max(1, Math.ceil(itens.length / TAMANHO_PAGINA_LANCAMENTOS));
-  if (paginaLancamentos > totalPaginas) paginaLancamentos = totalPaginas;
-  if (paginaLancamentos < 1) paginaLancamentos = 1;
-  const itensPagina = itens.slice((paginaLancamentos - 1) * TAMANHO_PAGINA_LANCAMENTOS, paginaLancamentos * TAMANHO_PAGINA_LANCAMENTOS);
-
   const colunasEmOrdem = ordemColunasLancamentos; // sem os fixos (anexos/ação), tratados à parte abaixo
-  document.querySelector('#tabela-lancamentos tbody').innerHTML = itensPagina.map(i => {
-    const acao = (!MODO_LEITURA && i.Origem === 'Manual')
-      ? `<button class="btn perigo small" title="Remover lançamento manual" onclick="removerManual('${i.ID}')">🗑️</button>`
-      : '';
-    const idEsc = escaparAtributo(i.ID);
-    const linkDoc = i['Link Documento'] || '';
-    const linkComp = i['Link Comprovante'] || '';
-    const tituloDoc = MODO_LEITURA
-      ? (linkDoc ? 'Abrir documento' : 'Nenhum documento cadastrado')
-      : (linkDoc ? 'Abrir/editar link do documento' : 'Adicionar link do documento');
-    const tituloComp = MODO_LEITURA
-      ? (linkComp ? 'Abrir comprovante' : 'Nenhum comprovante cadastrado')
-      : (linkComp ? 'Abrir/editar link do comprovante' : 'Adicionar link do comprovante');
-    // Documento = azul, Comprovante = verde (cores diferentes pra distinguir
-    // rápido qual botão é qual) — Remover é vermelho. Os 3 ficam juntos no
-    // mesmo grupo flex (mesmo espaçamento entre eles), em vez de Remover
-    // morar numa coluna própria separada por uma linha divisória — pedido
-    // explícito, pra aproximar o botão dos outros dois.
-    const anexos = `<td class="col-anexos"><div class="anexos-col">
-        <button class="btn secundario small anexo-doc ${linkDoc ? 'anexo-definido' : ''}" title="${tituloDoc}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','documento','${escaparAtributo(linkDoc)}')">📄</button>
-        <button class="btn secundario small anexo-comp ${linkComp ? 'anexo-definido-verde' : ''}" title="${tituloComp}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','comprovante','${escaparAtributo(linkComp)}')">🧾</button>
-        ${acao}
-      </div></td>`;
-    const celulasDados = colunasEmOrdem.map((chave) => celulaLancamento_(chave, i)).join('');
-    const classeDuplicado = i.Status === 'Duplicado – revisar' ? ' class="linha-duplicada"' : '';
-    return `<tr${classeDuplicado} onclick="abrirDetalheLinha(event, '${idEsc}', '${i.Origem}')" title="Clique para ver o lançamento por completo">
-      ${celulasDados}
-      ${anexos}
-      <td class="col-acao"></td>
-    </tr>`;
-  }).join('');
+  quantidadeCarregadaLancamentos = Math.min(TAMANHO_PAGINA_LANCAMENTOS, itens.length);
+  document.querySelector('#tabela-lancamentos tbody').innerHTML =
+    itens.slice(0, quantidadeCarregadaLancamentos).map((i) => linhaLancamentoHtml_(i, colunasEmOrdem)).join('');
   definirTotalizador('total-lancamentos', itens);
-  renderizarPaginacaoLancamentos(itens.length, totalPaginas);
+  atualizarStatusLancamentos(itens.length);
   // tornarOrdenavel só liga os listeners de clique no cabeçalho na 1ª
   // chamada (é idempotente) — o callback passado aqui é o que fica valendo
-  // pra todo clique de ordenação dali em diante, por isso a volta pra
-  // página 1 tem que estar dentro dele (mudar a ordenação muda o que cai em
-  // cada página).
-  tornarOrdenavel('tabela-lancamentos', extratoresLancamentosEmOrdem(), () => { paginaLancamentos = 1; renderizarLancamentos(); });
+  // pra todo clique de ordenação dali em diante.
+  tornarOrdenavel('tabela-lancamentos', extratoresLancamentosEmOrdem(), () => renderizarLancamentos());
   tornarColunasRedimensionaveis('tabela-lancamentos');
+  ajustarLayoutLancamentos();
 }
+
+// Anexa o próximo bloco de TAMANHO_PAGINA_LANCAMENTOS itens ao final do
+// <tbody> (não recria a tabela inteira — só isso já seria caro de novo com
+// milhares de linhas) — chamado pelo listener de rolagem abaixo quando o
+// usuário chega perto do fim da página com a aba "Lançamentos" ativa e
+// ainda sobra item de ultimoItensLancamentosFiltrados não carregado.
+function carregarMaisLancamentos() {
+  const itens = ultimoItensLancamentosFiltrados;
+  if (quantidadeCarregadaLancamentos >= itens.length) return;
+  const proximoBloco = itens.slice(quantidadeCarregadaLancamentos, quantidadeCarregadaLancamentos + TAMANHO_PAGINA_LANCAMENTOS);
+  quantidadeCarregadaLancamentos += proximoBloco.length;
+  document.querySelector('#tabela-lancamentos tbody')
+    .insertAdjacentHTML('beforeend', proximoBloco.map((i) => linhaLancamentoHtml_(i, ordemColunasLancamentos)).join(''));
+  atualizarStatusLancamentos(itens.length);
+  ajustarLayoutLancamentos();
+}
+
+// Dispara carregarMaisLancamentos() quando a rolagem da PÁGINA (não mais
+// uma rolagem interna só da tabela, ver .tabela-scroll-fluida) chega perto
+// do fim — só quando a aba "Lançamentos" está ativa, pra não competir com
+// a rolagem de outras abas. { passive: true } evita que o navegador espere
+// o listener terminar antes de rolar de fato (rolagem mais fluida).
+window.addEventListener('scroll', () => {
+  if (!document.getElementById('aba-lancamentos').classList.contains('ativa')) return;
+  const faltaParaOFim = document.documentElement.scrollHeight - (window.scrollY + window.innerHeight);
+  if (faltaParaOFim < 600) carregarMaisLancamentos();
+  seguirRolagemHorizontalLancamentos_();
+}, { passive: true });
+
+// #tabela-lancamentos tem min-width:1100px — em tela estreita, sem
+// container próprio de rolagem (ver .tabela-scroll-fluida), quem rola pra
+// ver as colunas que faltam é a PÁGINA inteira, na horizontal. Sem isso, o
+// cabeçalho fixo (#topo-fixo + cabecalho-painel + filtros — position:
+// sticky só resolve o eixo vertical de forma confiável entre navegadores;
+// "left:0" sticky no eixo horizontal, testado, não funcionou de forma
+// consistente) "andaria" pros lados junto com a rolagem horizontal em vez
+// de ficar parado. transform:translateX é só visual (não mexe em layout),
+// então não atrapalha o position:sticky vertical de cada um.
+function seguirRolagemHorizontalLancamentos_() {
+  if (!document.getElementById('aba-lancamentos').classList.contains('ativa')) return;
+  const deslocamento = window.scrollX ? `translateX(${window.scrollX}px)` : '';
+  document.getElementById('topo-fixo').style.transform = deslocamento;
+  document.querySelectorAll('#aba-lancamentos .cabecalho-painel, #aba-lancamentos .filtros').forEach((el) => { el.style.transform = deslocamento; });
+}
+
+// Recalcula, pra aba "Lançamentos": (1) a margem/largura do painel pra ele
+// ocupar a tela inteira (não só a largura de .main, que tem
+// max-width:1600px + padding) e (2) o "top" de cada camada do cabeçalho
+// fixo (cabecalho-painel, filtros, cabeçalho da tabela), empilhadas uma
+// embaixo da outra a partir da altura real de #topo-fixo. Tudo calculado
+// com getBoundingClientRect/innerWidth (nunca 100vw), que já descontam a
+// barra de rolagem vertical de verdade — 100vw não desconta, e "vazava"
+// alguns pixels de rolagem horizontal indesejada.
+function ajustarLayoutLancamentos() {
+  const secao = document.getElementById('aba-lancamentos');
+  if (!secao.classList.contains('ativa')) return;
+  const painel = secao.querySelector(':scope > .painel');
+  if (painel) {
+    // Zera antes de medir: sem isso, uma chamada anterior (ResizeObserver
+    // dispara várias vezes) deixaria a margem já aplicada, e medir de novo
+    // em cima dela compostaria o valor errado a cada rodada.
+    painel.style.marginLeft = '';
+    painel.style.marginRight = '';
+    painel.style.width = '';
+    const rect = painel.getBoundingClientRect();
+    const distEsquerda = rect.left;
+    const distDireita = window.innerWidth - rect.right;
+    painel.style.marginLeft = `${-distEsquerda}px`;
+    painel.style.marginRight = `${-distDireita}px`;
+    painel.style.width = `calc(100% + ${distEsquerda + distDireita}px)`;
+  }
+  const alturaTopo = document.getElementById('topo-fixo').getBoundingClientRect().height;
+  const cabecalhoPainel = secao.querySelector('.cabecalho-painel');
+  const filtros = secao.querySelector('.filtros');
+  if (!cabecalhoPainel || !filtros) return;
+  cabecalhoPainel.style.top = `${alturaTopo}px`;
+  const alturaCabecalhoPainel = cabecalhoPainel.getBoundingClientRect().height;
+  filtros.style.top = `${alturaTopo + alturaCabecalhoPainel}px`;
+  const alturaFiltros = filtros.getBoundingClientRect().height;
+  const topoCabecalhoTabela = `${alturaTopo + alturaCabecalhoPainel + alturaFiltros}px`;
+  secao.querySelectorAll('#tabela-lancamentos thead tr:first-child th').forEach((th) => { th.style.top = topoCabecalhoTabela; });
+}
+// #topo-fixo pode mudar de altura sem disparar um resize da janela (ex.:
+// texto do botão de acesso muda entre "Voltar para leitura"/"Habilitar
+// edição", quebrando o header numa linha a mais/menos) — ResizeObserver
+// nas 3 camadas cobre isso, além do resize normal da janela e do momento
+// em que a própria aba "Lançamentos" vira visível (troca de aba: o
+// elemento vai de 0 de altura pra altura real, o que já é, em si, um
+// resize observável).
+new ResizeObserver(() => ajustarLayoutLancamentos()).observe(document.getElementById('topo-fixo'));
+document.querySelectorAll('#aba-lancamentos .cabecalho-painel, #aba-lancamentos .filtros').forEach((el) => {
+  new ResizeObserver(() => ajustarLayoutLancamentos()).observe(el);
+});
+window.addEventListener('resize', ajustarLayoutLancamentos);
+
 ['busca', 'filtro-origem', 'filtro-status', 'filtro-aporte', 'filtro-categoria'].forEach(id =>
-  document.getElementById(id).addEventListener('input', () => { paginaLancamentos = 1; renderizarLancamentos(); }));
+  document.getElementById(id).addEventListener('input', () => renderizarLancamentos()));
 
 // Limpa a busca, os 4 seletores (Aporte/Categoria/Status/Origem) e todos os
 // filtros por coluna de "Todos os lançamentos" de uma vez — sem isso, um
@@ -5100,7 +5250,6 @@ function limparFiltrosLancamentos() {
   document.getElementById('filtro-status').value = '';
   document.getElementById('filtro-aporte').value = '';
   document.getElementById('filtro-categoria').value = '';
-  paginaLancamentos = 1;
   renderizarLancamentos();
 }
 
@@ -5451,10 +5600,11 @@ const EXTRATORES_DETALHE_APORTE = [
   i => paraNumero(i['R$ Valor']),
 ];
 
-// Mesmo esquema de paginação da tabela de Lançamentos (ver
-// TAMANHO_PAGINA_LANCAMENTOS): com "Todos os aportes" selecionado dá pra
-// listar o histórico inteiro de uma vez, o que já causou lentidão real
-// antes (ver correção equivalente em Lançamentos).
+// Paginação clássica (Anterior/Próxima), diferente do carregamento
+// incremental por rolagem que "Todos os lançamentos" usa hoje (ver
+// TAMANHO_PAGINA_LANCAMENTOS) — mesma ideia de fundo, porém: com "Todos os
+// aportes" selecionado dá pra listar o histórico inteiro de uma vez, o que
+// já causou lentidão real antes (ver correção equivalente em Lançamentos).
 const TAMANHO_PAGINA_APORTE = 300;
 let paginaDetalheAporte = 1;
 function mudarPaginaDetalheAporte(delta) {
