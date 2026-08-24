@@ -192,11 +192,11 @@
   /* Alça de redimensionar colunas (estilo planilha) — ver
      tornarColunasRedimensionaveis(); fica colada na borda direita do
      cabeçalho, sem atrapalhar o clique de ordenação. */
-  #tabela-lancamentos th .alca-redimensionar, #tabela-faturado-pago th .alca-redimensionar, #tabela-faturamento-categorias th .alca-redimensionar {
+  #tabela-lancamentos th .alca-redimensionar, #tabela-faturado-pago th .alca-redimensionar, #tabela-faturamento-categorias th .alca-redimensionar, #tabela-detalhe-aporte th .alca-redimensionar {
     position: absolute; top: 0; right: -4px; bottom: 0; width: 8px;
     cursor: col-resize; z-index: 5;
   }
-  #tabela-lancamentos th .alca-redimensionar:hover, #tabela-faturado-pago th .alca-redimensionar:hover, #tabela-faturamento-categorias th .alca-redimensionar:hover { background: rgba(31,78,120,.35); }
+  #tabela-lancamentos th .alca-redimensionar:hover, #tabela-faturado-pago th .alca-redimensionar:hover, #tabela-faturamento-categorias th .alca-redimensionar:hover, #tabela-detalhe-aporte th .alca-redimensionar:hover { background: rgba(31,78,120,.35); }
   .anexos-col { display: flex; gap: 4px; }
   /* #tabela-lancamentos no seletor não é enfeite — sem ele, ".btn.small"
      (2 classes) tinha mais especificidade que ".anexos-col button" (1
@@ -314,38 +314,41 @@
      max-height) faz as duas terminarem na mesma linha, mesmo tendo números
      bem diferentes de linhas (medições são poucas; categorias, muitas). */
   .tabela-scroll-par { height: 380px; }
-  /* "Todos os lançamentos" — pedido explícito: uma única barra de rolagem
-     (a da página), não duas. Cancela o max-height/overflow:auto padrão de
-     .tabela-scroll (que criava uma 2ª rolagem própria, vertical, só pra
-     esta tabela). overflow:visible nos dois eixos, não só vertical: um
-     "overflow-x:auto" aqui, sozinho, faria o overflow-y computado virar
-     "auto" de qualquer jeito (regra do CSS: eixo "visible" ao lado de eixo
-     diferente de "visible" vira "auto") — recriando a 2ª rolagem por
-     baixo do pano. Sem container próprio de rolagem, quem rola pra ver as
-     colunas que não couberem na tela (a tabela tem min-width:1100px, ver
-     #tabela-lancamentos) é a PÁGINA inteira, na horizontal — mesmo padrão
-     já usado hoje pra rolagem vertical do documento. */
+  /* "Todos os lançamentos" e "Aporte" — pedido explícito: uma única barra
+     de rolagem (a da página), não duas. Cancela o max-height/overflow:auto
+     padrão de .tabela-scroll (que criava uma 2ª rolagem própria, vertical,
+     só pra essas tabelas). overflow:visible nos dois eixos, não só
+     vertical: um "overflow-x:auto" aqui, sozinho, faria o overflow-y
+     computado virar "auto" de qualquer jeito (regra do CSS: eixo "visible"
+     ao lado de eixo diferente de "visible" vira "auto") — recriando a 2ª
+     rolagem por baixo do pano. Sem container próprio de rolagem, quem rola
+     pra ver as colunas que não couberem na tela (tabelas com min-width, ver
+     #tabela-lancamentos/#tabela-detalhe-aporte) é a PÁGINA inteira, na
+     horizontal — mesmo padrão já usado hoje pra rolagem vertical do
+     documento. */
   .tabela-scroll-fluida { max-height: none; overflow: visible; }
-  /* Painel de "Todos os lançamentos" ocupa a largura inteira da tela (não só
-     a de .main, que tem max-width:1600px + padding) — a margem/largura de
-     verdade é calculada em JS (ajustarLayoutLancamentos), porque depende da
-     posição real do <main> na tela (varia com o tamanho da janela e com a
-     barra de rolagem vertical, que 100vw calcularia errado). Sem cantos
-     arredondados nas bordas que agora encostam na tela. */
-  .painel-lancamentos-full { border-radius: 0; }
-  /* Cabeçalho da aba "Todos os lançamentos" fixo na rolagem — 3 camadas
-     empilhadas (cabecalho-painel, filtros, cabeçalho da tabela), cada uma
-     sticky com o "top" calculado em JS (ajustarLayoutLancamentos) somando a
-     altura de tudo que já é fixo acima dela (#topo-fixo + camadas
-     anteriores). Sem isso as 3 ficariam sticky todas coladas no topo da
-     tela (top:0), sobrepostas umas nas outras. z-index decrescente:
-     cabecalho-painel > filtros > cabeçalho da tabela (que já tem z-index:3
-     próprio, ver #tabela-lancamentos th) > linhas de dado (sem z-index). */
-  #aba-lancamentos .cabecalho-painel, #aba-lancamentos .filtros {
+  /* Painel ocupa a largura inteira da tela (não só a de .main, que tem
+     max-width:1600px + padding) — a margem/largura de verdade é calculada
+     em JS (ajustarLayoutAbaRolagemUnica_), porque depende da posição real
+     do <main> na tela (varia com o tamanho da janela e com a barra de
+     rolagem vertical, que 100vw calcularia errado). Sem cantos arredondados
+     nas bordas que agora encostam na tela. */
+  .painel-largura-total { border-radius: 0; }
+  /* Cabeçalho de "Todos os lançamentos"/"Aporte" fixo na rolagem — 3
+     camadas empilhadas (cabecalho-painel, filtros, cabeçalho da tabela),
+     cada uma sticky com o "top" calculado em JS
+     (ajustarLayoutAbaRolagemUnica_) somando a altura de tudo que já é fixo
+     acima dela (#topo-fixo + camadas anteriores). Sem isso as 3 ficariam
+     sticky todas coladas no topo da tela (top:0), sobrepostas umas nas
+     outras. z-index decrescente: cabecalho-painel > filtros > cabeçalho da
+     tabela (que já tem z-index:3 próprio, ver "th { position: sticky }"
+     mais abaixo) > linhas de dado (sem z-index). */
+  #aba-lancamentos .cabecalho-painel, #aba-lancamentos .filtros,
+  #aba-detalhe-aporte .cabecalho-painel, #aba-detalhe-aporte .filtros {
     position: sticky; left: 0; background: #fff;
   }
-  #aba-lancamentos .cabecalho-painel { z-index: 12; }
-  #aba-lancamentos .filtros { z-index: 11; }
+  #aba-lancamentos .cabecalho-painel, #aba-detalhe-aporte .cabecalho-painel { z-index: 12; }
+  #aba-lancamentos .filtros, #aba-detalhe-aporte .filtros { z-index: 11; }
   .paginacao { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--cinza); }
   .paginacao button { background: #fff; color: var(--azul); border: 1px solid var(--azul); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
   .paginacao button:disabled { opacity: .45; cursor: default; }
@@ -401,6 +404,15 @@
      colunas Aporte, Data e Venc. (as outras, N/Doc./Descrição/Valor,
      ficam como estão: texto livre ou já alinhado à direita). */
   #tabela-detalhe-aporte td.col-aporte, #tabela-detalhe-aporte td.col-data, #tabela-detalhe-aporte td.col-venc { text-align: center; }
+  /* table-layout:fixed pro <colgroup> valer de verdade (larguras vêm só das
+     % nele, não do conteúdo) — mesmo padrão de #tabela-lancamentos, com um
+     min-width menor (só 6 colunas aqui, cabem em telas mais estreitas sem
+     espremer). z-index:3 explícito no th (mesmo valor de
+     #tabela-lancamentos th) — sem ele, o th sticky ficava sem stacking
+     context garantido acima das linhas de dado que passam por baixo dele
+     ao rolar. */
+  #tabela-detalhe-aporte { table-layout: fixed; min-width: 700px; }
+  #tabela-detalhe-aporte th { position: sticky; top: 0; z-index: 3; }
   .filtros { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
   .filtros input, .filtros select { padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; font-size: 13px; }
   .btn { background: var(--azul); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
@@ -559,7 +571,7 @@
   <button data-aba="detalhe-aporte">Aporte</button>
   <button data-aba="analise">Análise</button>
   <button data-aba="historico">Histórico</button>
-  <button data-aba="atualizar" id="nav-atualizar">Extrator de Comprovante</button>
+  <button data-aba="atualizar" id="nav-atualizar">Arquivos de Dados</button>
 </nav>
 </div>
 
@@ -818,7 +830,7 @@
   </section>
 
   <section id="aba-lancamentos" class="aba">
-    <div class="painel painel-lancamentos-full">
+    <div class="painel painel-largura-total">
       <div class="cabecalho-painel">
         <h2>Todos os lançamentos</h2>
         <div style="display:flex; gap:8px;">
@@ -882,12 +894,12 @@
   </section>
 
   <section id="aba-detalhe-aporte" class="aba">
-    <div class="painel">
+    <div class="painel painel-largura-total">
       <div class="cabecalho-painel">
         <h2>Aporte</h2>
         <button class="btn secundario small" onclick="exportarXlsx('detalheAporte')">⬇ Exportar Excel</button>
       </div>
-      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:0; align-items:center;">
+      <div class="filtros" style="margin-bottom:0;">
         <input id="busca-detalhe-aporte" class="busca-tabela" placeholder="Buscar em N/Doc., Descrição e Venc.…" style="max-width:320px; margin-bottom:0;">
         <select id="filtro-origem-detalhe-aporte" class="busca-tabela" style="max-width:150px; margin-bottom:0;">
           <option value="">Origem: todas</option>
@@ -902,10 +914,13 @@
       </div>
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; margin-top:10px; flex-wrap:wrap;">
         <div id="total-detalhe-aporte" style="font-size:13px; color:var(--cinza);"></div>
-        <div style="font-size:12px; color:var(--cinza);">Clique no título de uma coluna pra ordenar (clique de novo pra inverter)</div>
+        <div style="font-size:12px; color:var(--cinza);">Clique no título de uma coluna pra ordenar (clique de novo pra inverter) — arraste a borda direita de uma coluna pra ajustar a largura</div>
       </div>
-      <div class="tabela-scroll">
+      <div class="tabela-scroll tabela-scroll-fluida">
         <table id="tabela-detalhe-aporte">
+          <colgroup>
+            <col style="width:8%"><col style="width:10%"><col style="width:12%"><col style="width:40%"><col style="width:10%"><col style="width:20%">
+          </colgroup>
           <thead><tr><th>Aporte</th><th>Data</th><th>N/Doc.</th><th>Descrição</th><th>Venc.</th><th>Valor</th></tr></thead>
           <tbody></tbody>
         </table>
@@ -1754,21 +1769,25 @@ document.querySelectorAll('nav button').forEach(btn => {
     // com uma leitura que quase ninguém abre) — busca só quando a aba é
     // clicada, e só a primeira vez (cache em ultimoLogCarregado).
     if (btn.dataset.aba === 'historico' && !ultimoLogCarregado) carregarHistorico();
-    // Extrator de Comprovante: só faz sentido checar o Drive com edição
+    // Arquivos de Dados: só faz sentido checar o Drive com edição
     // habilitada (o painel "Títulos (baixas)" fica escondido em modo
     // leitura, ver atualizarUiModoLeitura) — reconfere toda vez que a aba é
     // aberta, não só na primeira, pra sempre pegar um arquivo novo.
     if (btn.dataset.aba === 'atualizar' && !MODO_LEITURA) verificarEImportarDoDrive();
-    // "Lançamentos" some com display:none quando não é a aba ativa — as
-    // medidas de altura/largura usadas pelo cabeçalho fixo e pelo painel de
-    // largura total (ver ajustarLayoutLancamentos) só valem depois que a
-    // aba volta a ficar visível. Zera o transform horizontal (ver
-    // seguirRolagemHorizontalLancamentos_) sempre que troca de aba — sem
-    // isso, sair de "Lançamentos" rolado pros lados deixava a barra do
-    // topo "presa" deslocada nas outras abas, que não tratam esse eixo.
+    // "Lançamentos"/"Aporte" somem com display:none quando não são a aba
+    // ativa — as medidas de altura/largura usadas pelo cabeçalho fixo e
+    // pelo painel de largura total (ver ajustarLayoutAbaRolagemUnica_) só
+    // valem depois que a aba volta a ficar visível. Zera o transform
+    // horizontal (ver seguirRolagemHorizontalAbaRolagemUnica_) sempre que
+    // troca de aba — sem isso, sair de uma delas rolado pros lados deixava
+    // a barra do topo "presa" deslocada nas outras abas, que não tratam
+    // esse eixo.
     document.getElementById('topo-fixo').style.transform = '';
-    document.querySelectorAll('#aba-lancamentos .cabecalho-painel, #aba-lancamentos .filtros').forEach((el) => { el.style.transform = ''; });
+    document.querySelectorAll(
+      '#aba-lancamentos .cabecalho-painel, #aba-lancamentos .filtros, #aba-detalhe-aporte .cabecalho-painel, #aba-detalhe-aporte .filtros'
+    ).forEach((el) => { el.style.transform = ''; });
     if (btn.dataset.aba === 'lancamentos') { ajustarLayoutLancamentos(); seguirRolagemHorizontalLancamentos_(); }
+    if (btn.dataset.aba === 'detalhe-aporte') { ajustarLayoutDetalheAporte(); seguirRolagemHorizontalDetalheAporte_(); }
   };
 });
 
@@ -1812,7 +1831,7 @@ if (ABAS_PERMITIDAS_RESTRITO) {
 //      qualquer outro nome (Dayana/Francisco inclusive, e também ninguém
 //      ainda logado) não vê essas duas, mesmo mantendo o resto do
 //      Dashboard visível.
-//   3) Extrator de Comprovante e Histórico: só Anderson e Dayana Sousa —
+//   3) Arquivos de Dados e Histórico: só Anderson e Dayana Sousa —
 //      vale até pra quem nunca digitou nome nenhum (modo leitura padrão),
 //      mesmo padrão da regra 2 acima.
 const USUARIOS_SEM_DASHBOARD_ANALISE_ = ['dayana sousa', 'francisco gilderlan'];
@@ -5159,35 +5178,49 @@ function carregarMaisLancamentos() {
   ajustarLayoutLancamentos();
 }
 
-// Dispara carregarMaisLancamentos() quando a rolagem da PÁGINA (não mais
-// uma rolagem interna só da tabela, ver .tabela-scroll-fluida) chega perto
-// do fim — só quando a aba "Lançamentos" está ativa, pra não competir com
-// a rolagem de outras abas. { passive: true } evita que o navegador espere
-// o listener terminar antes de rolar de fato (rolagem mais fluida).
+// Dispara carregarMaisLancamentos()/carregarMaisDetalheAporte() quando a
+// rolagem da PÁGINA (não mais uma rolagem interna só da tabela, ver
+// .tabela-scroll-fluida) chega perto do fim — só uma das duas abas fica
+// ativa por vez, então checa qual delas é (se nenhuma, não faz nada — não
+// compete com a rolagem normal das outras abas). { passive: true } evita
+// que o navegador espere o listener terminar antes de rolar de fato
+// (rolagem mais fluida).
 window.addEventListener('scroll', () => {
-  if (!document.getElementById('aba-lancamentos').classList.contains('ativa')) return;
   const faltaParaOFim = document.documentElement.scrollHeight - (window.scrollY + window.innerHeight);
-  if (faltaParaOFim < 600) carregarMaisLancamentos();
-  seguirRolagemHorizontalLancamentos_();
+  if (document.getElementById('aba-lancamentos').classList.contains('ativa')) {
+    if (faltaParaOFim < 600) carregarMaisLancamentos();
+    seguirRolagemHorizontalLancamentos_();
+  } else if (document.getElementById('aba-detalhe-aporte').classList.contains('ativa')) {
+    if (faltaParaOFim < 600) carregarMaisDetalheAporte();
+    seguirRolagemHorizontalDetalheAporte_();
+  }
 }, { passive: true });
 
-// #tabela-lancamentos tem min-width:1100px — em tela estreita, sem
-// container próprio de rolagem (ver .tabela-scroll-fluida), quem rola pra
-// ver as colunas que faltam é a PÁGINA inteira, na horizontal. Sem isso, o
-// cabeçalho fixo (#topo-fixo + cabecalho-painel + filtros — position:
-// sticky só resolve o eixo vertical de forma confiável entre navegadores;
-// "left:0" sticky no eixo horizontal, testado, não funcionou de forma
-// consistente) "andaria" pros lados junto com a rolagem horizontal em vez
-// de ficar parado. transform:translateX é só visual (não mexe em layout),
-// então não atrapalha o position:sticky vertical de cada um.
-function seguirRolagemHorizontalLancamentos_() {
-  if (!document.getElementById('aba-lancamentos').classList.contains('ativa')) return;
+// ---------- Núcleo compartilhado por "Lançamentos" e "Aporte" (as duas
+// abas de rolagem única, cabeçalho fixo e largura total — ver
+// .painel-largura-total/.tabela-scroll-fluida no HTML de cada uma) ----------
+
+// A tabela larga (min-width, ver #tabela-lancamentos/#tabela-detalhe-aporte)
+// em tela estreita, sem container próprio de rolagem (ver
+// .tabela-scroll-fluida), faz quem rola pra ver as colunas que faltam ser a
+// PÁGINA inteira, na horizontal. Sem isso, o cabeçalho fixo (#topo-fixo +
+// cabecalho-painel + filtros — position:sticky só resolve o eixo vertical
+// de forma confiável entre navegadores; "left:0" sticky no eixo horizontal,
+// testado, não funcionou de forma consistente) "andaria" pros lados junto
+// com a rolagem horizontal em vez de ficar parado. transform:translateX é
+// só visual (não mexe em layout), então não atrapalha o position:sticky
+// vertical de cada um.
+function seguirRolagemHorizontalAbaRolagemUnica_(idAba) {
+  const secao = document.getElementById(idAba);
+  if (!secao.classList.contains('ativa')) return;
   const deslocamento = window.scrollX ? `translateX(${window.scrollX}px)` : '';
   document.getElementById('topo-fixo').style.transform = deslocamento;
-  document.querySelectorAll('#aba-lancamentos .cabecalho-painel, #aba-lancamentos .filtros').forEach((el) => { el.style.transform = deslocamento; });
+  secao.querySelectorAll('.cabecalho-painel, .filtros').forEach((el) => { el.style.transform = deslocamento; });
 }
+function seguirRolagemHorizontalLancamentos_() { seguirRolagemHorizontalAbaRolagemUnica_('aba-lancamentos'); }
+function seguirRolagemHorizontalDetalheAporte_() { seguirRolagemHorizontalAbaRolagemUnica_('aba-detalhe-aporte'); }
 
-// Recalcula, pra aba "Lançamentos": (1) a margem/largura do painel pra ele
+// Recalcula, pra uma dessas abas: (1) a margem/largura do painel pra ele
 // ocupar a tela inteira (não só a largura de .main, que tem
 // max-width:1600px + padding) e (2) o "top" de cada camada do cabeçalho
 // fixo (cabecalho-painel, filtros, cabeçalho da tabela), empilhadas uma
@@ -5195,8 +5228,8 @@ function seguirRolagemHorizontalLancamentos_() {
 // com getBoundingClientRect/innerWidth (nunca 100vw), que já descontam a
 // barra de rolagem vertical de verdade — 100vw não desconta, e "vazava"
 // alguns pixels de rolagem horizontal indesejada.
-function ajustarLayoutLancamentos() {
-  const secao = document.getElementById('aba-lancamentos');
+function ajustarLayoutAbaRolagemUnica_(idAba) {
+  const secao = document.getElementById(idAba);
   if (!secao.classList.contains('ativa')) return;
   const painel = secao.querySelector(':scope > .painel');
   if (painel) {
@@ -5222,20 +5255,25 @@ function ajustarLayoutLancamentos() {
   filtros.style.top = `${alturaTopo + alturaCabecalhoPainel}px`;
   const alturaFiltros = filtros.getBoundingClientRect().height;
   const topoCabecalhoTabela = `${alturaTopo + alturaCabecalhoPainel + alturaFiltros}px`;
-  secao.querySelectorAll('#tabela-lancamentos thead tr:first-child th').forEach((th) => { th.style.top = topoCabecalhoTabela; });
+  secao.querySelectorAll('table thead tr:first-child th').forEach((th) => { th.style.top = topoCabecalhoTabela; });
 }
+function ajustarLayoutLancamentos() { ajustarLayoutAbaRolagemUnica_('aba-lancamentos'); }
+function ajustarLayoutDetalheAporte() { ajustarLayoutAbaRolagemUnica_('aba-detalhe-aporte'); }
+
 // #topo-fixo pode mudar de altura sem disparar um resize da janela (ex.:
 // texto do botão de acesso muda entre "Voltar para leitura"/"Habilitar
 // edição", quebrando o header numa linha a mais/menos) — ResizeObserver
-// nas 3 camadas cobre isso, além do resize normal da janela e do momento
-// em que a própria aba "Lançamentos" vira visível (troca de aba: o
-// elemento vai de 0 de altura pra altura real, o que já é, em si, um
-// resize observável).
-new ResizeObserver(() => ajustarLayoutLancamentos()).observe(document.getElementById('topo-fixo'));
+// nas camadas de cada aba cobre isso, além do resize normal da janela e do
+// momento em que a própria aba vira visível (troca de aba: o elemento vai
+// de 0 de altura pra altura real, o que já é, em si, um resize observável).
+new ResizeObserver(() => { ajustarLayoutLancamentos(); ajustarLayoutDetalheAporte(); }).observe(document.getElementById('topo-fixo'));
 document.querySelectorAll('#aba-lancamentos .cabecalho-painel, #aba-lancamentos .filtros').forEach((el) => {
   new ResizeObserver(() => ajustarLayoutLancamentos()).observe(el);
 });
-window.addEventListener('resize', ajustarLayoutLancamentos);
+document.querySelectorAll('#aba-detalhe-aporte .cabecalho-painel, #aba-detalhe-aporte .filtros').forEach((el) => {
+  new ResizeObserver(() => ajustarLayoutDetalheAporte()).observe(el);
+});
+window.addEventListener('resize', () => { ajustarLayoutLancamentos(); ajustarLayoutDetalheAporte(); });
 
 ['busca', 'filtro-origem', 'filtro-status', 'filtro-aporte', 'filtro-categoria'].forEach(id =>
   document.getElementById(id).addEventListener('input', () => renderizarLancamentos()));
@@ -5564,7 +5602,6 @@ function popularSelectAporteDetalhe() {
 
 function voltarTodosAportes() {
   document.getElementById('select-aporte-detalhe').value = '';
-  paginaDetalheAporte = 1;
   renderizarDetalheAporte();
 }
 
@@ -5575,7 +5612,6 @@ function voltarTodosAportes() {
 function limparFiltrosDetalheAporte() {
   document.getElementById('busca-detalhe-aporte').value = '';
   document.getElementById('filtro-origem-detalhe-aporte').value = '';
-  paginaDetalheAporte = 1;
   popularSelectAporteDetalhe(); // filtros voltaram a vazio — o menu volta a listar todos os aportes
   renderizarDetalheAporte();
 }
@@ -5600,27 +5636,54 @@ const EXTRATORES_DETALHE_APORTE = [
   i => paraNumero(i['R$ Valor']),
 ];
 
-// Paginação clássica (Anterior/Próxima), diferente do carregamento
-// incremental por rolagem que "Todos os lançamentos" usa hoje (ver
-// TAMANHO_PAGINA_LANCAMENTOS) — mesma ideia de fundo, porém: com "Todos os
-// aportes" selecionado dá pra listar o histórico inteiro de uma vez, o que
-// já causou lentidão real antes (ver correção equivalente em Lançamentos).
+// Carregamento incremental por rolagem — mesma ideia de "Todos os
+// lançamentos" (ver TAMANHO_PAGINA_LANCAMENTOS/carregarMaisLancamentos):
+// troca a antiga paginação com botões "Anterior/Próxima" por blocos
+// anexados conforme o usuário rola a página pra perto do fim, sem precisar
+// clicar em nada — importante aqui também, já que "Todos os aportes"
+// selecionado pode listar o histórico inteiro de uma vez.
 const TAMANHO_PAGINA_APORTE = 300;
-let paginaDetalheAporte = 1;
-function mudarPaginaDetalheAporte(delta) {
-  paginaDetalheAporte += delta;
-  renderizarDetalheAporte();
-}
-function renderizarPaginacaoDetalheAporte(totalItens, totalPaginas) {
+let quantidadeCarregadaDetalheAporte = 0;
+// "Venc." da última linha já carregada — precisa sobreviver ENTRE chamadas
+// de carregarMaisDetalheAporte() (não é reiniciado a cada bloco), pra saber
+// se a 1ª linha do próximo bloco entra numa janela de vencimento nova
+// (separador-grupo, ver linhaDetalheAporteHtml_) ou continua o mesmo grupo
+// que terminou no fim do bloco anterior.
+let ultimoVencimentoCarregadoDetalheAporte_ = null;
+
+function atualizarStatusDetalheAporte(totalItens) {
   const el = document.getElementById('paginacao-detalhe-aporte');
-  if (totalPaginas <= 1) { el.innerHTML = ''; return; }
-  const inicio = (paginaDetalheAporte - 1) * TAMANHO_PAGINA_APORTE + 1;
-  const fim = Math.min(paginaDetalheAporte * TAMANHO_PAGINA_APORTE, totalItens);
-  el.innerHTML = `
-    <button type="button" ${paginaDetalheAporte <= 1 ? 'disabled' : ''} onclick="mudarPaginaDetalheAporte(-1)">‹ Anterior</button>
-    <span>Mostrando ${inicio}–${fim} de ${totalItens} (página ${paginaDetalheAporte} de ${totalPaginas})</span>
-    <button type="button" ${paginaDetalheAporte >= totalPaginas ? 'disabled' : ''} onclick="mudarPaginaDetalheAporte(1)">Próxima ›</button>
-  `;
+  if (!totalItens) { el.textContent = ''; return; }
+  el.textContent = quantidadeCarregadaDetalheAporte >= totalItens
+    ? `Mostrando todos os ${totalItens.toLocaleString('pt-BR')} título(s)`
+    : `Mostrando ${quantidadeCarregadaDetalheAporte.toLocaleString('pt-BR')} de ${totalItens.toLocaleString('pt-BR')} — role a página para carregar mais`;
+}
+
+// Gera o <tr> de um título — usado tanto pelo render completo
+// (renderizarDetalheAporte) quanto pelo carregamento incremental
+// (carregarMaisDetalheAporte). vencAnteriorRef é um objeto { valor }, não
+// uma string solta, só pra dar pra atualizar por referência a cada linha
+// gerada e o chamador ler o último valor depois do .map (inclusive entre
+// um bloco e o próximo, ver ultimoVencimentoCarregadoDetalheAporte_ acima).
+function linhaDetalheAporteHtml_(i, vencAnteriorRef) {
+  const vencAtual = fmtData(i['Vencimento']);
+  // Duas classes independentes que podem coexistir na mesma linha (um
+  // atributo class="..." só, nunca dois) — separador-grupo (borda entre
+  // vencimentos diferentes) e linha-origem-manual (destaque visual pra
+  // lançamento Manual, ver CSS), cada uma condicional à sua própria regra.
+  const classes = [];
+  if (vencAnteriorRef.valor !== null && vencAnteriorRef.valor !== vencAtual) classes.push('separador-grupo');
+  if (i.Origem === 'Manual') classes.push('linha-origem-manual');
+  const classeAttr = classes.length ? ` class="${classes.join(' ')}"` : '';
+  vencAnteriorRef.valor = vencAtual;
+  const nDoc = `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim();
+  const descricao = montarDescricaoAporte_(i);
+  const linkDoc = i['Link Documento'] || '';
+  const linkComp = i['Link Comprovante'] || '';
+  const tituloLinha = (linkDoc || linkComp)
+    ? `Clique para abrir o anexo (${[linkDoc ? 'documento' : '', linkComp ? 'comprovante' : ''].filter(Boolean).join(' e ')})`
+    : 'Nenhum anexo cadastrado para este título';
+  return `<tr${classeAttr} onclick="abrirAnexoLinhaModalDetalhe('${escaparAtributo(linkDoc)}','${escaparAtributo(linkComp)}')" title="${escaparHtml(tituloLinha)}"><td class="col-aporte">${calcularAporte(i['Vencimento'])}</td><td class="col-data">${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td class="col-venc">${vencAtual}</td><td class="col-valor">${htmlMoedaAlinhada(i['R$ Valor'])}</td></tr>`;
 }
 
 function renderizarDetalheAporte() {
@@ -5643,46 +5706,42 @@ function renderizarDetalheAporte() {
   if (!estadoOrdenacao['tabela-detalhe-aporte']) estadoOrdenacao['tabela-detalhe-aporte'] = { colIdx: 4, asc: true };
   ultimoDetalheAporte = aplicarOrdenacao('tabela-detalhe-aporte', itens, EXTRATORES_DETALHE_APORTE);
 
-  const totalPaginas = Math.max(1, Math.ceil(ultimoDetalheAporte.length / TAMANHO_PAGINA_APORTE));
-  if (paginaDetalheAporte > totalPaginas) paginaDetalheAporte = totalPaginas;
-  if (paginaDetalheAporte < 1) paginaDetalheAporte = 1;
-  const itensPagina = ultimoDetalheAporte.slice((paginaDetalheAporte - 1) * TAMANHO_PAGINA_APORTE, paginaDetalheAporte * TAMANHO_PAGINA_APORTE);
-
-  let vencAnterior = null;
-  const linhas = itensPagina.map((i) => {
-    const vencAtual = fmtData(i['Vencimento']);
-    // Duas classes independentes que podem coexistir na mesma linha (um
-    // atributo class="..." só, nunca dois) — separador-grupo (borda entre
-    // vencimentos diferentes) e linha-origem-manual (destaque visual pra
-    // lançamento Manual, ver CSS), cada uma condicional à sua própria regra.
-    const classes = [];
-    if (vencAnterior !== null && vencAnterior !== vencAtual) classes.push('separador-grupo');
-    if (i.Origem === 'Manual') classes.push('linha-origem-manual');
-    const classeAttr = classes.length ? ` class="${classes.join(' ')}"` : '';
-    vencAnterior = vencAtual;
-    const nDoc = `${i.Tipo || ''} ${i['Nº Documento'] || ''}`.trim();
-    const descricao = montarDescricaoAporte_(i);
-    const linkDoc = i['Link Documento'] || '';
-    const linkComp = i['Link Comprovante'] || '';
-    const tituloLinha = (linkDoc || linkComp)
-      ? `Clique para abrir o anexo (${[linkDoc ? 'documento' : '', linkComp ? 'comprovante' : ''].filter(Boolean).join(' e ')})`
-      : 'Nenhum anexo cadastrado para este título';
-    return `<tr${classeAttr} onclick="abrirAnexoLinhaModalDetalhe('${escaparAtributo(linkDoc)}','${escaparAtributo(linkComp)}')" title="${escaparHtml(tituloLinha)}"><td class="col-aporte">${calcularAporte(i['Vencimento'])}</td><td class="col-data">${fmtData(i['Data Emissão'])}</td><td>${nDoc}</td><td>${descricao}</td><td class="col-venc">${vencAtual}</td><td class="col-valor">${htmlMoedaAlinhada(i['R$ Valor'])}</td></tr>`;
-  });
-  tbody.innerHTML = linhas.join('') || `<tr><td colspan="6" style="color:var(--cinza)">${aporte ? 'Nenhum título encontrado para este aporte.' : 'Nenhum título encontrado.'}</td></tr>`;
+  quantidadeCarregadaDetalheAporte = Math.min(TAMANHO_PAGINA_APORTE, ultimoDetalheAporte.length);
+  const vencAnteriorRef = { valor: null };
+  tbody.innerHTML = ultimoDetalheAporte.slice(0, quantidadeCarregadaDetalheAporte).map((i) => linhaDetalheAporteHtml_(i, vencAnteriorRef)).join('') ||
+    `<tr><td colspan="6" style="color:var(--cinza)">${aporte ? 'Nenhum título encontrado para este aporte.' : 'Nenhum título encontrado.'}</td></tr>`;
+  ultimoVencimentoCarregadoDetalheAporte_ = vencAnteriorRef.valor;
   definirTotalizador('total-detalhe-aporte', ultimoDetalheAporte);
-  renderizarPaginacaoDetalheAporte(ultimoDetalheAporte.length, totalPaginas);
-  tornarOrdenavel('tabela-detalhe-aporte', EXTRATORES_DETALHE_APORTE, () => { paginaDetalheAporte = 1; renderizarDetalheAporte(); });
+  atualizarStatusDetalheAporte(ultimoDetalheAporte.length);
+  tornarOrdenavel('tabela-detalhe-aporte', EXTRATORES_DETALHE_APORTE, () => renderizarDetalheAporte());
   atualizarSetasOrdenacao('tabela-detalhe-aporte');
+  tornarColunasRedimensionaveis('tabela-detalhe-aporte');
+  ajustarLayoutDetalheAporte();
 }
-document.getElementById('select-aporte-detalhe').addEventListener('change', () => { paginaDetalheAporte = 1; renderizarDetalheAporte(); });
+
+// Anexa o próximo bloco de TAMANHO_PAGINA_APORTE itens ao final do <tbody>
+// (não recria a tabela inteira) — chamado pelo listener de rolagem quando o
+// usuário chega perto do fim da página com a aba "Aporte" ativa e ainda
+// sobra item de ultimoDetalheAporte não carregado.
+function carregarMaisDetalheAporte() {
+  if (quantidadeCarregadaDetalheAporte >= ultimoDetalheAporte.length) return;
+  const proximoBloco = ultimoDetalheAporte.slice(quantidadeCarregadaDetalheAporte, quantidadeCarregadaDetalheAporte + TAMANHO_PAGINA_APORTE);
+  quantidadeCarregadaDetalheAporte += proximoBloco.length;
+  const vencAnteriorRef = { valor: ultimoVencimentoCarregadoDetalheAporte_ };
+  document.querySelector('#tabela-detalhe-aporte tbody')
+    .insertAdjacentHTML('beforeend', proximoBloco.map((i) => linhaDetalheAporteHtml_(i, vencAnteriorRef)).join(''));
+  ultimoVencimentoCarregadoDetalheAporte_ = vencAnteriorRef.valor;
+  atualizarStatusDetalheAporte(ultimoDetalheAporte.length);
+  ajustarLayoutDetalheAporte();
+}
+
+document.getElementById('select-aporte-detalhe').addEventListener('change', () => renderizarDetalheAporte());
 // Recalcula o menu de aportes a cada mudança na busca ou na Origem — só
 // oferece aportes que tenham pelo menos um título batendo com os filtros
 // atuais (ver itensParaDetalheAporte_), pra nunca deixar escolher um
 // aporte que a tabela abaixo mostraria vazio.
 ['busca-detalhe-aporte', 'filtro-origem-detalhe-aporte'].forEach((id) => {
   document.getElementById(id).addEventListener('input', () => {
-    paginaDetalheAporte = 1;
     popularSelectAporteDetalhe();
     renderizarDetalheAporte();
   });
@@ -6684,7 +6743,7 @@ async function separarComprovantesBancarios() {
 }
 
 // Substitui o antigo upload manual (arraste/selecione o .xlsx): a aba
-// Extrator de Comprovante, ao ser aberta (ver o forEach de "nav button" mais
+// Arquivos de Dados, ao ser aberta (ver o forEach de "nav button" mais
 // abaixo), checa sozinha se existe um arquivo mais novo do que o último já
 // importado na pasta do Google Drive do Protheus (api_buscarArquivoDriveNovo,
 // qualquer nome de arquivo) e importa automaticamente. O parser continua
