@@ -4332,18 +4332,38 @@ function renderizarGraficoCategoriaFaturamento_(linhasOrdenadas, itensBrutos) {
     return mapaCat[catInfo.cat] || 0;
   }
 
-  const datasets = catsGrafico.map((catInfo) => {
+  // Cada categoria ocupa uma "faixa" (1 unidade de altura) no eixo Y, mas
+  // dentro da própria faixa a linha OSCILA conforme o % do Faturamento de
+  // cada ponto — não fica mais reta. Normalizado por categoria (min/max da
+  // PRÓPRIA série, não global): sem isso, categorias grandes (%
+  // alto) esmagariam a oscilação das pequenas. Categoria mais alta
+  // (rank 1) recebe o maior "bandCenter", pra continuar aparecendo no topo
+  // como antes (mesma ordem de sempre).
+  const AMPLITUDE_FAIXA_ = 0.36; // até 0.36 acima/abaixo do centro da faixa (faixa tem altura 1 — sobra 0.14 de vão até a faixa vizinha)
+  const datasets = catsGrafico.map((catInfo, catIdx) => {
+    const bandCenter = catsGrafico.length - 1 - catIdx;
     let anterior = null;
-    const pontos = janelas.map((j) => {
+    const brutos = janelas.map((j) => {
       const valor = valorCategoriaNaMedicao_(catInfo, j.medicao);
       const pctFaturamento = j.valorLiquido ? (valor / j.valorLiquido) * 100 : null;
       const variacao = anterior != null && anterior !== 0 ? ((valor - anterior) / Math.abs(anterior)) * 100 : null;
       anterior = valor;
-      return { x: `Med. ${j.medicao}`, y: catInfo.cat, valor, pctFaturamento, variacao };
+      return { medicao: j.medicao, valor, pctFaturamento, variacao };
+    });
+    const pctValidos = brutos.map((p) => p.pctFaturamento).filter((v) => v != null);
+    const pctMin = pctValidos.length ? Math.min(...pctValidos) : 0;
+    const pctMax = pctValidos.length ? Math.max(...pctValidos) : 0;
+    const meio = (pctMin + pctMax) / 2;
+    const amplitudeReal = pctMax - pctMin;
+    const pontos = brutos.map((p) => {
+      const offset = p.pctFaturamento == null || amplitudeReal === 0
+        ? 0
+        : ((p.pctFaturamento - meio) / amplitudeReal) * AMPLITUDE_FAIXA_ * 2;
+      return { x: `Med. ${p.medicao}`, y: bandCenter + offset, valor: p.valor, pctFaturamento: p.pctFaturamento, variacao: p.variacao, cat: catInfo.cat };
     });
     return {
       type: 'line', label: catInfo.cat, data: pontos, yAxisID: 'y',
-      borderColor: catInfo.cor, backgroundColor: catInfo.cor, borderWidth: 2, tension: 0,
+      borderColor: catInfo.cor, backgroundColor: catInfo.cor, borderWidth: 2, tension: 0.3,
       pointBorderColor: '#fcfcfb', pointBorderWidth: 1,
       pointStyle: (ctx) => (ctx.raw && ctx.raw.variacao == null ? 'circle' : 'triangle'),
       pointRadius: (ctx) => (ctx.raw && ctx.raw.variacao == null ? 3 : 6),
@@ -4391,7 +4411,30 @@ function renderizarGraficoCategoriaFaturamento_(linhasOrdenadas, itensBrutos) {
       },
       scales: {
         x: { type: 'category', labels: janelas.map((j) => `Med. ${j.medicao}`), grid: { display: false }, ticks: { color: '#898781' } },
-        y: { type: 'category', labels: catsGrafico.map((c) => c.cat), offset: true, grid: { color: '#e1e0d9' }, ticks: { color: '#898781' } },
+        // Eixo Y numérico (não mais categórico) — cada categoria tem uma
+        // "faixa" de 1 unidade de altura (ver bandCenter acima), e o
+        // rótulo de cada faixa é resolvido de volta pro nome da categoria
+        // no callback abaixo. Precisa ser numérico pra linha poder oscilar
+        // dentro da própria faixa em vez de ficar presa numa única posição.
+        // afterBuildTicks força os ticks a caírem EXATAMENTE em cada
+        // bandCenter inteiro — a geração automática do Chart.js pra uma
+        // escala linear (com min/max fracionários, -0.5/N-0.5) não
+        // garantia isso, e os rótulos das categorias sumiam (ticks caindo
+        // em posições sem categoria correspondente).
+        y: {
+          type: 'linear', min: -0.5, max: catsGrafico.length - 0.5,
+          afterBuildTicks: (scale) => {
+            scale.ticks = catsGrafico.map((_, i) => ({ value: catsGrafico.length - 1 - i }));
+          },
+          grid: { color: '#e1e0d9' },
+          ticks: {
+            color: '#898781',
+            callback: (val) => {
+              const idx = catsGrafico.length - 1 - val;
+              return catsGrafico[idx] ? catsGrafico[idx].cat : '';
+            },
+          },
+        },
       },
       onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
       onClick: (ev, els) => {
