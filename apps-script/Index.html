@@ -1824,8 +1824,9 @@ document.querySelectorAll('nav button').forEach(btn => {
     // Arquivos de Dados: só faz sentido checar o Drive com edição
     // habilitada (o painel "Títulos (baixas)" fica escondido em modo
     // leitura, ver atualizarUiModoLeitura) — reconfere toda vez que a aba é
-    // aberta, não só na primeira, pra sempre pegar um arquivo novo.
-    if (btn.dataset.aba === 'atualizar' && !MODO_LEITURA) verificarEImportarDoDrive();
+    // aberta, não só na primeira, pra sempre indicar se há um arquivo novo.
+    // Só informa (ver verificarNovoArquivoDrive_) — não importa sozinha.
+    if (btn.dataset.aba === 'atualizar' && !MODO_LEITURA) verificarNovoArquivoDrive_();
     // "Lançamentos"/"Aporte" somem com display:none quando não são a aba
     // ativa — as medidas de altura/largura usadas pelo cabeçalho fixo e
     // pelo painel de largura total (ver ajustarLayoutAbaRolagemUnica_) só
@@ -7170,14 +7171,12 @@ async function baixarArquivoDriveTitulos() {
   }
 }
 
-// Substitui o antigo upload manual (arraste/selecione o .xlsx): a aba
-// Arquivos de Dados, ao ser aberta (ver o forEach de "nav button" mais
-// abaixo), checa sozinha se existe um arquivo mais novo do que o último já
-// importado na pasta do Google Drive do Protheus (api_buscarArquivoDriveNovo,
-// qualquer nome de arquivo) e importa automaticamente. O parser continua
-// 100% client-side (parseArquivoProtheus/XLSX), só que lendo o conteúdo em
-// base64 devolvido pelo servidor em vez de um File do input — mesmo
-// resultado final de processarArquivo, que existia antes disso.
+// Substitui o antigo upload manual (arraste/selecione o .xlsx): o conteúdo
+// do arquivo do Google Drive do Protheus chega em base64 (ver
+// api_buscarArquivoDriveNovo) e o parser continua 100% client-side
+// (parseArquivoProtheus/XLSX) — mesmo resultado final de processarArquivo,
+// que existia antes disso, só lendo de um base64 devolvido pelo servidor
+// em vez de um File do input.
 function base64ParaArrayBuffer_(base64) {
   const binario = atob(base64);
   const bytes = new Uint8Array(binario.length);
@@ -7185,6 +7184,33 @@ function base64ParaArrayBuffer_(base64) {
   return bytes.buffer;
 }
 
+// A aba Arquivos de Dados, ao ser aberta (ver o forEach de "nav button"
+// mais abaixo), só CHECA sozinha se existe um arquivo mais novo do que o
+// último já importado na pasta do Google Drive do Protheus — não importa
+// mais automaticamente (pedido explícito: a importação de verdade só
+// acontece no clique em "Atualizar dados", que chama
+// verificarEImportarDoDrive logo abaixo). Este espaço (resumo-importacao)
+// só informa se há ou não um arquivo novo esperando.
+async function verificarNovoArquivoDrive_() {
+  const resumoEl = document.getElementById('resumo-importacao');
+  resumoEl.innerHTML = `<div class="aviso">Verificando a pasta do Google Drive por um arquivo novo…</div>`;
+  let resposta;
+  try {
+    resposta = await chamarServidor('buscarArquivoDriveNovo', {});
+  } catch (e) {
+    resumoEl.innerHTML = `<div class="aviso">Falha ao verificar a pasta do Google Drive: ${e.message}</div>`;
+    return;
+  }
+  resumoEl.innerHTML = resposta.encontrado
+    ? `<div class="aviso">Novo arquivo disponível na pasta do Google Drive: "${escaparHtml(resposta.nomeArquivo)}". Clique em "Atualizar dados" para importar.</div>`
+    : `<div class="aviso">Nenhum arquivo novo na pasta do Google Drive — os títulos já estão com a última importação.</div>`;
+}
+
+// Import de verdade — só roda no clique em "Atualizar dados" (ver botão em
+// #painel-atualizar-baixas). Confere de novo por conta própria (não reusa
+// o resultado de verificarNovoArquivoDrive_ acima) pra nunca importar um
+// arquivo que já ficou desatualizado entre a checagem informativa e o
+// clique.
 async function verificarEImportarDoDrive() {
   const resumoEl = document.getElementById('resumo-importacao');
   resumoEl.innerHTML = `<div class="aviso">Verificando a pasta do Google Drive por um arquivo novo…</div>`;
@@ -7272,10 +7298,11 @@ function prefillUsuarioInclusor() {
 function atualizarUiModoLeitura() {
   document.getElementById('painel-atualizar-baixas').style.display = MODO_LEITURA ? 'none' : '';
   document.getElementById('painel-baixar-arquivo').style.display = MODO_LEITURA ? 'none' : '';
-  // Cobre o caso de habilitar a edição enquanto já se está na aba Extrator
-  // de Comprovante (o clique na aba, mais acima, só dispara a checagem se a
-  // edição já estava habilitada nesse momento).
-  if (!MODO_LEITURA && document.getElementById('aba-atualizar').classList.contains('ativa')) verificarEImportarDoDrive();
+  // Cobre o caso de habilitar a edição enquanto já se está na aba Arquivos
+  // de Dados (o clique na aba, mais acima, só dispara a checagem se a
+  // edição já estava habilitada nesse momento). Só informa — não importa
+  // sozinha, ver verificarNovoArquivoDrive_.
+  if (!MODO_LEITURA && document.getElementById('aba-atualizar').classList.contains('ativa')) verificarNovoArquivoDrive_();
   document.getElementById('btn-abrir-lancamento-manual').style.display = MODO_LEITURA ? 'none' : '';
   if (MODO_LEITURA) fecharModalLancamentoManual(); // voltar pra leitura com o pop-up aberto não deveria deixar editar
   const btnRemoverDuplicados = document.getElementById('btn-remover-duplicados');
