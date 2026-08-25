@@ -310,10 +310,18 @@
     text-align: center;
   }
   .tabela-scroll { max-height: 480px; overflow: auto; border: 1px solid var(--borda); border-radius: 8px; }
-  /* "Por medição" x "Por categoria de custo" lado a lado: height fixo (não
-     max-height) faz as duas terminarem na mesma linha, mesmo tendo números
-     bem diferentes de linhas (medições são poucas; categorias, muitas). */
+  /* Tabela de "Por medição"/"Por categoria de custo" dentro do pop-up
+     "Planilha" (ver abrirPlanilhaModal) — 380px era de quando as duas
+     ficavam lado a lado no Dashboard (só sobrava por baixo do pop-up
+     bem maior, com a rolagem própria da tabela cortando os dados cedo
+     demais). Dentro do modal, cresce (flex:1) até preencher a altura
+     disponível — ver as regras de #modal-planilha-corpo logo abaixo.
+     380px/max-height:480px continuam valendo como fallback fora do
+     modal, se algum dia a classe for reaproveitada noutro lugar. */
   .tabela-scroll-par { height: 380px; }
+  #modal-planilha-corpo { display: flex; flex-direction: column; overflow: hidden; }
+  #modal-planilha-corpo > div { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  #modal-planilha-corpo .tabela-scroll-par { flex: 1; min-height: 0; height: auto; max-height: none; }
   /* "Todos os lançamentos" e "Aporte" — pedido explícito: uma única barra
      de rolagem (a da página), não duas. Cancela o max-height/overflow:auto
      padrão de .tabela-scroll (que criava uma 2ª rolagem própria, vertical,
@@ -1029,7 +1037,7 @@
       <h2 id="modal-planilha-titulo"></h2>
       <button class="modal-fechar" onclick="fecharModalPlanilha()" title="Fechar (Esc)">✕</button>
     </div>
-    <div id="modal-planilha-corpo" style="flex:1; min-height:0; overflow:auto;"></div>
+    <div id="modal-planilha-corpo" style="flex:1; min-height:0;"></div>
   </div>
 </div>
 
