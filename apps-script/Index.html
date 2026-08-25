@@ -677,67 +677,65 @@
             <canvas id="chart-faturado-pago-acumulado"></canvas>
           </div>
         </div>
-        <div class="grid-2">
-          <div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
-              <h3 style="font-size:13px; color:var(--azul); margin:0;">Por medição</h3>
-              <div style="display:flex; gap:6px;">
-                <button class="btn secundario small" onclick="expandirGrafico('margemMedicao', 'Margem por Medição (Faturado − Pago)')">⛶ Expandir</button>
-                <button class="btn secundario small" onclick="exportarXlsx('faturadoPago')">⬇ Exportar Excel</button>
-                <button class="btn secundario small" id="btn-planilha-faturado-pago" onclick="alternarPlanilha('faturado-pago')">📋 Planilha</button>
-              </div>
-            </div>
-            <div class="filtros" style="margin-bottom:8px;">
-              <select id="filtro-medicao-faturado-pago">
-                <option value="">Medição: todas</option>
-              </select>
-              <button type="button" class="btn secundario small" onclick="limparFiltroMedicaoFaturadoPago()">✕ Limpar Filtro</button>
-            </div>
-            <div id="total-faturado-pago" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
-            <div id="grafico-faturado-pago-wrap" style="height:300px; width:100%; margin-bottom:10px;">
-              <canvas id="chart-margem-medicao"></canvas>
-            </div>
-            <div id="planilha-faturado-pago-wrap" style="display:none;">
-              <div class="tabela-scroll tabela-scroll-par">
-                <table id="tabela-faturado-pago" class="tabela-centralizada">
-                  <colgroup>
-                    <col style="width:15%"><col style="width:28.33%"><col style="width:28.33%"><col style="width:28.33%">
-                  </colgroup>
-                  <thead><tr><th>Medição</th><th>Faturado</th><th>Pago</th><th>Margem</th></tr></thead>
-                  <tbody></tbody>
-                </table>
-              </div>
+        <div class="painel" style="margin-bottom:18px; width:100%;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+            <h3 style="font-size:13px; color:var(--azul); margin:0;">Por medição</h3>
+            <div style="display:flex; gap:6px;">
+              <button class="btn secundario small" onclick="expandirGrafico('margemMedicao', 'Faturado, Pago e Margem (%) por Medição')">⛶ Expandir</button>
+              <button class="btn secundario small" onclick="exportarXlsx('faturadoPago')">⬇ Exportar Excel</button>
+              <button class="btn secundario small" id="btn-planilha-faturado-pago" onclick="abrirPlanilhaModal('faturado-pago', 'Por medição')">📋 Planilha</button>
             </div>
           </div>
-          <div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
-              <h3 style="font-size:13px; color:var(--azul); margin:0;" title="Quanto o custo de cada categoria (Custo por Categoria/Ranking de categorias) representa do Faturamento líquido do período">Por categoria de custo</h3>
-              <div style="display:flex; gap:6px;">
-                <button class="btn secundario small" onclick="expandirGrafico('categoriaFaturamento', 'Por Categoria de Custo — % do Faturamento')">⛶ Expandir</button>
-                <button class="btn secundario small" onclick="exportarXlsx('faturamentoCategorias')">⬇ Exportar Excel</button>
-                <button class="btn secundario small" id="btn-planilha-faturamento-categorias" onclick="alternarPlanilha('faturamento-categorias')">📋 Planilha</button>
-              </div>
+          <div class="filtros" style="margin-bottom:8px;">
+            <select id="filtro-medicao-faturado-pago">
+              <option value="">Medição: todas</option>
+            </select>
+            <button type="button" class="btn secundario small" onclick="limparFiltroMedicaoFaturadoPago()">✕ Limpar Filtro</button>
+          </div>
+          <div id="total-faturado-pago" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
+          <div id="grafico-faturado-pago-wrap" style="height:340px; width:100%; margin-bottom:10px;">
+            <canvas id="chart-margem-medicao"></canvas>
+          </div>
+          <div id="planilha-faturado-pago-wrap" style="display:none;">
+            <div class="tabela-scroll tabela-scroll-par">
+              <table id="tabela-faturado-pago" class="tabela-centralizada">
+                <colgroup>
+                  <col style="width:15%"><col style="width:28.33%"><col style="width:28.33%"><col style="width:28.33%">
+                </colgroup>
+                <thead><tr><th>Medição</th><th>Faturado</th><th>Pago</th><th>Margem</th></tr></thead>
+                <tbody></tbody>
+              </table>
             </div>
-            <div class="filtros" style="margin-bottom:8px;">
-              <select id="filtro-categoria-faturamento">
-                <option value="">Categoria: todas</option>
-              </select>
-              <button type="button" class="btn secundario small" onclick="limparFiltroCategoriaFaturamento()">✕ Limpar Filtro</button>
+          </div>
+        </div>
+        <div class="painel" style="margin-bottom:18px; width:100%;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+            <h3 style="font-size:13px; color:var(--azul); margin:0;" title="Quanto o custo de cada categoria (Custo por Categoria/Ranking de categorias) representa do Faturamento líquido do período">Por categoria de custo</h3>
+            <div style="display:flex; gap:6px;">
+              <button class="btn secundario small" onclick="expandirGrafico('categoriaFaturamento', 'Por Categoria de Custo — % do Faturamento')">⛶ Expandir</button>
+              <button class="btn secundario small" onclick="exportarXlsx('faturamentoCategorias')">⬇ Exportar Excel</button>
+              <button class="btn secundario small" id="btn-planilha-faturamento-categorias" onclick="abrirPlanilhaModal('faturamento-categorias', 'Por categoria de custo')">📋 Planilha</button>
             </div>
-            <div id="total-faturamento-categorias" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
-            <div id="grafico-faturamento-categorias-wrap" style="height:300px; width:100%; margin-bottom:10px;">
-              <canvas id="chart-faturamento-categorias"></canvas>
-            </div>
-            <div id="planilha-faturamento-categorias-wrap" style="display:none;">
-              <div class="tabela-scroll tabela-scroll-par">
-                <table id="tabela-faturamento-categorias" class="tabela-centralizada">
-                  <colgroup>
-                    <col style="width:40%"><col style="width:30%"><col style="width:30%">
-                  </colgroup>
-                  <thead><tr><th>Categoria</th><th>Custo no período</th><th>% do Faturamento</th></tr></thead>
-                  <tbody></tbody>
-                </table>
-              </div>
+          </div>
+          <div class="filtros" style="margin-bottom:8px;">
+            <select id="filtro-categoria-faturamento">
+              <option value="">Categoria: todas</option>
+            </select>
+            <button type="button" class="btn secundario small" onclick="limparFiltroCategoriaFaturamento()">✕ Limpar Filtro</button>
+          </div>
+          <div id="total-faturamento-categorias" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
+          <div id="grafico-faturamento-categorias-wrap" style="height:300px; width:100%; margin-bottom:10px;">
+            <canvas id="chart-faturamento-categorias"></canvas>
+          </div>
+          <div id="planilha-faturamento-categorias-wrap" style="display:none;">
+            <div class="tabela-scroll tabela-scroll-par">
+              <table id="tabela-faturamento-categorias" class="tabela-centralizada">
+                <colgroup>
+                  <col style="width:40%"><col style="width:30%"><col style="width:30%">
+                </colgroup>
+                <thead><tr><th>Categoria</th><th>Custo no período</th><th>% do Faturamento</th></tr></thead>
+                <tbody></tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -1017,6 +1015,21 @@
     <div style="flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center;">
       <canvas id="chart-expandido"></canvas>
     </div>
+  </div>
+</div>
+
+<!-- Pop-up genérico pra planilha "sob demanda" de um painel do Dashboard
+     (ver abrirPlanilhaModal): em vez de clonar/reconstruir a tabela, o modal
+     REPARENTA o wrap original (com todos os listeners já ligados — sort,
+     redimensionar coluna) pra dentro de si ao abrir, e devolve pro lugar
+     original ao fechar. -->
+<div class="modal-overlay" id="modal-planilha" onclick="if (event.target === this) fecharModalPlanilha()">
+  <div class="modal-caixa" style="max-width:1200px; height:85vh;">
+    <div class="modal-cabecalho">
+      <h2 id="modal-planilha-titulo"></h2>
+      <button class="modal-fechar" onclick="fecharModalPlanilha()" title="Fechar (Esc)">✕</button>
+    </div>
+    <div id="modal-planilha-corpo" style="flex:1; min-height:0; overflow:auto;"></div>
   </div>
 </div>
 
@@ -2886,16 +2899,31 @@ const REGISTRO_GRAFICOS_DASHBOARD_ = {
 
 // Botão "Planilha" de "Por medição"/"Por categoria de custo" — o gráfico é
 // a visão padrão (mesmo tratamento dos outros gráficos do Dashboard,
-// Expandir/Exportar incluídos); a tabela em si só aparece sob demanda,
-// pedido explícito. "chave" é o sufixo comum aos 2 ids
-// (planilha-<chave>-wrap / btn-planilha-<chave>).
-function alternarPlanilha(chave) {
+// Expandir/Exportar incluídos); a tabela em si só aparece sob demanda, num
+// pop-up, pedido explícito. REPARENTA o wrap original da tabela pra dentro
+// do modal (preserva os listeners de ordenação/redimensionar coluna já
+// ligados nela, em vez de reconstruir a tabela do zero) e guarda o pai
+// original pra devolver ao fechar. Só existe 1 desses modais aberto por
+// vez, então uma única variável de módulo basta.
+let planilhaModalOrigem_ = null;
+function abrirPlanilhaModal(chave, titulo) {
   const wrap = document.getElementById(`planilha-${chave}-wrap`);
-  const btn = document.getElementById(`btn-planilha-${chave}`);
-  const aberta = wrap.style.display !== 'none';
-  wrap.style.display = aberta ? 'none' : '';
-  btn.textContent = aberta ? '📋 Planilha' : '📋 Ocultar planilha';
+  document.getElementById('modal-planilha-titulo').textContent = titulo;
+  planilhaModalOrigem_ = wrap.parentElement;
+  document.getElementById('modal-planilha-corpo').appendChild(wrap);
+  wrap.style.display = '';
+  document.getElementById('modal-planilha').classList.add('aberto');
 }
+function fecharModalPlanilha() {
+  const corpo = document.getElementById('modal-planilha-corpo');
+  const wrap = corpo.firstElementChild;
+  if (wrap && planilhaModalOrigem_) { wrap.style.display = 'none'; planilhaModalOrigem_.appendChild(wrap); }
+  planilhaModalOrigem_ = null;
+  document.getElementById('modal-planilha').classList.remove('aberto');
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('modal-planilha').classList.contains('aberto')) { e.stopImmediatePropagation(); fecharModalPlanilha(); }
+});
 let chartExpandido;
 function expandirGrafico(chave, titulo) {
   const getter = REGISTRO_GRAFICOS_DASHBOARD_[chave];
@@ -3653,16 +3681,23 @@ function renderizarFaturadoPago_() {
   // de exibição da tabela — senão ordenar a tabela por outra coluna
   // (Faturado, Pago…) bagunçaria o que "anterior" significa.
   const tendenciaPorMedicao_ = {};
+  // Mesma variação (%) da tendência acima, mas o número bruto com sinal
+  // (não a badge em HTML) — usado pela linha "Margem" do gráfico logo
+  // abaixo (renderizarGraficoMargemMedicao_), que precisa plotar o valor,
+  // não só formatá-lo pra leitura. Medição sem "anterior" fica de fora do
+  // mapa (undefined), igual à tendência (badge vazia).
+  const variacaoMargemPorMedicao_ = {};
   linhas.forEach((l, idx) => {
     const anterior = idx > 0 ? linhas[idx - 1] : null;
-    tendenciaPorMedicao_[l.medicao] = anterior && anterior.margem !== 0
-      ? (() => {
-          const variacao = ((l.margem - anterior.margem) / Math.abs(anterior.margem)) * 100;
-          const seta = variacao >= 0 ? '▲' : '▼';
-          const cor = variacao >= 0 ? 'var(--verde)' : 'var(--vermelho)';
-          return `<span style="color:${cor}; font-size:11px;" title="vs Medição ${anterior.medicao}">${seta} ${Math.abs(variacao).toFixed(0)}%</span>`;
-        })()
-      : '';
+    if (anterior && anterior.margem !== 0) {
+      const variacao = ((l.margem - anterior.margem) / Math.abs(anterior.margem)) * 100;
+      variacaoMargemPorMedicao_[l.medicao] = variacao;
+      const seta = variacao >= 0 ? '▲' : '▼';
+      const cor = variacao >= 0 ? 'var(--verde)' : 'var(--vermelho)';
+      tendenciaPorMedicao_[l.medicao] = `<span style="color:${cor}; font-size:11px;" title="vs Medição ${anterior.medicao}">${seta} ${Math.abs(variacao).toFixed(0)}%</span>`;
+    } else {
+      tendenciaPorMedicao_[l.medicao] = '';
+    }
   });
 
   // Ordenação por clique no cabeçalho (aplicarOrdenacao devolve uma cópia —
@@ -3685,7 +3720,7 @@ function renderizarFaturadoPago_() {
   const fMedicao = selectMedicao.value;
   if (fMedicao) linhasTabela = linhasTabela.filter((l) => String(l.medicao) === fMedicao);
 
-  renderizarGraficoMargemMedicao_(linhasTabela);
+  renderizarGraficoMargemMedicao_(linhasTabela, variacaoMargemPorMedicao_);
 
   const totalFaturadoTabela = linhasTabela.reduce((s, l) => s + l.faturado, 0);
   document.getElementById('total-faturado-pago').textContent =
@@ -3732,52 +3767,78 @@ function ultimoItensPagosFaturadoPago_(medicao) {
   return ultimoItensPagosPorMedicao_[medicao] || [];
 }
 
-// Barra divergente — só a Margem (Faturado − Pago) de cada medição, verde
-// acima de zero e vermelho abaixo (ex.: Medição 2, que fechou negativa).
-// Faturado/Pago já têm gráfico próprio ("Faturado, Pago e Saldo Bruto por
-// Medição" logo acima) — repetir as 2 séries aqui seria redundante; este
-// foca só na "saúde" de cada medição, de relance. Datalabels ligados (não
-// só a cor) pro sinal de cada barra também ficar legível pra quem não
-// distingue verde de vermelho. Respeita o filtro "Medição: todas/N" desta
-// mesma tabela — recebe `linhasTabela` já filtrada.
-function renderizarGraficoMargemMedicao_(linhasTabela) {
+// Combo: Faturado (barra, R$) + Pago (barra, R$) no eixo esquerdo, e Margem
+// como % de variação vs a medição anterior (linha, verde/vermelha
+// acompanhando a mesma seta ▲/▼ já usada na tabela — ver
+// variacaoMargemPorMedicao_ acima) num eixo à direita, próprio, em %.
+// Pedido explícito de dual-axis (uma exceção deliberada à regra geral de
+// "nunca 2 eixos Y" — aqui o eixo direito existe só pra essa 3ª série, que
+// é uma grandeza diferente das duas primeiras). Sem valor em R$ escrito
+// nas barras (só no tooltip) — pedido explícito; a % da linha continua
+// escrita (não é "barra" e é o dado central deste gráfico). Medição sem
+// "anterior" (a mais antiga da lista) fica sem ponto na linha, igual à
+// tabela (sem seta). Respeita o filtro "Medição: todas/N" desta mesma
+// tabela — recebe `linhasTabela` já filtrada.
+function renderizarGraficoMargemMedicao_(linhasTabela, variacaoPorMedicao_) {
   const labels = linhasTabela.map((l) => `Med. ${l.medicao}`);
-  const cores = linhasTabela.map((l) => (l.margem >= 0 ? '#1baf7a' : '#c0392b'));
+  const variacoes = linhasTabela.map((l) => {
+    const v = variacaoPorMedicao_[l.medicao];
+    return v === undefined ? null : v;
+  });
+  const corVariacao_ = (v) => (v == null ? '#898781' : v >= 0 ? '#1baf7a' : '#c0392b');
   if (chartMargemMedicao) { chartMargemMedicao.destroy(); chartMargemMedicao = null; }
   chartMargemMedicao = new Chart(document.getElementById('chart-margem-medicao'), {
-    type: 'bar',
     data: {
       labels,
-      datasets: [{
-        label: 'Margem (Faturado − Pago)',
-        data: linhasTabela.map((l) => l.margem),
-        backgroundColor: cores, borderRadius: 4, borderSkipped: false, maxBarThickness: 44,
-      }],
+      datasets: [
+        {
+          type: 'bar', label: 'Faturado', data: linhasTabela.map((l) => l.faturado), yAxisID: 'y',
+          backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24,
+          categoryPercentage: 0.6, barPercentage: 0.9, datalabels: { display: false },
+        },
+        {
+          type: 'bar', label: 'Pago', data: linhasTabela.map((l) => l.pago), yAxisID: 'y',
+          backgroundColor: '#eb6834', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24,
+          categoryPercentage: 0.6, barPercentage: 0.9, datalabels: { display: false },
+        },
+        {
+          type: 'line', label: 'Margem (variação vs medição anterior)', data: variacoes, yAxisID: 'y1',
+          borderColor: '#898781', borderWidth: 2, tension: 0.3,
+          pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb',
+          pointBackgroundColor: (ctx) => corVariacao_(ctx.raw),
+          segment: { borderColor: (ctx) => corVariacao_(ctx.p1.parsed.y) },
+          datalabels: {
+            color: (ctx) => corVariacao_(ctx.dataset.data[ctx.dataIndex]),
+            font: { size: 10, weight: '600' }, align: 'top', anchor: 'end',
+            formatter: (v) => (v == null ? '' : `${v >= 0 ? '▲' : '▼'} ${Math.abs(v).toFixed(0)}%`),
+          },
+        },
+      ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
-        datalabels: {
-          // Contexto do datalabels não tem `.parsed` (isso é exclusivo do
-          // contexto de tooltip do Chart.js) — o valor bruto vem de
-          // dataset.data[dataIndex].
-          color: '#52514e',
-          anchor: (ctx) => (ctx.dataset.data[ctx.dataIndex] >= 0 ? 'end' : 'start'),
-          align: (ctx) => (ctx.dataset.data[ctx.dataIndex] >= 0 ? 'end' : 'start'),
-          font: { size: 10 }, formatter: (v) => fmtMoeda(v),
+        legend: { labels: { color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8 } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ctx.datasetIndex === 2
+              ? `Margem: ${ctx.parsed.y == null ? 'sem medição anterior pra comparar' : (ctx.parsed.y >= 0 ? '+' : '') + ctx.parsed.y.toFixed(1) + '%'}`
+              : `${ctx.dataset.label}: ${fmtMoeda(ctx.parsed.y)}`,
+          },
         },
-        tooltip: { callbacks: { label: (ctx) => `Margem: ${fmtMoeda(ctx.parsed.y)}` } },
       },
       scales: {
-        y: { grid: { color: '#e1e0d9' }, ticks: { color: '#898781' } },
+        y: { beginAtZero: true, grid: { color: '#e1e0d9' }, ticks: { color: '#898781' } },
+        y1: { position: 'right', grid: { display: false }, ticks: { color: '#898781', callback: (v) => v + '%' } },
         x: { grid: { display: false }, ticks: { color: '#898781' } },
       },
       onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
       onClick: (ev, els) => {
         if (!els.length) return;
-        const l = linhasTabela[els[0].index];
+        const el = els.find((e) => e.datasetIndex === 1) || els[0];
+        if (el.datasetIndex !== 1) return; // só a barra "Pago" tem títulos pra abrir (mesmo padrão do gráfico Faturado/Pago/Saldo Bruto acima)
+        const l = linhasTabela[el.index];
         abrirDetalhe(`Pago — Med. ${l.medicao}`, ultimoItensPagosFaturadoPago_(l.medicao));
       },
     },
@@ -4163,7 +4224,7 @@ function renderizarTabelaFaturamentoCategorias(itens) {
   // é exatamente a ordem que o gráfico Top N + Outras precisa; a partir
   // daqui `linhas` pode ser reordenada pelo clique no cabeçalho da tabela,
   // então o gráfico é montado ANTES disso acontecer.
-  renderizarGraficoCategoriaFaturamento_(linhas);
+  renderizarGraficoCategoriaFaturamento_(linhas, itens);
 
   linhas = aplicarOrdenacao('tabela-faturamento-categorias', linhas, EXTRATORES_FATURAMENTO_CATEGORIAS_);
   ultimoDadosFaturamentoCategorias = linhas;
@@ -4188,59 +4249,156 @@ function limparFiltroCategoriaFaturamento() {
   renderizarTabelaFaturamentoCategorias(ultimoItensAnalise);
 }
 
-// Barra horizontal, Top 10 + "Outras" — mesmo padrão do gráfico "Custo por
-// Categoria" (ver TOP_N_CATEGORIA_CUSTO/renderizarCustoPorCategoria mais
-// abaixo), aqui com o critério de "% do Faturamento" específico desta
-// tabela. `linhasOrdenadas` já chega maior valor primeiro (ordem de
-// calcularRankingAbcCategoria) e já filtrada por busca/Categoria — só falta
-// agrupar o que sobra do Top N.
-const TOP_N_CATEGORIA_FATURAMENTO_ = 10;
-function renderizarGraficoCategoriaFaturamento_(linhasOrdenadas) {
+// Janelas de medição (mesmo critério de renderizarFaturadoPago_: cada
+// medição cobre do dia seguinte à medição anterior até sua própria Data de
+// Referência, e a ÚLTIMA se estende até ontem, pra fechar a lacuna até
+// hoje). Duplicado deliberadamente aqui em vez de extraído num helper
+// compartilhado, pra não mexer na função já testada de lá — só a lista de
+// janelas (sem os itens pagos, que não interessam a este gráfico).
+function calcularJanelasMedicao_() {
+  const brutas = state.faturamento.medicoes || [];
+  const medicoes = brutas.filter((m) => m.dataReferencia).slice().sort((a, b) => a.dataReferencia.localeCompare(b.dataReferencia));
+  const ontemDia_ = hojeCalendario() - 86400000;
+  return medicoes.map((m, idx) => {
+    let fimJanelaDia = diaCalendario(paraData(m.dataReferencia));
+    if (idx === medicoes.length - 1 && fimJanelaDia != null && ontemDia_ > fimJanelaDia) fimJanelaDia = ontemDia_;
+    const inicioJanelaDia = idx > 0 ? diaCalendario(paraData(medicoes[idx - 1].dataReferencia)) : null;
+    return { medicao: m.medicao, inicioJanelaDia, fimJanelaDia, valorLiquido: m.valorLiquido };
+  });
+}
+
+// Paleta categórica fixa validada (skill de dataviz — ordem que passa o
+// pior par ADJACENTE em CVD, ΔE 9.1 claro/8.4 escuro): 8 matizes, nunca
+// mais. Uma 9ª cor não é "inventada" — categorias além da 8ª entram em
+// "Outras" (mesma regra não-negociável do skill: "a 9th series is never a
+// generated hue"). Cada linha também tem a própria identidade marcada pelo
+// eixo Y (nome da categoria), então a cor aqui é reforço, não a única
+// forma de diferenciar — mas o teto de 8 continua valendo.
+const TOP_N_CATEGORIA_FATURAMENTO_ = 8;
+const CORES_CATEGORICAS_FATURAMENTO_ = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
+const COR_OUTRAS_FATURAMENTO_ = '#898781';
+
+// Uma linha por categoria (Top 8 + "Outras"), eixo X = medição, eixo Y =
+// categoria (linha horizontal fixa naquela "faixa" — a posição vertical é
+// a identidade da categoria, não um valor). O valor em R$ só some no
+// tooltip (mouse em cima) e, fixo, no último ponto de cada linha (última
+// medição) — pedido explícito. Em cada ponto, só a seta ▲/▼ verde/vermelha
+// fica sempre visível, indicando se o custo daquela categoria subiu ou
+// desceu vs a medição anterior (ponto sem "anterior" vira uma bolinha
+// cinza neutra). `linhasOrdenadas` já chega maior valor primeiro (ordem de
+// calcularRankingAbcCategoria) e já filtrada por busca/Categoria — define
+// QUAIS categorias aparecem; os valores por medição vêm de `itensBrutos`
+// (não filtrado — a filtragem já escolheu as categorias, não precisa
+// filtrar os itens de novo).
+function renderizarGraficoCategoriaFaturamento_(linhasOrdenadas, itensBrutos) {
+  const janelas = calcularJanelasMedicao_();
   const top = linhasOrdenadas.slice(0, TOP_N_CATEGORIA_FATURAMENTO_);
   const resto = linhasOrdenadas.slice(TOP_N_CATEGORIA_FATURAMENTO_);
-  const linhasGrafico = top.slice();
-  if (resto.length) {
-    linhasGrafico.push({
-      cat: `Outras (${resto.length})`,
-      valor: resto.reduce((s, l) => s + l.valor, 0),
-      pctFaturamento: resto.reduce((s, l) => s + (l.pctFaturamento || 0), 0),
+  const catsResto = new Set(resto.map((l) => l.cat));
+  const temOutras = resto.length > 0;
+
+  // valorPorMedicaoECategoria[medicao][cat] = soma de R$ Valor dos itens
+  // com Vencimento dentro da janela daquela medição — mesmo critério de
+  // "Pago" em Faturado x Pago, só que quebrado por categoria também.
+  const valorPorMedicaoECategoria = {};
+  janelas.forEach((j) => { valorPorMedicaoECategoria[j.medicao] = {}; });
+  itensBrutos.forEach((i) => {
+    const vencimentoDia = diaCalendario(paraData(i['Vencimento']));
+    if (vencimentoDia == null) return;
+    const janela = janelas.find((j) => {
+      if (j.fimJanelaDia == null) return false;
+      if (j.inicioJanelaDia != null && vencimentoDia <= j.inicioJanelaDia) return false;
+      return vencimentoDia <= j.fimJanelaDia;
     });
+    if (!janela) return;
+    const cat = categoriaFornecedor_(i) || '(sem categoria)';
+    const mapaCat = valorPorMedicaoECategoria[janela.medicao];
+    mapaCat[cat] = (mapaCat[cat] || 0) + paraNumero(i['R$ Valor']);
+  });
+
+  // Uma "linha" de config por categoria visível (Top N + Outras); cada uma
+  // vira 1 dataset do Chart.js com 1 ponto por medição.
+  const catsGrafico = top.map((l) => ({ cat: l.cat, cor: null })); // cor preenchida abaixo, em ordem
+  top.forEach((l, idx) => { catsGrafico[idx].cor = CORES_CATEGORICAS_FATURAMENTO_[idx]; });
+  if (temOutras) catsGrafico.push({ cat: `Outras (${resto.length})`, cor: COR_OUTRAS_FATURAMENTO_ });
+
+  function valorCategoriaNaMedicao_(catInfo, medicao) {
+    const mapaCat = valorPorMedicaoECategoria[medicao] || {};
+    if (catInfo.cat.startsWith('Outras (')) {
+      let soma = 0;
+      catsResto.forEach((c) => { soma += mapaCat[c] || 0; });
+      return soma;
+    }
+    return mapaCat[catInfo.cat] || 0;
   }
+
+  const datasets = catsGrafico.map((catInfo) => {
+    let anterior = null;
+    const pontos = janelas.map((j) => {
+      const valor = valorCategoriaNaMedicao_(catInfo, j.medicao);
+      const pctFaturamento = j.valorLiquido ? (valor / j.valorLiquido) * 100 : null;
+      const variacao = anterior != null && anterior !== 0 ? ((valor - anterior) / Math.abs(anterior)) * 100 : null;
+      anterior = valor;
+      return { x: `Med. ${j.medicao}`, y: catInfo.cat, valor, pctFaturamento, variacao };
+    });
+    return {
+      type: 'line', label: catInfo.cat, data: pontos, yAxisID: 'y',
+      borderColor: catInfo.cor, backgroundColor: catInfo.cor, borderWidth: 2, tension: 0,
+      pointBorderColor: '#fcfcfb', pointBorderWidth: 1,
+      pointStyle: (ctx) => (ctx.raw && ctx.raw.variacao == null ? 'circle' : 'triangle'),
+      pointRadius: (ctx) => (ctx.raw && ctx.raw.variacao == null ? 3 : 6),
+      pointRotation: (ctx) => (ctx.raw && ctx.raw.variacao != null && ctx.raw.variacao < 0 ? 180 : 0),
+      pointBackgroundColor: (ctx) => {
+        if (!ctx.raw || ctx.raw.variacao == null) return '#898781';
+        return ctx.raw.variacao >= 0 ? '#1baf7a' : '#c0392b';
+      },
+    };
+  });
+
   if (chartCategoriaFaturamento) { chartCategoriaFaturamento.destroy(); chartCategoriaFaturamento = null; }
-  document.getElementById('grafico-faturamento-categorias-wrap').style.height = Math.max(260, linhasGrafico.length * 32 + 60) + 'px';
+  document.getElementById('grafico-faturamento-categorias-wrap').style.height = Math.max(300, catsGrafico.length * 40 + 60) + 'px';
   chartCategoriaFaturamento = new Chart(document.getElementById('chart-faturamento-categorias'), {
-    type: 'bar',
     data: {
-      labels: linhasGrafico.map((l) => l.cat),
-      datasets: [{ label: 'Custo no período', data: linhasGrafico.map((l) => l.valor), backgroundColor: '#eb6834', borderRadius: 4, borderSkipped: false, maxBarThickness: 22 }],
+      labels: janelas.map((j) => `Med. ${j.medicao}`),
+      datasets,
     },
     options: {
-      indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
+      // O último ponto de cada linha (Medição mais recente) fica na borda
+      // direita do canvas — sem essa folga o rótulo em R$ (ver datalabels
+      // abaixo) ficava cortado pela borda, ilegível.
+      layout: { padding: { right: 80 } },
       plugins: {
-        legend: { display: false },
-        datalabels: { display: false },
+        legend: { display: false }, // identidade da linha já vem do eixo Y (nome da categoria) — legenda de 8+ itens só duplicaria isso
+        datalabels: {
+          // Só o último ponto de cada linha (última medição) mostra o
+          // valor em R$ escrito — os demais ficam só com a seta (ver
+          // pointStyle/pointRotation acima) e o valor via tooltip.
+          display: (ctx) => ctx.dataIndex === ctx.dataset.data.length - 1,
+          formatter: (v) => fmtMoeda(v.valor),
+          color: '#52514e', font: { size: 9, weight: '600' }, align: 'right', anchor: 'center', offset: 10,
+        },
         tooltip: {
           callbacks: {
-            label: (ctx) => `Custo: ${fmtMoeda(ctx.parsed.x)}`,
-            afterLabel: (ctx) => {
-              const p = linhasGrafico[ctx.dataIndex].pctFaturamento;
-              return p == null ? '' : `${p.toFixed(1)}% do Faturamento`;
+            title: (items) => items.length ? `${items[0].dataset.label} — ${items[0].label}` : '',
+            label: (ctx) => {
+              const p = ctx.raw;
+              return `Custo: ${fmtMoeda(p.valor)} · ${p.pctFaturamento == null ? '—' : p.pctFaturamento.toFixed(1) + '% do Faturamento'}`;
             },
           },
         },
       },
       scales: {
-        x: { beginAtZero: true, grid: { color: '#e1e0d9' }, ticks: { color: '#898781' } },
-        y: { grid: { display: false }, ticks: { color: '#898781' } },
+        x: { type: 'category', labels: janelas.map((j) => `Med. ${j.medicao}`), grid: { display: false }, ticks: { color: '#898781' } },
+        y: { type: 'category', labels: catsGrafico.map((c) => c.cat), offset: true, grid: { color: '#e1e0d9' }, ticks: { color: '#898781' } },
       },
       onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
       onClick: (ev, els) => {
         if (!els.length) return;
-        const l = linhasGrafico[els[0].index];
-        if (l.cat.startsWith('Outras (')) { toast('Selecione uma categoria específica no filtro pra ver os títulos dela.'); return; }
-        abrirDetalheCategoria(l.cat);
+        const cat = catsGrafico[els[0].datasetIndex].cat;
+        if (cat.startsWith('Outras (')) { toast('Selecione uma categoria específica no filtro pra ver os títulos dela.'); return; }
+        abrirDetalheCategoria(cat);
       },
     },
   });
