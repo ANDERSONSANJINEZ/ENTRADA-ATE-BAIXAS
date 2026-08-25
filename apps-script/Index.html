@@ -4317,10 +4317,14 @@ function renderizarGraficoCategoriaFaturamento_(linhasOrdenadas, itensBrutos) {
   });
 
   // Uma "linha" de config por categoria visível (Top N + Outras); cada uma
-  // vira 1 dataset do Chart.js com 1 ponto por medição.
-  const catsGrafico = top.map((l) => ({ cat: l.cat, cor: null })); // cor preenchida abaixo, em ordem
-  top.forEach((l, idx) => { catsGrafico[idx].cor = CORES_CATEGORICAS_FATURAMENTO_[idx]; });
-  if (temOutras) catsGrafico.push({ cat: `Outras (${resto.length})`, cor: COR_OUTRAS_FATURAMENTO_ });
+  // vira 1 dataset do Chart.js com 1 ponto por medição. valorAcumulado =
+  // custo total da categoria em TODO o período (já vem pronto de
+  // calcularRankingAbcCategoria via linhasOrdenadas — a mesma soma que
+  // ordena o ranking) — é o que aparece escrito no fim de cada linha.
+  const catsGrafico = top.map((l, idx) => ({ cat: l.cat, cor: CORES_CATEGORICAS_FATURAMENTO_[idx], valorAcumulado: l.valor }));
+  if (temOutras) {
+    catsGrafico.push({ cat: `Outras (${resto.length})`, cor: COR_OUTRAS_FATURAMENTO_, valorAcumulado: resto.reduce((s, l) => s + l.valor, 0) });
+  }
 
   function valorCategoriaNaMedicao_(catInfo, medicao) {
     const mapaCat = valorPorMedicaoECategoria[medicao] || {};
@@ -4362,7 +4366,7 @@ function renderizarGraficoCategoriaFaturamento_(linhasOrdenadas, itensBrutos) {
       return { x: `Med. ${p.medicao}`, y: bandCenter + offset, valor: p.valor, pctFaturamento: p.pctFaturamento, variacao: p.variacao, cat: catInfo.cat };
     });
     return {
-      type: 'line', label: catInfo.cat, data: pontos, yAxisID: 'y',
+      type: 'line', label: catInfo.cat, data: pontos, yAxisID: 'y', valorAcumulado: catInfo.valorAcumulado,
       borderColor: catInfo.cor, backgroundColor: catInfo.cor, borderWidth: 2, tension: 0.3,
       pointBorderColor: '#fcfcfb', pointBorderWidth: 1,
       pointStyle: (ctx) => (ctx.raw && ctx.raw.variacao == null ? 'circle' : 'triangle'),
@@ -4392,11 +4396,14 @@ function renderizarGraficoCategoriaFaturamento_(linhasOrdenadas, itensBrutos) {
       plugins: {
         legend: { display: false }, // identidade da linha já vem do eixo Y (nome da categoria) — legenda de 8+ itens só duplicaria isso
         datalabels: {
-          // Só o último ponto de cada linha (última medição) mostra o
-          // valor em R$ escrito — os demais ficam só com a seta (ver
-          // pointStyle/pointRotation acima) e o valor via tooltip.
+          // Só o último ponto de cada linha mostra rótulo — mas o valor
+          // escrito é o ACUMULADO da categoria no período inteiro (soma de
+          // todas as medições, mesmo total que ordena o ranking), não o
+          // custo de uma medição isolada. Os demais pontos ficam só com a
+          // seta (ver pointStyle/pointRotation acima) e o valor por
+          // medição via tooltip.
           display: (ctx) => ctx.dataIndex === ctx.dataset.data.length - 1,
-          formatter: (v) => fmtMoeda(v.valor),
+          formatter: (v, ctx) => fmtMoeda(ctx.dataset.valorAcumulado),
           color: '#52514e', font: { size: 9, weight: '600' }, align: 'right', anchor: 'center', offset: 10,
         },
         tooltip: {
