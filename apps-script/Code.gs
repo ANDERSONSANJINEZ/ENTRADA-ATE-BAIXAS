@@ -621,8 +621,12 @@ function api_importar(payload) {
 var PASTA_DRIVE_TITULOS_ID_ = '1sVlF29VGWDzHelgBGIeFvVK3OCpMjGmD';
 var PROP_ULTIMO_ARQUIVO_DRIVE_ = 'drive_ultimo_arquivo_titulos';
 
-function api_buscarArquivoDriveNovo(payload) {
-  validarAcessoEdicao_(payload);
+// Percorre a pasta e devolve o arquivo .xlsx com getLastUpdated() mais
+// recente, ou null se a pasta não tiver nenhum — usado tanto pela checagem
+// de importação (api_buscarArquivoDriveNovo) quanto pelo download avulso
+// (api_baixarArquivoDriveTitulos), que precisam do MESMO critério de "qual
+// é o arquivo vigente" pra nunca divergir um do outro.
+function arquivoDriveTitulosMaisRecente_() {
   var pasta = DriveApp.getFolderById(PASTA_DRIVE_TITULOS_ID_);
   var arquivos = pasta.getFilesByType(MimeType.MICROSOFT_EXCEL);
   var maisRecente = null;
@@ -632,6 +636,12 @@ function api_buscarArquivoDriveNovo(payload) {
       maisRecente = arquivo;
     }
   }
+  return maisRecente;
+}
+
+function api_buscarArquivoDriveNovo(payload) {
+  validarAcessoEdicao_(payload);
+  var maisRecente = arquivoDriveTitulosMaisRecente_();
   if (!maisRecente) return { encontrado: false };
 
   var chaveAtual = maisRecente.getId() + '|' + maisRecente.getLastUpdated().getTime();
@@ -644,6 +654,21 @@ function api_buscarArquivoDriveNovo(payload) {
     nomeArquivo: maisRecente.getName(),
     conteudoBase64: Utilities.base64Encode(blob.getBytes()),
     driveChave: chaveAtual,
+  };
+}
+
+// Baixa o mesmo arquivo que api_buscarArquivoDriveNovo usaria pra
+// atualizar os dados — mas sem a checagem de "já importado" (sempre
+// devolve o mais recente da pasta, já importado ou não) e sem marcar nada
+// como processado, já que aqui é só um download, não uma importação.
+function api_baixarArquivoDriveTitulos(payload) {
+  validarAcessoEdicao_(payload);
+  var maisRecente = arquivoDriveTitulosMaisRecente_();
+  if (!maisRecente) throw new Error('Nenhum arquivo encontrado na pasta do Google Drive.');
+  var blob = maisRecente.getBlob();
+  return {
+    nomeArquivo: maisRecente.getName(),
+    conteudoBase64: Utilities.base64Encode(blob.getBytes()),
   };
 }
 
@@ -1062,6 +1087,7 @@ function doPost(e) {
     var resultado;
     if (acao === 'importar') resultado = api_importar(payload);
     else if (acao === 'buscarArquivoDriveNovo') resultado = api_buscarArquivoDriveNovo(payload);
+    else if (acao === 'baixarArquivoDriveTitulos') resultado = api_baixarArquivoDriveTitulos(payload);
     else if (acao === 'adicionarManual') resultado = api_adicionarManual(payload);
     else if (acao === 'editarManual') resultado = api_editarManual(payload);
     else if (acao === 'removerManual') resultado = api_removerManual(payload);

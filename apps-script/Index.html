@@ -988,9 +988,22 @@
   </section>
 
   <section id="aba-atualizar" class="aba">
+    <div class="painel" id="painel-baixar-arquivo">
+      <h2>⬇ Baixar arquivo</h2>
+      <p style="font-size:13px;color:var(--cinza)">
+        Baixa o arquivo de títulos (baixas) do TOTVS Protheus mais recente na
+        pasta do Google Drive — o mesmo arquivo que "Atualizar dados" usa
+        logo abaixo, já importado ou não.
+      </p>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button class="btn secundario" id="btn-baixar-arquivo" onclick="baixarArquivoDriveTitulos()">⬇ Baixar arquivo</button>
+        <span id="status-baixar-arquivo" style="font-size:13px;color:var(--cinza)"></span>
+      </div>
+    </div>
     <div class="painel" id="painel-atualizar-baixas">
       <h2>Títulos (baixas) — TOTVS Protheus</h2>
       <div id="resumo-importacao"></div>
+      <button class="btn secundario small" onclick="verificarEImportarDoDrive()">🔄 Atualizar dados</button>
     </div>
     <div class="painel">
       <h2>📎 Separar comprovantes bancários</h2>
@@ -7124,6 +7137,39 @@ async function separarComprovantesBancarios() {
   }
 }
 
+// Baixa pro computador o mesmo arquivo que "Atualizar dados" (logo abaixo)
+// usaria pra atualizar os dados — o mais recente na pasta do Google Drive
+// do Protheus, já importado ou não (api_baixarArquivoDriveTitulos, que
+// reaproveita o mesmo critério de "arquivo vigente" do lado do servidor,
+// sem a checagem de "já importado" que api_buscarArquivoDriveNovo faz).
+async function baixarArquivoDriveTitulos() {
+  const statusEl = document.getElementById('status-baixar-arquivo');
+  const btn = document.getElementById('btn-baixar-arquivo');
+  btn.disabled = true;
+  statusEl.textContent = 'Baixando…';
+  try {
+    const resposta = await chamarServidor('baixarArquivoDriveTitulos', {});
+    const blob = new Blob([base64ParaArrayBuffer_(resposta.conteudoBase64)], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = resposta.nomeArquivo || 'titulos.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    statusEl.textContent = '';
+    toast(`Arquivo "${resposta.nomeArquivo}" baixado.`);
+  } catch (e) {
+    statusEl.textContent = '';
+    toast('Falha ao baixar o arquivo: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // Substitui o antigo upload manual (arraste/selecione o .xlsx): a aba
 // Arquivos de Dados, ao ser aberta (ver o forEach de "nav button" mais
 // abaixo), checa sozinha se existe um arquivo mais novo do que o último já
@@ -7225,6 +7271,7 @@ function prefillUsuarioInclusor() {
 
 function atualizarUiModoLeitura() {
   document.getElementById('painel-atualizar-baixas').style.display = MODO_LEITURA ? 'none' : '';
+  document.getElementById('painel-baixar-arquivo').style.display = MODO_LEITURA ? 'none' : '';
   // Cobre o caso de habilitar a edição enquanto já se está na aba Extrator
   // de Comprovante (o clique na aba, mais acima, só dispara a checagem se a
   // edição já estava habilitada nesse momento).
