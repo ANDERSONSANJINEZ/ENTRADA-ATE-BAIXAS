@@ -3806,7 +3806,29 @@ function renderizarGraficoMargemMedicao_(linhasTabela, variacaoPorMedicao_) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { labels: { color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8 } },
+        legend: {
+          labels: {
+            color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8,
+            // A bolinha da legenda, por padrão, copia a cor do PRIMEIRO
+            // ponto da série (pointBackgroundColor no índice 0) — pra
+            // Margem isso é escriptável por tendência, e o índice 0 pode
+            // calhar de ser cinza (sem "anterior" pra comparar), diferente
+            // da cor fixa roxa da curva. Corrige só o item da Margem pra
+            // usar a MESMA cor fixa da linha, evitando a bolinha "errada".
+            generateLabels: (chart) => {
+              // itens vem na ORDEM DE EXIBIÇÃO da legenda (que segue o
+              // "order" do dataset, não a posição no array original) — por
+              // isso o item certo é achado pelo próprio datasetIndex de
+              // cada item, nunca indexando itens[] pela posição em
+              // chart.data.datasets (índices diferentes = bolinha errada
+              // recolorida, como aconteceu na 1ª tentativa).
+              const itens = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+              const item = itens.find((it) => chart.data.datasets[it.datasetIndex].label === 'Margem (R$)');
+              if (item) { item.fillStyle = '#4a3aa7'; item.strokeStyle = '#4a3aa7'; }
+              return itens;
+            },
+          },
+        },
         tooltip: {
           callbacks: {
             label: (ctx) => ctx.datasetIndex === 2
