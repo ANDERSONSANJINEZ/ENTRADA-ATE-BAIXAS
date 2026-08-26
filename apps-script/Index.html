@@ -679,7 +679,7 @@
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
             <h3 style="font-size:13px; color:var(--azul); margin:0;">Por medição</h3>
             <div style="display:flex; gap:6px;">
-              <button class="btn secundario small" onclick="expandirGrafico('margemMedicao', 'Faturado, Pago e Margem (%) por Medição')">⛶ Expandir</button>
+              <button class="btn secundario small" onclick="expandirGrafico('margemMedicao', 'Faturado, Pago e Margem por Medição')">⛶ Expandir</button>
               <button class="btn secundario small" onclick="exportarXlsx('faturadoPago')">⬇ Exportar Excel</button>
               <button class="btn secundario small" id="btn-planilha-faturado-pago" onclick="abrirPlanilhaModal('faturado-pago', 'Por medição')">📋 Planilha</button>
             </div>
@@ -3736,26 +3736,23 @@ function ultimoItensPagosFaturadoPago_(medicao) {
   return ultimoItensPagosPorMedicao_[medicao] || [];
 }
 
-// Combo: Faturado, Pago e Margem em barra (R$, eixo esquerdo) + Margem como
-// % de variação vs a medição anterior (linha, verde/vermelha acompanhando
-// a mesma seta ▲/▼ já usada na tabela — ver variacaoMargemPorMedicao_
-// acima) num eixo à direita, próprio, em %. A barra de Margem usa a MESMA
-// cor diverging (verde ≥0 / vermelho <0) da linha — é a mesma grandeza em
-// duas unidades, não duas séries diferentes, então a cor reforça em vez de
-// confundir. Pedido explícito de dual-axis (uma exceção deliberada à regra
-// geral de "nunca 2 eixos Y" — aqui o eixo direito existe só pra essa 4ª
-// série, que é uma grandeza diferente das outras 3). Sem valor em R$
-// escrito nas barras (só no tooltip) — pedido explícito; a % da linha
-// continua escrita (não é "barra" e é o dado central deste gráfico).
-// Medição sem "anterior" (a mais antiga da lista) fica sem ponto na linha
-// e com a barra de Margem em cinza neutro, igual à tabela (sem seta).
-// Respeita o filtro "Medição: todas/N" desta mesma tabela — recebe
-// `linhasTabela` já filtrada.
+// Combo: Faturado e Pago em barra (R$, eixo esquerdo, "Faturado / Pago - R$")
+// + Margem em R$ como linha curva verde, por cima das barras, num eixo
+// próprio à direita ("Margem - R$"). A linha não usa mais % — o eixo em
+// que ela vive agora é o mesmo R$ das barras, só que numa escala própria
+// (dual-axis: exceção deliberada à regra geral de "nunca 2 eixos Y",
+// pedido explícito, eixo direito existe só pra essa 2ª grandeza). A COR de
+// cada trecho da linha e de cada ponto continua vindo da TENDÊNCIA (▲/▼
+// vs a medição anterior — ver variacaoMargemPorMedicao_ acima), não do
+// sinal do valor em R$ em si: verde quando a margem subiu, vermelho
+// quando caiu, cinza neutro (sem seta) na medição mais antiga, que não
+// tem "anterior" pra comparar. Respeita o filtro "Medição: todas/N" desta
+// mesma tabela — recebe `linhasTabela` já filtrada.
 function renderizarGraficoMargemMedicao_(linhasTabela, variacaoPorMedicao_) {
   const labels = linhasTabela.map((l) => `Med. ${l.medicao}`);
-  const variacoes = linhasTabela.map((l) => {
+  const pontosMargem = linhasTabela.map((l, idx) => {
     const v = variacaoPorMedicao_[l.medicao];
-    return v === undefined ? null : v;
+    return { x: labels[idx], y: l.margem, variacao: v === undefined ? null : v };
   });
   const corVariacao_ = (v) => (v == null ? '#898781' : v >= 0 ? '#1baf7a' : '#c0392b');
   if (chartMargemMedicao) { chartMargemMedicao.destroy(); chartMargemMedicao = null; }
@@ -3774,29 +3771,23 @@ function renderizarGraficoMargemMedicao_(linhasTabela, variacaoPorMedicao_) {
           categoryPercentage: 0.7, barPercentage: 0.9, datalabels: { display: false },
         },
         {
-          type: 'bar', label: 'Margem (R$)', data: linhasTabela.map((l) => l.margem), yAxisID: 'y',
-          backgroundColor: linhasTabela.map((l) => (l.margem >= 0 ? '#1baf7a' : '#c0392b')),
-          borderRadius: 4, borderSkipped: false, maxBarThickness: 20,
-          categoryPercentage: 0.7, barPercentage: 0.9, datalabels: { display: false },
-        },
-        {
-          type: 'line', label: 'Margem (variação vs medição anterior)', data: variacoes, yAxisID: 'y1',
-          borderColor: '#898781', borderWidth: 2, tension: 0.3,
+          type: 'line', label: 'Margem (R$)', data: pontosMargem, yAxisID: 'y1',
+          borderColor: '#1baf7a', backgroundColor: '#1baf7a', borderWidth: 2.5, tension: 0.3,
           pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb',
-          pointBackgroundColor: (ctx) => corVariacao_(ctx.raw),
-          segment: { borderColor: (ctx) => corVariacao_(ctx.p1.parsed.y) },
+          pointBackgroundColor: (ctx) => corVariacao_(ctx.raw && ctx.raw.variacao),
+          segment: { borderColor: (ctx) => corVariacao_(ctx.p1.raw.variacao) },
           datalabels: {
             // O texto usa tinta neutra de alto contraste (nunca a cor da
             // série) — o verde/vermelho do ponto/segmento já carrega o
-            // sinal; colorir o NÚMERO também de verde/vermelho (como
-            // estava antes) deixava o texto ilegível sobre o fundo claro e
-            // por cima das barras. Fundo branco semi-opaco por trás do
-            // texto (chip) pra continuar legível quando o rótulo cai em
-            // cima de uma barra azul/laranja.
+            // sinal; colorir o NÚMERO também de verde/vermelho deixaria o
+            // texto ilegível sobre o fundo claro e por cima das barras.
+            // Fundo branco semi-opaco por trás do texto (chip) pra
+            // continuar legível quando o rótulo cai em cima de uma barra
+            // azul/laranja.
             color: '#1e2430',
             backgroundColor: 'rgba(252,252,251,0.85)', borderRadius: 3, padding: { top: 1, bottom: 1, left: 3, right: 3 },
             font: { size: 10, weight: '600' }, align: 'top', anchor: 'end',
-            formatter: (v) => (v == null ? '' : `${v >= 0 ? '▲' : '▼'} ${Math.abs(v).toFixed(0)}%`),
+            formatter: (v) => (v.variacao == null ? '' : `${v.variacao >= 0 ? '▲' : '▼'} ${Math.abs(v.variacao).toFixed(0)}%`),
           },
         },
       ],
@@ -3808,15 +3799,21 @@ function renderizarGraficoMargemMedicao_(linhasTabela, variacaoPorMedicao_) {
         legend: { labels: { color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8 } },
         tooltip: {
           callbacks: {
-            label: (ctx) => ctx.datasetIndex === 3
-              ? `Margem: ${ctx.parsed.y == null ? 'sem medição anterior pra comparar' : (ctx.parsed.y >= 0 ? '+' : '') + ctx.parsed.y.toFixed(1) + '%'}`
+            label: (ctx) => ctx.datasetIndex === 2
+              ? `Margem: ${fmtMoeda(ctx.parsed.y)}${ctx.raw.variacao == null ? ' (sem medição anterior pra comparar)' : ` (${ctx.raw.variacao >= 0 ? '+' : ''}${ctx.raw.variacao.toFixed(1)}% vs medição anterior)`}`
               : `${ctx.dataset.label}: ${fmtMoeda(ctx.parsed.y)}`,
           },
         },
       },
       scales: {
-        y: { beginAtZero: true, grid: { color: '#e1e0d9' }, ticks: { color: '#898781' } },
-        y1: { position: 'right', grid: { display: false }, ticks: { color: '#898781', callback: (v) => v + '%' } },
+        y: {
+          beginAtZero: true, grid: { color: '#e1e0d9' }, ticks: { color: '#898781' },
+          title: { display: true, text: 'Faturado / Pago - R$', color: '#898781', font: { size: 11, weight: '600' } },
+        },
+        y1: {
+          position: 'right', grid: { display: false }, ticks: { color: '#898781' },
+          title: { display: true, text: 'Margem - R$', color: '#898781', font: { size: 11, weight: '600' } },
+        },
         x: { grid: { display: false }, ticks: { color: '#898781' } },
       },
       onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
