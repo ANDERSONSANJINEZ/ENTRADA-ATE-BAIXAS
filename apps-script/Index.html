@@ -667,21 +667,11 @@
         <div class="cards" id="cards-faturamento" style="margin-bottom:18px;"></div>
         <div class="painel" style="margin-bottom:18px; width:100%;">
           <div class="cabecalho-painel">
-            <h2>Faturado, Pago e Saldo Bruto por Medição</h2>
-            <button class="btn secundario small" onclick="expandirGrafico('faturadoPago', 'Faturado, Pago e Saldo Bruto por Medição')">⛶ Expandir</button>
-            <button class="btn secundario small" onclick="exportarXlsx('faturadoPago')">⬇ Exportar Excel</button>
-          </div>
-          <div id="faturado-pago-chart-wrap" style="height:340px; width:100%;">
-            <canvas id="chart-faturado-pago"></canvas>
-          </div>
-        </div>
-        <div class="painel" style="margin-bottom:18px; width:100%;">
-          <div class="cabecalho-painel">
             <h2>Faturamento, Pago e Saldo Bruto — Acumulado</h2>
             <button class="btn secundario small" onclick="expandirGrafico('faturadoPagoAcumulado', 'Faturamento, Pago e Saldo Bruto — Acumulado')">⛶ Expandir</button>
             <button class="btn secundario small" onclick="exportarXlsx('faturadoPagoAcumulado')">⬇ Exportar Excel</button>
           </div>
-          <div id="faturado-pago-acumulado-chart-wrap" style="height:300px; width:100%;">
+          <div id="faturado-pago-acumulado-chart-wrap" class="grafico-altura-tela">
             <canvas id="chart-faturado-pago-acumulado"></canvas>
           </div>
         </div>
@@ -701,7 +691,7 @@
             <button type="button" class="btn secundario small" onclick="limparFiltroMedicaoFaturadoPago()">✕ Limpar Filtro</button>
           </div>
           <div id="total-faturado-pago" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
-          <div id="grafico-faturado-pago-wrap" style="height:340px; width:100%; margin-bottom:10px;">
+          <div id="grafico-faturado-pago-wrap" class="grafico-altura-tela grafico-altura-tela--com-legenda" style="width:100%; margin-bottom:10px;">
             <canvas id="chart-margem-medicao"></canvas>
           </div>
           <div id="planilha-faturado-pago-wrap" style="display:none;">
@@ -2888,7 +2878,7 @@ function atualizarSetasOrdenacao(tabelaId) {
 
 // ---------- Dashboard ----------
 let chartAging, chartFluxo, chartStatusPagamento, chartPagosAbc, chartAporte;
-let chartCategoriaCusto, chartAbcCategoria, chartFaturadoPago, chartMargemGauge, chartFaturadoPagoAcumulado;
+let chartCategoriaCusto, chartAbcCategoria, chartMargemGauge, chartFaturadoPagoAcumulado;
 let chartPagoApagarGauge, chartApagarGauge, chartSaldoDisponivelGauge;
 let chartMargemMedicao, chartCategoriaFaturamento;
 let ultimoDadosFaturadoPago = []; // export: [{medicao, faturado, pago, margem}]
@@ -2913,7 +2903,6 @@ const REGISTRO_GRAFICOS_DASHBOARD_ = {
   abcCategoria: () => chartAbcCategoria,
   pagosAbc: () => chartPagosAbc,
   aporte: () => chartAporte,
-  faturadoPago: () => chartFaturadoPago,
   faturadoPagoAcumulado: () => chartFaturadoPagoAcumulado,
   margemMedicao: () => chartMargemMedicao,
   categoriaFaturamento: () => chartCategoriaFaturamento,
@@ -3623,48 +3612,6 @@ function renderizarFaturadoPago_() {
   document.getElementById('saldo-disponivel-gauge-texto').textContent = `${saldoDisponivelPct.toFixed(1)}%`;
   document.getElementById('saldo-disponivel-gauge-texto').style.color = corSaldoDisponivel;
 
-  const labels = linhas.map((l) => `Med. ${l.medicao}`);
-  if (chartFaturadoPago) chartFaturadoPago.destroy();
-  chartFaturadoPago = new Chart(document.getElementById('chart-faturado-pago'), {
-    data: {
-      labels,
-      // Paleta validada (contraste + daltonismo) pro conjunto das 4 séries —
-      // ver skill de dataviz: azul/laranja/verde-água/violeta passam em
-      // todos os pares (worst-case ΔE 9.2 daltônico / 16.3 visão normal),
-      // diferente do azul-marinho/verde escuros usados antes (que falhavam
-      // no piso de contraste/croma).
-      datasets: [
-        { type: 'bar', label: 'Faturado', data: linhas.map((l) => l.faturado), backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24, categoryPercentage: 0.6, barPercentage: 0.9 },
-        { type: 'bar', label: 'Pago', data: linhas.map((l) => l.pago), backgroundColor: '#eb6834', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24, categoryPercentage: 0.6, barPercentage: 0.9 },
-        { type: 'line', label: 'Saldo Bruto (Faturado − Pago)', data: linhas.map((l) => l.margem), borderColor: '#1baf7a', backgroundColor: '#1baf7a', borderWidth: 2, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, yAxisID: 'y' },
-      ],
-    },
-    options: {
-      // maintainAspectRatio:false (padrão do Chart.js é true) — sem isso o
-      // canvas calcula a largura a partir de uma proporção fixa em vez de
-      // esticar até preencher o wrap de 100% de largura, sobrando um vão
-      // vazio à direita do gráfico dentro do painel.
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        datalabels: { display: false },
-        legend: { labels: { color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8 } },
-        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtMoeda(ctx.parsed.y)}` } },
-      },
-      scales: {
-        y: { beginAtZero: true, grid: { color: '#e1e0d9' }, ticks: { color: '#898781' } },
-        x: { grid: { display: false }, ticks: { color: '#898781' } },
-      },
-      onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
-      onClick: (ev, els) => {
-        if (!els.length) return;
-        const el = els.find((e) => e.datasetIndex === 1) || els[0];
-        if (el.datasetIndex !== 1) return; // só a barra "Pago" tem títulos pra abrir (Faturado vem de fora do app)
-        abrirDetalhe(`Pago — ${labels[el.index]}`, linhas[el.index].itensPagos);
-      },
-    },
-  });
-
   // Gráfico "Acumulado" — Faturado, Pago/A Pagar e Saldo Disponível somados
   // período a período, numa escala própria (ver comentário acima de
   // `acumulados`). O último segmento (última medição → "Hoje") vem
@@ -3680,7 +3627,7 @@ function renderizarFaturadoPago_() {
       datasets: [
         { type: 'line', label: 'Faturado acumulado', data: acumulados.map((a) => a.faturado), borderColor: '#2a78d6', backgroundColor: '#2a78d6', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
         { type: 'line', label: 'Pago / A Pagar acumulado', data: acumulados.map((a) => a.pago), borderColor: '#eb6834', backgroundColor: '#eb6834', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
-        { type: 'line', label: 'Saldo Disponível acumulado', data: acumulados.map((a) => a.saldoDisponivel), borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', borderDash: [5, 3], tension: 0.3 },
+        { type: 'line', label: 'Saldo Disponível acumulado', data: acumulados.map((a) => a.saldoDisponivel), borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
       ],
     },
     options: {
@@ -3789,18 +3736,21 @@ function ultimoItensPagosFaturadoPago_(medicao) {
   return ultimoItensPagosPorMedicao_[medicao] || [];
 }
 
-// Combo: Faturado (barra, R$) + Pago (barra, R$) no eixo esquerdo, e Margem
-// como % de variação vs a medição anterior (linha, verde/vermelha
-// acompanhando a mesma seta ▲/▼ já usada na tabela — ver
-// variacaoMargemPorMedicao_ acima) num eixo à direita, próprio, em %.
-// Pedido explícito de dual-axis (uma exceção deliberada à regra geral de
-// "nunca 2 eixos Y" — aqui o eixo direito existe só pra essa 3ª série, que
-// é uma grandeza diferente das duas primeiras). Sem valor em R$ escrito
-// nas barras (só no tooltip) — pedido explícito; a % da linha continua
-// escrita (não é "barra" e é o dado central deste gráfico). Medição sem
-// "anterior" (a mais antiga da lista) fica sem ponto na linha, igual à
-// tabela (sem seta). Respeita o filtro "Medição: todas/N" desta mesma
-// tabela — recebe `linhasTabela` já filtrada.
+// Combo: Faturado, Pago e Margem em barra (R$, eixo esquerdo) + Margem como
+// % de variação vs a medição anterior (linha, verde/vermelha acompanhando
+// a mesma seta ▲/▼ já usada na tabela — ver variacaoMargemPorMedicao_
+// acima) num eixo à direita, próprio, em %. A barra de Margem usa a MESMA
+// cor diverging (verde ≥0 / vermelho <0) da linha — é a mesma grandeza em
+// duas unidades, não duas séries diferentes, então a cor reforça em vez de
+// confundir. Pedido explícito de dual-axis (uma exceção deliberada à regra
+// geral de "nunca 2 eixos Y" — aqui o eixo direito existe só pra essa 4ª
+// série, que é uma grandeza diferente das outras 3). Sem valor em R$
+// escrito nas barras (só no tooltip) — pedido explícito; a % da linha
+// continua escrita (não é "barra" e é o dado central deste gráfico).
+// Medição sem "anterior" (a mais antiga da lista) fica sem ponto na linha
+// e com a barra de Margem em cinza neutro, igual à tabela (sem seta).
+// Respeita o filtro "Medição: todas/N" desta mesma tabela — recebe
+// `linhasTabela` já filtrada.
 function renderizarGraficoMargemMedicao_(linhasTabela, variacaoPorMedicao_) {
   const labels = linhasTabela.map((l) => `Med. ${l.medicao}`);
   const variacoes = linhasTabela.map((l) => {
@@ -3815,13 +3765,19 @@ function renderizarGraficoMargemMedicao_(linhasTabela, variacaoPorMedicao_) {
       datasets: [
         {
           type: 'bar', label: 'Faturado', data: linhasTabela.map((l) => l.faturado), yAxisID: 'y',
-          backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24,
-          categoryPercentage: 0.6, barPercentage: 0.9, datalabels: { display: false },
+          backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 20,
+          categoryPercentage: 0.7, barPercentage: 0.9, datalabels: { display: false },
         },
         {
           type: 'bar', label: 'Pago', data: linhasTabela.map((l) => l.pago), yAxisID: 'y',
-          backgroundColor: '#eb6834', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24,
-          categoryPercentage: 0.6, barPercentage: 0.9, datalabels: { display: false },
+          backgroundColor: '#eb6834', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 20,
+          categoryPercentage: 0.7, barPercentage: 0.9, datalabels: { display: false },
+        },
+        {
+          type: 'bar', label: 'Margem (R$)', data: linhasTabela.map((l) => l.margem), yAxisID: 'y',
+          backgroundColor: linhasTabela.map((l) => (l.margem >= 0 ? '#1baf7a' : '#c0392b')),
+          borderRadius: 4, borderSkipped: false, maxBarThickness: 20,
+          categoryPercentage: 0.7, barPercentage: 0.9, datalabels: { display: false },
         },
         {
           type: 'line', label: 'Margem (variação vs medição anterior)', data: variacoes, yAxisID: 'y1',
@@ -3852,7 +3808,7 @@ function renderizarGraficoMargemMedicao_(linhasTabela, variacaoPorMedicao_) {
         legend: { labels: { color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8 } },
         tooltip: {
           callbacks: {
-            label: (ctx) => ctx.datasetIndex === 2
+            label: (ctx) => ctx.datasetIndex === 3
               ? `Margem: ${ctx.parsed.y == null ? 'sem medição anterior pra comparar' : (ctx.parsed.y >= 0 ? '+' : '') + ctx.parsed.y.toFixed(1) + '%'}`
               : `${ctx.dataset.label}: ${fmtMoeda(ctx.parsed.y)}`,
           },
