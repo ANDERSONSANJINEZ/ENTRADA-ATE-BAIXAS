@@ -3312,8 +3312,8 @@ function renderizarFluxoCaixa(abertos, hoje) {
     data: {
       labels,
       datasets: [
-        { type: 'bar', label: 'A pagar no período (R$)', data: valoresMes, backgroundColor: '#1f4e78' },
-        { type: 'line', label: 'Saldo acumulado (R$)', data: saldo, borderColor: '#c0392b', backgroundColor: '#c0392b', yAxisID: 'y', tension: 0.35 },
+        { type: 'bar', label: 'A pagar no período (R$)', data: valoresMes, backgroundColor: '#1f4e78', order: 1 },
+        { type: 'line', label: 'Saldo acumulado (R$)', data: saldo, borderColor: '#c0392b', backgroundColor: '#c0392b', yAxisID: 'y', tension: 0.35, order: 0 },
       ],
     },
     options: {
@@ -3737,16 +3737,19 @@ function ultimoItensPagosFaturadoPago_(medicao) {
 }
 
 // Combo: Faturado e Pago em barra (R$, eixo esquerdo, "Faturado / Pago - R$")
-// + Margem em R$ como linha curva verde, por cima das barras, num eixo
-// próprio à direita ("Margem - R$"). A linha não usa mais % — o eixo em
-// que ela vive agora é o mesmo R$ das barras, só que numa escala própria
-// (dual-axis: exceção deliberada à regra geral de "nunca 2 eixos Y",
-// pedido explícito, eixo direito existe só pra essa 2ª grandeza). A COR de
-// cada trecho da linha e de cada ponto continua vindo da TENDÊNCIA (▲/▼
-// vs a medição anterior — ver variacaoMargemPorMedicao_ acima), não do
-// sinal do valor em R$ em si: verde quando a margem subiu, vermelho
-// quando caiu, cinza neutro (sem seta) na medição mais antiga, que não
-// tem "anterior" pra comparar. Respeita o filtro "Medição: todas/N" desta
+// + Margem em R$ como linha curva, por cima das barras (order: 0 nas
+// séries de linha/ponto/rótulo vs order: 1 nas barras — sempre desenhada
+// por cima, não só por vir depois no array), num eixo próprio à direita
+// ("Margem - R$"). A linha não usa mais % — o eixo em que ela vive agora é
+// o mesmo R$ das barras, só que numa escala própria (dual-axis: exceção
+// deliberada à regra geral de "nunca 2 eixos Y", pedido explícito, eixo
+// direito existe só pra essa 2ª grandeza). A cor da LINHA em si é FIXA
+// (roxo) — não muda por trecho — justamente pra não competir com o
+// marcador/seta de cada ponto, que são o que carrega a TENDÊNCIA (▲/▼ vs
+// a medição anterior — ver variacaoMargemPorMedicao_ acima), não o sinal
+// do valor em R$ em si: verde quando a margem subiu, vermelho quando
+// caiu, cinza neutro (sem seta) na medição mais antiga, que não tem
+// "anterior" pra comparar. Respeita o filtro "Medição: todas/N" desta
 // mesma tabela — recebe `linhasTabela` já filtrada.
 function renderizarGraficoMargemMedicao_(linhasTabela, variacaoPorMedicao_) {
   const labels = linhasTabela.map((l) => `Med. ${l.medicao}`);
@@ -3761,32 +3764,39 @@ function renderizarGraficoMargemMedicao_(linhasTabela, variacaoPorMedicao_) {
       labels,
       datasets: [
         {
-          type: 'bar', label: 'Faturado', data: linhasTabela.map((l) => l.faturado), yAxisID: 'y',
+          type: 'bar', label: 'Faturado', data: linhasTabela.map((l) => l.faturado), yAxisID: 'y', order: 1,
           backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 20,
           categoryPercentage: 0.7, barPercentage: 0.9, datalabels: { display: false },
         },
         {
-          type: 'bar', label: 'Pago', data: linhasTabela.map((l) => l.pago), yAxisID: 'y',
+          type: 'bar', label: 'Pago', data: linhasTabela.map((l) => l.pago), yAxisID: 'y', order: 1,
           backgroundColor: '#eb6834', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 20,
           categoryPercentage: 0.7, barPercentage: 0.9, datalabels: { display: false },
         },
         {
-          type: 'line', label: 'Margem (R$)', data: pontosMargem, yAxisID: 'y1',
-          borderColor: '#1baf7a', backgroundColor: '#1baf7a', borderWidth: 2.5, tension: 0.3,
+          // Cor da LINHA fixa (roxo — não é verde nem vermelho, não compete
+          // com o sinal de tendência) — é só o "trilho" que conecta os
+          // pontos; quem carrega o sinal (subiu/desceu vs a medição
+          // anterior) são o marcador e a seta de cada ponto, coloridos em
+          // verde/vermelho. Uma linha que também mudasse de cor a cada
+          // segmento (como antes) competia visualmente com a seta e
+          // deixava mais difícil notar qual das duas cores "vale". order: 0
+          // (menor que o das barras, que agora são order: 1) garante que a
+          // linha, os pontos e os rótulos fiquem sempre por cima das
+          // barras, não só por estarem depois no array de datasets.
+          type: 'line', label: 'Margem (R$)', data: pontosMargem, yAxisID: 'y1', order: 0,
+          borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2.5, tension: 0.3,
           pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb',
           pointBackgroundColor: (ctx) => corVariacao_(ctx.raw && ctx.raw.variacao),
-          segment: { borderColor: (ctx) => corVariacao_(ctx.p1.raw.variacao) },
           datalabels: {
-            // O texto usa tinta neutra de alto contraste (nunca a cor da
-            // série) — o verde/vermelho do ponto/segmento já carrega o
-            // sinal; colorir o NÚMERO também de verde/vermelho deixaria o
-            // texto ilegível sobre o fundo claro e por cima das barras.
-            // Fundo branco semi-opaco por trás do texto (chip) pra
-            // continuar legível quando o rótulo cai em cima de uma barra
-            // azul/laranja.
-            color: '#1e2430',
+            // A seta/rótulo é colorida verde/vermelho (mesma cor do
+            // marcador) — pedido explícito pra reforçar o sinal também no
+            // texto, não só no ponto. Fundo branco semi-opaco por trás do
+            // texto (chip) continua garantindo leitura por cima das barras
+            // azul/laranja mesmo com o texto colorido.
+            color: (ctx) => corVariacao_(ctx.dataset.data[ctx.dataIndex].variacao),
             backgroundColor: 'rgba(252,252,251,0.85)', borderRadius: 3, padding: { top: 1, bottom: 1, left: 3, right: 3 },
-            font: { size: 10, weight: '600' }, align: 'top', anchor: 'end',
+            font: { size: 10, weight: '700' }, align: 'top', anchor: 'end',
             formatter: (v) => (v.variacao == null ? '' : `${v.variacao >= 0 ? '▲' : '▼'} ${Math.abs(v.variacao).toFixed(0)}%`),
           },
         },
@@ -4136,12 +4146,12 @@ function renderizarGraficoAbcCategoria(itens) {
   // — relaciona graficamente Ranking de categorias x Faturamento sem
   // travar o gráfico quando esse dado ainda não está disponível.
   const datasets = [
-    { type: 'bar', label: '% do total (categoria)', data: linhas.map(l => l.pct), backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24 },
+    { type: 'bar', label: '% do total (categoria)', data: linhas.map(l => l.pct), backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24, order: 1 },
   ];
   if (totalFaturamento) {
-    datasets.push({ type: 'bar', label: '% do Faturamento (líquido)', data: linhas.map(l => l.pctFaturamento), backgroundColor: '#eb6834', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24 });
+    datasets.push({ type: 'bar', label: '% do Faturamento (líquido)', data: linhas.map(l => l.pctFaturamento), backgroundColor: '#eb6834', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24, order: 1 });
   }
-  datasets.push({ type: 'line', label: '% acumulado', data: linhas.map(l => l.acum), borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2, tension: 0.25, pointRadius: 3, pointHoverRadius: 5 });
+  datasets.push({ type: 'line', label: '% acumulado', data: linhas.map(l => l.acum), borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2, tension: 0.25, pointRadius: 3, pointHoverRadius: 5, order: 0 });
 
   chartAbcCategoria = new Chart(document.getElementById('chart-abc-categoria'), {
     data: { labels: linhas.map(l => l.cat), datasets },
