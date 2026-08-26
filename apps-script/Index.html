@@ -3692,8 +3692,11 @@ function renderizarFaturadoPago_() {
   renderizarGraficoMargemMedicao_(linhasTabela, variacaoMargemPorMedicao_);
 
   const totalFaturadoTabela = linhasTabela.reduce((s, l) => s + l.faturado, 0);
+  const totalPagoTabela = linhasTabela.reduce((s, l) => s + l.pago, 0);
+  const totalMargemTabela = linhasTabela.reduce((s, l) => s + l.margem, 0);
   document.getElementById('total-faturado-pago').textContent =
-    `${linhasTabela.length.toLocaleString('pt-BR')} medição(ões) · Total Faturado: ${fmtMoeda(totalFaturadoTabela)}`;
+    `${linhasTabela.length.toLocaleString('pt-BR')} medição(ões) · Total Faturado: ${fmtMoeda(totalFaturadoTabela)} · ` +
+    `Total Pago: ${fmtMoeda(totalPagoTabela)} · Total Margem: ${fmtMoeda(totalMargemTabela)}`;
 
   document.querySelector('#tabela-faturado-pago tbody').innerHTML = linhasTabela.map((l) => {
     const tendencia = tendenciaPorMedicao_[l.medicao] || '';
