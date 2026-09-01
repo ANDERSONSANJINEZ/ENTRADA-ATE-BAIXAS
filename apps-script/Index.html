@@ -676,6 +676,16 @@
           </div>
         </div>
         <div class="painel" style="margin-bottom:18px; width:100%;">
+          <div class="cabecalho-painel">
+            <h2 title="Pago da própria medição ÷ Faturado da própria medição — mesmas 2 colunas da tabela &quot;Por medição&quot; logo abaixo, em %">Comprometido Utilizado (%)</h2>
+            <button class="btn secundario small" onclick="expandirGrafico('comprometidoUtilizado', 'Comprometido Utilizado (%) — Pago sobre Faturado, por Medição')">⛶ Expandir</button>
+            <button class="btn secundario small" onclick="exportarXlsx('comprometidoUtilizado')">⬇ Exportar Excel</button>
+          </div>
+          <div id="comprometido-utilizado-chart-wrap" class="grafico-altura-tela">
+            <canvas id="chart-comprometido-utilizado"></canvas>
+          </div>
+        </div>
+        <div class="painel" style="margin-bottom:18px; width:100%;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
             <h3 style="font-size:13px; color:var(--azul); margin:0;">Por medição</h3>
             <div style="display:flex; gap:6px;">
@@ -2794,6 +2804,9 @@ function exportarXlsx(qual) {
   } else if (qual === 'faturadoPagoAcumulado') {
     const linhas = ultimoDadosFaturadoPagoAcumulado.map((a) => [a.medicao === 'hoje' ? 'Hoje' : `Medição ${a.medicao}`, fmtMoeda(a.faturado), fmtMoeda(a.pago), fmtMoeda(a.saldoDisponivel)]);
     baixarXlsx('faturado_pago_saldo_acumulado.xlsx', ['Medição', 'Faturado acumulado', 'Pago / A Pagar acumulado', 'Saldo Disponível acumulado'], linhas);
+  } else if (qual === 'comprometidoUtilizado') {
+    const linhas = ultimoDadosComprometidoUtilizado.map((d) => [`Medição ${d.medicao}`, d.pct == null ? '' : `${d.pct.toFixed(1)}%`]);
+    baixarXlsx('comprometido_utilizado.xlsx', ['Medição', '% Comprometido Utilizado'], linhas);
   } else if (qual === 'categoriaCusto') {
     const linhas = ultimoDadosCategoriaCusto.map(([cat, baixado, aBaixar, total]) => [cat, fmtMoeda(baixado), fmtMoeda(aBaixar), fmtMoeda(total)]);
     baixarXlsx('custo_por_categoria.xlsx', ['Categoria', 'Baixado', 'A Baixar', 'Total'], linhas);
@@ -2880,9 +2893,10 @@ function atualizarSetasOrdenacao(tabelaId) {
 let chartAging, chartFluxo, chartStatusPagamento, chartPagosAbc, chartAporte;
 let chartCategoriaCusto, chartAbcCategoria, chartMargemGauge, chartFaturadoPagoAcumulado;
 let chartPagoApagarGauge, chartApagarGauge, chartSaldoDisponivelGauge;
-let chartMargemMedicao, chartCategoriaFaturamento;
+let chartMargemMedicao, chartCategoriaFaturamento, chartComprometidoUtilizado;
 let ultimoDadosFaturadoPago = []; // export: [{medicao, faturado, pago, margem}]
 let ultimoDadosFaturadoPagoAcumulado = []; // export: [{medicao, faturado, pago, saldoDisponivel}]
+let ultimoDadosComprometidoUtilizado = []; // export: [{medicao, pct}]
 let ultimoAbertos = [];
 let ultimoItensAnalise = [];
 
@@ -2904,6 +2918,7 @@ const REGISTRO_GRAFICOS_DASHBOARD_ = {
   pagosAbc: () => chartPagosAbc,
   aporte: () => chartAporte,
   faturadoPagoAcumulado: () => chartFaturadoPagoAcumulado,
+  comprometidoUtilizado: () => chartComprometidoUtilizado,
   margemMedicao: () => chartMargemMedicao,
   categoriaFaturamento: () => chartCategoriaFaturamento,
 };
@@ -3641,6 +3656,64 @@ function renderizarFaturadoPago_() {
       scales: {
         y: { grid: { color: '#e1e0d9' }, ticks: { color: '#898781' } },
         x: { grid: { display: false }, ticks: { color: '#898781' } },
+      },
+    },
+  });
+
+  // Gráfico "Comprometido Utilizado (%)" — Pago ÷ Faturado de CADA medição
+  // (as mesmas duas colunas da tabela "Por medição" logo abaixo, só que em
+  // %), numa única linha de tendência — pedido explícito, no formato do
+  // gráfico "Dívida Bruta do Governo Geral" (uma linha só mostrando quanto
+  // de um valor comprometido já foi utilizado). "Pago" aqui é sempre o
+  // título já vencido dentro da janela da própria medição — nunca A Pagar/
+  // projeção futura (na medição mais recente essa janela já vai só até
+  // ontem/hoje, ver comentário de `linhas` acima) — então o ponto mais
+  // recente do gráfico já nasce "limitado ao dia de hoje", sem precisar de
+  // nenhum corte extra. Ignora o filtro "Medição: todas/N" da tabela (igual
+  // ao gráfico Acumulado acima) — é sempre a série histórica inteira.
+  const dadosComprometidoUtilizado = linhas.map((l) => ({
+    medicao: l.medicao,
+    pct: l.faturado ? (l.pago / l.faturado) * 100 : null,
+  }));
+  ultimoDadosComprometidoUtilizado = dadosComprometidoUtilizado;
+  if (chartComprometidoUtilizado) { chartComprometidoUtilizado.destroy(); chartComprometidoUtilizado = null; }
+  chartComprometidoUtilizado = new Chart(document.getElementById('chart-comprometido-utilizado'), {
+    type: 'line',
+    data: {
+      labels: dadosComprometidoUtilizado.map((d) => `Med. ${d.medicao}`),
+      datasets: [{
+        label: '% Comprometido Utilizado',
+        data: dadosComprometidoUtilizado.map((d) => d.pct),
+        borderColor: '#2a78d6', backgroundColor: '#2a78d6', borderWidth: 2.7, tension: 0.3,
+        pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', spanGaps: true,
+        datalabels: {
+          color: '#1e2430', backgroundColor: 'rgba(252,252,251,0.85)', borderRadius: 3,
+          padding: { top: 1, bottom: 1, left: 3, right: 3 }, font: { size: 10, weight: '600' },
+          align: 'top', anchor: 'end',
+          formatter: (v) => (v == null ? '' : `${v.toFixed(1)}%`),
+        },
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }, // 1 série só — o título do painel já identifica
+        tooltip: { callbacks: { label: (ctx) => `Comprometido utilizado: ${ctx.parsed.y == null ? 'sem Faturado no período' : ctx.parsed.y.toFixed(1) + '%'}` } },
+      },
+      scales: {
+        y: {
+          beginAtZero: true, suggestedMax: 100, grid: { color: '#e1e0d9' },
+          ticks: { color: '#898781', callback: (v) => v + '%' },
+          title: { display: true, text: '%', color: '#898781', font: { size: 11, weight: '600' } },
+        },
+        x: { grid: { display: false }, ticks: { color: '#898781' } },
+      },
+      onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      onClick: (ev, els) => {
+        if (!els.length) return;
+        const d = dadosComprometidoUtilizado[els[0].index];
+        abrirDetalhe(`Pago — Med. ${d.medicao}`, ultimoItensPagosFaturadoPago_(d.medicao));
       },
     },
   });
