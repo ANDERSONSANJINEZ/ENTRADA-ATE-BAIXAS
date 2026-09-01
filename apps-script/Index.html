@@ -3684,8 +3684,12 @@ function renderizarFaturadoPago_() {
       datasets: [{
         label: '% Comprometido Utilizado',
         data: dadosComprometidoUtilizado.map((d) => d.pct),
-        borderColor: '#2a78d6', backgroundColor: '#2a78d6', borderWidth: 2.7, tension: 0.3,
-        pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', spanGaps: true,
+        // Área preenchida (pedido explícito, no formato do gráfico de
+        // referência) — fill até a origem do eixo Y (0%), num azul bem
+        // translúcido pra não competir com a linha nem com os rótulos.
+        borderColor: '#2a78d6', backgroundColor: 'rgba(42,120,214,0.16)', fill: 'origin',
+        borderWidth: 2.7, tension: 0.3,
+        pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', pointBackgroundColor: '#2a78d6', spanGaps: true,
         datalabels: {
           color: '#1e2430', backgroundColor: 'rgba(252,252,251,0.85)', borderRadius: 3,
           padding: { top: 1, bottom: 1, left: 3, right: 3 }, font: { size: 10, weight: '600' },
