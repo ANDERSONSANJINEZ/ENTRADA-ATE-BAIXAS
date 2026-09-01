@@ -676,16 +676,6 @@
           </div>
         </div>
         <div class="painel" style="margin-bottom:18px; width:100%;">
-          <div class="cabecalho-painel">
-            <h2 title="Pago da própria medição ÷ Faturado da própria medição — mesmas 2 colunas da tabela &quot;Por medição&quot; logo abaixo, em %">Comprometido Utilizado (%)</h2>
-            <button class="btn secundario small" onclick="expandirGrafico('comprometidoUtilizado', 'Comprometido Utilizado (%) — Pago sobre Faturado, por Medição')">⛶ Expandir</button>
-            <button class="btn secundario small" onclick="exportarXlsx('comprometidoUtilizado')">⬇ Exportar Excel</button>
-          </div>
-          <div id="comprometido-utilizado-chart-wrap" class="grafico-altura-tela">
-            <canvas id="chart-comprometido-utilizado"></canvas>
-          </div>
-        </div>
-        <div class="painel" style="margin-bottom:18px; width:100%;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
             <h3 style="font-size:13px; color:var(--azul); margin:0;">Por medição</h3>
             <div style="display:flex; gap:6px;">
@@ -714,6 +704,18 @@
                 <tbody></tbody>
               </table>
             </div>
+          </div>
+        </div>
+        <div class="painel" style="margin-bottom:18px; width:100%;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+            <h3 style="font-size:13px; color:var(--azul); margin:0;" title="Pago da própria medição ÷ Faturado da própria medição — mesmas 2 colunas da tabela &quot;Por medição&quot; acima, em %">Comprometido Utilizado (%)</h3>
+            <div style="display:flex; gap:6px;">
+              <button class="btn secundario small" onclick="expandirGrafico('comprometidoUtilizado', 'Comprometido Utilizado (%) — Pago sobre Faturado, por Medição')">⛶ Expandir</button>
+              <button class="btn secundario small" onclick="exportarXlsx('comprometidoUtilizado')">⬇ Exportar Excel</button>
+            </div>
+          </div>
+          <div id="comprometido-utilizado-chart-wrap" class="grafico-altura-tela">
+            <canvas id="chart-comprometido-utilizado"></canvas>
           </div>
         </div>
         <div class="painel" style="margin-bottom:18px; width:100%;">
@@ -3639,10 +3641,14 @@ function renderizarFaturadoPago_() {
   chartFaturadoPagoAcumulado = new Chart(document.getElementById('chart-faturado-pago-acumulado'), {
     data: {
       labels: labelsAcum,
+      // Área preenchida sob cada linha, na MESMA cor da própria linha (só
+      // translúcida) — pedido explícito. pointBackgroundColor fica explícito
+      // e opaco (a cor cheia, não a translúcida do fill) pra os marcadores
+      // continuarem sólidos.
       datasets: [
-        { type: 'line', label: 'Faturado acumulado', data: acumulados.map((a) => a.faturado), borderColor: '#2a78d6', backgroundColor: '#2a78d6', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
-        { type: 'line', label: 'Pago / A Pagar acumulado', data: acumulados.map((a) => a.pago), borderColor: '#eb6834', backgroundColor: '#eb6834', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
-        { type: 'line', label: 'Saldo Disponível acumulado', data: acumulados.map((a) => a.saldoDisponivel), borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
+        { type: 'line', label: 'Faturado acumulado', data: acumulados.map((a) => a.faturado), borderColor: '#2a78d6', backgroundColor: 'rgba(42,120,214,0.16)', fill: 'origin', pointBackgroundColor: '#2a78d6', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
+        { type: 'line', label: 'Pago / A Pagar acumulado', data: acumulados.map((a) => a.pago), borderColor: '#eb6834', backgroundColor: 'rgba(235,104,52,0.16)', fill: 'origin', pointBackgroundColor: '#eb6834', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
+        { type: 'line', label: 'Saldo Disponível acumulado', data: acumulados.map((a) => a.saldoDisponivel), borderColor: '#4a3aa7', backgroundColor: 'rgba(74,58,167,0.16)', fill: 'origin', pointBackgroundColor: '#4a3aa7', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
       ],
     },
     options: {
@@ -3727,17 +3733,10 @@ function renderizarFaturadoPago_() {
   // de exibição da tabela — senão ordenar a tabela por outra coluna
   // (Faturado, Pago…) bagunçaria o que "anterior" significa.
   const tendenciaPorMedicao_ = {};
-  // Mesma variação (%) da tendência acima, mas o número bruto com sinal
-  // (não a badge em HTML) — usado pela linha "Margem" do gráfico logo
-  // abaixo (renderizarGraficoMargemMedicao_), que precisa plotar o valor,
-  // não só formatá-lo pra leitura. Medição sem "anterior" fica de fora do
-  // mapa (undefined), igual à tendência (badge vazia).
-  const variacaoMargemPorMedicao_ = {};
   linhas.forEach((l, idx) => {
     const anterior = idx > 0 ? linhas[idx - 1] : null;
     if (anterior && anterior.margem !== 0) {
       const variacao = ((l.margem - anterior.margem) / Math.abs(anterior.margem)) * 100;
-      variacaoMargemPorMedicao_[l.medicao] = variacao;
       const seta = variacao >= 0 ? '▲' : '▼';
       const cor = variacao >= 0 ? 'var(--verde)' : 'var(--vermelho)';
       tendenciaPorMedicao_[l.medicao] = `<span style="color:${cor}; font-size:11px;" title="vs Medição ${anterior.medicao}">${seta} ${Math.abs(variacao).toFixed(0)}%</span>`;
@@ -3766,7 +3765,7 @@ function renderizarFaturadoPago_() {
   const fMedicao = selectMedicao.value;
   if (fMedicao) linhasTabela = linhasTabela.filter((l) => String(l.medicao) === fMedicao);
 
-  renderizarGraficoMargemMedicao_(linhasTabela, variacaoMargemPorMedicao_);
+  renderizarGraficoMargemMedicao_(linhasTabela);
 
   const totalFaturadoTabela = linhasTabela.reduce((s, l) => s + l.faturado, 0);
   const totalPagoTabela = linhasTabela.reduce((s, l) => s + l.pago, 0);
@@ -3816,69 +3815,28 @@ function ultimoItensPagosFaturadoPago_(medicao) {
   return ultimoItensPagosPorMedicao_[medicao] || [];
 }
 
-// Combo: Faturado e Pago em barra (R$, eixo esquerdo, "Faturado / Pago - R$")
-// + Margem em R$ como linha curva, por cima das barras (order: 0 nas
-// séries de linha/ponto/rótulo vs order: 1 nas barras — sempre desenhada
-// por cima, não só por vir depois no array), num eixo próprio à direita
-// ("Margem - R$"). A linha não usa mais % — o eixo em que ela vive agora é
-// o mesmo R$ das barras, só que numa escala própria (dual-axis: exceção
-// deliberada à regra geral de "nunca 2 eixos Y", pedido explícito, eixo
-// direito existe só pra essa 2ª grandeza). A cor da LINHA em si é FIXA
-// (roxo) — não muda por trecho — justamente pra não competir com o
-// marcador/seta de cada ponto, que são o que carrega a TENDÊNCIA (▲/▼ vs
-// a medição anterior — ver variacaoMargemPorMedicao_ acima), não o sinal
-// do valor em R$ em si: verde quando a margem subiu, vermelho quando
-// caiu, cinza neutro (sem seta) na medição mais antiga, que não tem
-// "anterior" pra comparar. Respeita o filtro "Medição: todas/N" desta
-// mesma tabela — recebe `linhasTabela` já filtrada.
-function renderizarGraficoMargemMedicao_(linhasTabela, variacaoPorMedicao_) {
+// Faturado e Pago em barra (R$) por medição — a Margem (Faturado − Pago)
+// segue disponível na tabela logo abaixo e no gráfico dedicado
+// "Comprometido Utilizado (%)" (Pago ÷ Faturado, em %), então este aqui
+// ficou só com as 2 barras, sem linha nenhuma — pedido explícito pra
+// tirar a linha de Margem que existia antes. Respeita o filtro "Medição:
+// todas/N" desta mesma tabela — recebe `linhasTabela` já filtrada.
+function renderizarGraficoMargemMedicao_(linhasTabela) {
   const labels = linhasTabela.map((l) => `Med. ${l.medicao}`);
-  const pontosMargem = linhasTabela.map((l, idx) => {
-    const v = variacaoPorMedicao_[l.medicao];
-    return { x: labels[idx], y: l.margem, variacao: v === undefined ? null : v };
-  });
-  const corVariacao_ = (v) => (v == null ? '#898781' : v >= 0 ? '#1baf7a' : '#c0392b');
   if (chartMargemMedicao) { chartMargemMedicao.destroy(); chartMargemMedicao = null; }
   chartMargemMedicao = new Chart(document.getElementById('chart-margem-medicao'), {
     data: {
       labels,
       datasets: [
         {
-          type: 'bar', label: 'Faturado', data: linhasTabela.map((l) => l.faturado), yAxisID: 'y', order: 1,
+          type: 'bar', label: 'Faturado', data: linhasTabela.map((l) => l.faturado), yAxisID: 'y',
           backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 20,
           categoryPercentage: 0.7, barPercentage: 0.9, datalabels: { display: false },
         },
         {
-          type: 'bar', label: 'Pago', data: linhasTabela.map((l) => l.pago), yAxisID: 'y', order: 1,
+          type: 'bar', label: 'Pago', data: linhasTabela.map((l) => l.pago), yAxisID: 'y',
           backgroundColor: '#eb6834', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 20,
           categoryPercentage: 0.7, barPercentage: 0.9, datalabels: { display: false },
-        },
-        {
-          // Cor da LINHA fixa (roxo — não é verde nem vermelho, não compete
-          // com o sinal de tendência) — é só o "trilho" que conecta os
-          // pontos; quem carrega o sinal (subiu/desceu vs a medição
-          // anterior) são o marcador e a seta de cada ponto, coloridos em
-          // verde/vermelho. Uma linha que também mudasse de cor a cada
-          // segmento (como antes) competia visualmente com a seta e
-          // deixava mais difícil notar qual das duas cores "vale". order: 0
-          // (menor que o das barras, que agora são order: 1) garante que a
-          // linha, os pontos e os rótulos fiquem sempre por cima das
-          // barras, não só por estarem depois no array de datasets.
-          type: 'line', label: 'Margem (R$)', data: pontosMargem, yAxisID: 'y1', order: 0,
-          borderColor: '#4a3aa7', backgroundColor: '#4a3aa7', borderWidth: 2.5, tension: 0.3,
-          pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb',
-          pointBackgroundColor: (ctx) => corVariacao_(ctx.raw && ctx.raw.variacao),
-          datalabels: {
-            // A seta/rótulo é colorida verde/vermelho (mesma cor do
-            // marcador) — pedido explícito pra reforçar o sinal também no
-            // texto, não só no ponto. Fundo branco semi-opaco por trás do
-            // texto (chip) continua garantindo leitura por cima das barras
-            // azul/laranja mesmo com o texto colorido.
-            color: (ctx) => corVariacao_(ctx.dataset.data[ctx.dataIndex].variacao),
-            backgroundColor: 'rgba(252,252,251,0.85)', borderRadius: 3, padding: { top: 1, bottom: 1, left: 3, right: 3 },
-            font: { size: 10, weight: '700' }, align: 'top', anchor: 'end',
-            formatter: (v) => (v.variacao == null ? '' : `${v.variacao >= 0 ? '▲' : '▼'} ${Math.abs(v.variacao).toFixed(0)}%`),
-          },
         },
       ],
     },
@@ -3886,45 +3844,13 @@ function renderizarGraficoMargemMedicao_(linhasTabela, variacaoPorMedicao_) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: {
-          labels: {
-            color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8,
-            // A bolinha da legenda, por padrão, copia a cor do PRIMEIRO
-            // ponto da série (pointBackgroundColor no índice 0) — pra
-            // Margem isso é escriptável por tendência, e o índice 0 pode
-            // calhar de ser cinza (sem "anterior" pra comparar), diferente
-            // da cor fixa roxa da curva. Corrige só o item da Margem pra
-            // usar a MESMA cor fixa da linha, evitando a bolinha "errada".
-            generateLabels: (chart) => {
-              // itens vem na ORDEM DE EXIBIÇÃO da legenda (que segue o
-              // "order" do dataset, não a posição no array original) — por
-              // isso o item certo é achado pelo próprio datasetIndex de
-              // cada item, nunca indexando itens[] pela posição em
-              // chart.data.datasets (índices diferentes = bolinha errada
-              // recolorida, como aconteceu na 1ª tentativa).
-              const itens = Chart.defaults.plugins.legend.labels.generateLabels(chart);
-              const item = itens.find((it) => chart.data.datasets[it.datasetIndex].label === 'Margem (R$)');
-              if (item) { item.fillStyle = '#4a3aa7'; item.strokeStyle = '#4a3aa7'; }
-              return itens;
-            },
-          },
-        },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => ctx.datasetIndex === 2
-              ? `Margem: ${fmtMoeda(ctx.parsed.y)}${ctx.raw.variacao == null ? ' (sem medição anterior pra comparar)' : ` (${ctx.raw.variacao >= 0 ? '+' : ''}${ctx.raw.variacao.toFixed(1)}% vs medição anterior)`}`
-              : `${ctx.dataset.label}: ${fmtMoeda(ctx.parsed.y)}`,
-          },
-        },
+        legend: { labels: { color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8 } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtMoeda(ctx.parsed.y)}` } },
       },
       scales: {
         y: {
           beginAtZero: true, grid: { color: '#e1e0d9' }, ticks: { color: '#898781' },
           title: { display: true, text: 'Faturado / Pago - R$', color: '#898781', font: { size: 11, weight: '600' } },
-        },
-        y1: {
-          position: 'right', grid: { display: false }, ticks: { color: '#898781' },
-          title: { display: true, text: 'Margem - R$', color: '#898781', font: { size: 11, weight: '600' } },
         },
         x: { grid: { display: false }, ticks: { color: '#898781' } },
       },
