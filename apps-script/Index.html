@@ -3646,9 +3646,11 @@ function renderizarFaturadoPago_() {
       // e opaco (a cor cheia, não a translúcida do fill) pra os marcadores
       // continuarem sólidos.
       datasets: [
-        { type: 'line', label: 'Faturado acumulado', data: acumulados.map((a) => a.faturado), borderColor: '#2a78d6', backgroundColor: 'rgba(42,120,214,0.16)', fill: 'origin', pointBackgroundColor: '#2a78d6', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
-        { type: 'line', label: 'Pago / A Pagar acumulado', data: acumulados.map((a) => a.pago), borderColor: '#eb6834', backgroundColor: 'rgba(235,104,52,0.16)', fill: 'origin', pointBackgroundColor: '#eb6834', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
-        { type: 'line', label: 'Saldo Disponível acumulado', data: acumulados.map((a) => a.saldoDisponivel), borderColor: '#4a3aa7', backgroundColor: 'rgba(74,58,167,0.16)', fill: 'origin', pointBackgroundColor: '#4a3aa7', borderWidth: 2.7, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
+        { type: 'line', label: 'Faturado acumulado', data: acumulados.map((a) => a.faturado), borderColor: '#2a78d6', backgroundColor: 'rgba(42,120,214,0.16)', fill: 'origin', pointBackgroundColor: '#2a78d6', borderWidth: 3.24, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
+        { type: 'line', label: 'Pago / A Pagar acumulado', data: acumulados.map((a) => a.pago), borderColor: '#eb6834', backgroundColor: 'rgba(235,104,52,0.16)', fill: 'origin', pointBackgroundColor: '#eb6834', borderWidth: 3.24, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
+        // Saldo Disponível trocado de roxo pra verde (pedido explícito) —
+        // Faturado e Pago/A Pagar mantêm as cores de sempre.
+        { type: 'line', label: 'Saldo Disponível acumulado', data: acumulados.map((a) => a.saldoDisponivel), borderColor: '#1baf7a', backgroundColor: 'rgba(27,175,122,0.16)', fill: 'origin', pointBackgroundColor: '#1baf7a', borderWidth: 3.24, pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', tension: 0.3, segment: segmentoAteHoje_ },
       ],
     },
     options: {
@@ -3694,7 +3696,7 @@ function renderizarFaturadoPago_() {
         // referência) — fill até a origem do eixo Y (0%), num azul bem
         // translúcido pra não competir com a linha nem com os rótulos.
         borderColor: '#2a78d6', backgroundColor: 'rgba(42,120,214,0.16)', fill: 'origin',
-        borderWidth: 2.7, tension: 0.3,
+        borderWidth: 3.24, tension: 0.3,
         pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', pointBackgroundColor: '#2a78d6', spanGaps: true,
         datalabels: {
           color: '#1e2430', backgroundColor: 'rgba(252,252,251,0.85)', borderRadius: 3,
@@ -3829,14 +3831,19 @@ function renderizarGraficoMargemMedicao_(linhasTabela) {
       labels,
       datasets: [
         {
+          // barPercentage mais alto (0.9 -> 0.98) junta as barras Faturado
+          // e Pago da mesma medição, quase sem vão entre elas (pedido
+          // explícito) — categoryPercentage continua controlando só o vão
+          // ENTRE medições diferentes, sem mexer nisso. maxBarThickness
+          // 20% maior (20 -> 24), pedido à parte.
           type: 'bar', label: 'Faturado', data: linhasTabela.map((l) => l.faturado), yAxisID: 'y',
-          backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 20,
-          categoryPercentage: 0.7, barPercentage: 0.9, datalabels: { display: false },
+          backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24,
+          categoryPercentage: 0.7, barPercentage: 0.98, datalabels: { display: false },
         },
         {
           type: 'bar', label: 'Pago', data: linhasTabela.map((l) => l.pago), yAxisID: 'y',
-          backgroundColor: '#eb6834', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 20,
-          categoryPercentage: 0.7, barPercentage: 0.9, datalabels: { display: false },
+          backgroundColor: '#eb6834', borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 24,
+          categoryPercentage: 0.7, barPercentage: 0.98, datalabels: { display: false },
         },
       ],
     },
