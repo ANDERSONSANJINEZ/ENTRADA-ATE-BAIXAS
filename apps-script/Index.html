@@ -720,9 +720,9 @@
         </div>
         <div class="painel" style="margin-bottom:18px; width:100%;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
-            <h3 style="font-size:13px; color:var(--azul); margin:0;" title="Mesmas 2 curvas do gráfico acima, só que acumuladas mês a mês (não por medição) — Faturado/Pago/Emitido somados até o fim de cada mês, sempre crescendo">Comprometido Utilizado x Emitido — Acumulado Mensal (%)</h3>
+            <h3 style="font-size:13px; color:var(--azul); margin:0;" title="Pago e Emitido acumulados (soma corrida desde a 1ª medição) mês a mês, em R$ — a faixa sombreada entre as 2 curvas mostra a diferença entre Emitido e Pago">Pago x Emitido — Acumulado Mensal (R$)</h3>
             <div style="display:flex; gap:6px;">
-              <button class="btn secundario small" onclick="expandirGrafico('comprometidoEmitidoMensal', 'Comprometido Utilizado x Emitido — Acumulado Mensal (%)')">⛶ Expandir</button>
+              <button class="btn secundario small" onclick="expandirGrafico('comprometidoEmitidoMensal', 'Pago x Emitido — Acumulado Mensal (R$)')">⛶ Expandir</button>
               <button class="btn secundario small" onclick="exportarXlsx('comprometidoEmitidoMensal')">⬇ Exportar Excel</button>
             </div>
           </div>
@@ -2829,11 +2829,11 @@ function exportarXlsx(qual) {
   } else if (qual === 'comprometidoEmitidoMensal') {
     const linhas = ultimoDadosAcumuladoMensal.map((d) => [
       d.mesLabel,
-      d.pagoPct == null ? '' : `${d.pagoPct.toFixed(1)}%`,
-      d.emitidoPct == null ? '' : `${d.emitidoPct.toFixed(1)}%`,
+      fmtMoeda(d.pagoAcum),
+      fmtMoeda(d.emitidoAcum),
       fmtMoeda(d.deltaReais),
     ]);
-    baixarXlsx('comprometido_utilizado_x_emitido_acumulado_mensal.xlsx', ['Mês', '% Comprometido Utilizado (acum.)', '% Emitido no Período (acum.)', 'Diferença Emitido − Pago (R$)'], linhas);
+    baixarXlsx('pago_x_emitido_acumulado_mensal.xlsx', ['Mês', 'Pago Acumulado (R$)', 'Emitido Acumulado (R$)', 'Diferença Emitido − Pago (R$)'], linhas);
   } else if (qual === 'categoriaCusto') {
     const linhas = ultimoDadosCategoriaCusto.map(([cat, baixado, aBaixar, total]) => [cat, fmtMoeda(baixado), fmtMoeda(aBaixar), fmtMoeda(total)]);
     baixarXlsx('custo_por_categoria.xlsx', ['Categoria', 'Baixado', 'A Baixar', 'Total'], linhas);
@@ -2924,7 +2924,7 @@ let chartMargemMedicao, chartCategoriaFaturamento, chartComprometidoEmitido, cha
 let ultimoDadosFaturadoPago = []; // export: [{medicao, faturado, pago, margem}]
 let ultimoDadosFaturadoPagoAcumulado = []; // export: [{medicao, faturado, pago, saldoDisponivel}]
 let ultimoDadosComprometidoEmitido = []; // export: [{medicao, pagoPct, emitidoPct, deltaReais}]
-let ultimoDadosAcumuladoMensal = []; // export: [{mesLabel, pagoPct, emitidoPct, deltaReais}]
+let ultimoDadosAcumuladoMensal = []; // export: [{mesLabel, pagoAcum, emitidoAcum, deltaReais}]
 let ultimoAbertos = [];
 let ultimoItensAnalise = [];
 
@@ -3846,15 +3846,14 @@ function renderizarFaturadoPago_() {
     },
   });
 
-  // Versão "Acumulado Mensal" do gráfico acima — pedido explícito. Mesmas
-  // 2 curvas/mesma faixa/mesmo rótulo de diferença em R$, só que o eixo X
-  // agora é MÊS CALENDÁRIO (não medição) e os 3 valores (Faturado, Pago,
-  // Emitido) são SOMAS ACUMULADAS até o fim de cada mês — cresce sempre,
-  // nunca "reseta" a cada mês. Faturado acumulado num mês = soma do
-  // Valor Líquido de toda medição cuja Data de Referência já tenha
-  // passado até aquele mês (é um valor que só muda quando fecha uma nova
-  // medição, então fica em "degraus" entre um mês e outro — normal, não é
-  // bug). Pago/Emitido acumulados = mesma regra de sempre (Vencimento/
+  // Versão "Acumulado Mensal" do gráfico acima — pedido explícito. Mesma
+  // faixa/mesmo rótulo de diferença em R$, só que o eixo X agora é MÊS
+  // CALENDÁRIO (não medição), o eixo Y passou de % pra R$ (pedido
+  // explícito) e as 2 curvas plotam Pago/Emitido ACUMULADOS (soma
+  // corrida desde a 1ª medição) em vez da razão sobre o Faturado — cresce
+  // sempre, nunca "reseta" a cada mês, e nunca fica negativo/null (por
+  // isso não precisa mais do "sem Faturado no período" que a versão em %
+  // tinha). Pago/Emitido acumulados = mesma regra de sempre (Vencimento/
   // Data Emissão), só que testando contra o ÚLTIMO DIA do mês em vez da
   // janela de uma medição. O mês mais recente (atual) tem seu limite
   // preso em ONTEM, não no fim do mês — mesma regra de "nunca projetar
@@ -3874,10 +3873,6 @@ function renderizarFaturadoPago_() {
   const dadosAcumuladoMensal = mesesAcumulado_.map(({ ano, mes }, idx) => {
     let fimMesDia = Date.UTC(ano, mes + 1, 0); // último dia do mês, meia-noite UTC
     if (idx === mesesAcumulado_.length - 1 && ontemDia_ < fimMesDia) fimMesDia = ontemDia_;
-    const faturadoAcum = medicoes.reduce((s, m) => {
-      const d = diaCalendario(paraData(m.dataReferencia));
-      return (d != null && d <= fimMesDia) ? s + m.valorLiquido : s;
-    }, 0);
     const itensPagosAcum = todosItens.filter((i) => {
       const d = diaCalendario(paraData(i['Vencimento']));
       return d != null && d <= fimMesDia;
@@ -3888,17 +3883,15 @@ function renderizarFaturadoPago_() {
     });
     const pagoAcum = itensPagosAcum.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
     const emitidoAcum = itensEmitidosAcum.reduce((s, i) => s + paraNumero(i['R$ Valor']), 0);
-    const pagoPct = faturadoAcum ? (pagoAcum / faturadoAcum) * 100 : null;
-    const emitidoPct = faturadoAcum ? (emitidoAcum / faturadoAcum) * 100 : null;
     return {
       mesLabel: `${String(mes + 1).padStart(2, '0')}/${ano}`,
-      pagoPct, emitidoPct,
+      pagoAcum, emitidoAcum,
       deltaReais: emitidoAcum - pagoAcum,
-      meioPct: (pagoPct != null && emitidoPct != null) ? (pagoPct + emitidoPct) / 2 : null,
+      meioReais: (pagoAcum + emitidoAcum) / 2,
       itensPagosAcum, itensEmitidosAcum,
     };
   });
-  ultimoDadosAcumuladoMensal = dadosAcumuladoMensal.map((d) => ({ mesLabel: d.mesLabel, pagoPct: d.pagoPct, emitidoPct: d.emitidoPct, deltaReais: d.deltaReais }));
+  ultimoDadosAcumuladoMensal = dadosAcumuladoMensal.map((d) => ({ mesLabel: d.mesLabel, pagoAcum: d.pagoAcum, emitidoAcum: d.emitidoAcum, deltaReais: d.deltaReais }));
   if (chartComprometidoEmitidoMensal) { chartComprometidoEmitidoMensal.destroy(); chartComprometidoEmitidoMensal = null; }
   chartComprometidoEmitidoMensal = new Chart(document.getElementById('chart-comprometido-emitido-mensal'), {
     type: 'line',
@@ -3906,16 +3899,16 @@ function renderizarFaturadoPago_() {
       labels: dadosAcumuladoMensal.map((d) => d.mesLabel),
       datasets: [
         {
-          label: 'Comprometido Utilizado (%)',
-          data: dadosAcumuladoMensal.map((d) => d.pagoPct),
+          label: 'Pago Acumulado (R$)',
+          data: dadosAcumuladoMensal.map((d) => d.pagoAcum),
           borderColor: '#2a78d6', backgroundColor: '#2a78d6', fill: false,
           borderWidth: 3.24, tension: 0.3,
           pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', spanGaps: true,
           datalabels: { display: false },
         },
         {
-          label: 'Emitido no Período (%)',
-          data: dadosAcumuladoMensal.map((d) => d.emitidoPct),
+          label: 'Emitido Acumulado (R$)',
+          data: dadosAcumuladoMensal.map((d) => d.emitidoAcum),
           borderColor: '#4a3aa7', backgroundColor: 'rgba(137,135,129,0.16)', fill: 0,
           pointBackgroundColor: '#4a3aa7',
           borderWidth: 3.24, tension: 0.3,
@@ -3924,7 +3917,7 @@ function renderizarFaturadoPago_() {
         },
         {
           label: 'Diferença (R$)',
-          data: dadosAcumuladoMensal.map((d) => d.meioPct),
+          data: dadosAcumuladoMensal.map((d) => d.meioReais),
           borderWidth: 0, pointRadius: 0, pointHoverRadius: 0, pointHitRadius: 0, showLine: false, fill: false,
           datalabels: {
             color: (ctx) => corDeltaComprometido_(dadosAcumuladoMensal[ctx.dataIndex].deltaReais),
@@ -3932,7 +3925,6 @@ function renderizarFaturadoPago_() {
             font: { size: 10, weight: '700' }, align: 'center', anchor: 'center',
             formatter: (v, ctx) => {
               const delta = dadosAcumuladoMensal[ctx.dataIndex].deltaReais;
-              if (v == null) return '';
               const sinal = delta >= 0 ? '+' : '−';
               return `${sinal}${fmtMoeda(Math.abs(delta))}`;
             },
@@ -3953,7 +3945,7 @@ function renderizarFaturadoPago_() {
         tooltip: {
           filter: (item) => item.dataset.label !== 'Diferença (R$)',
           callbacks: {
-            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? 'sem Faturado no período' : ctx.parsed.y.toFixed(1) + '%'}`,
+            label: (ctx) => `${ctx.dataset.label}: ${fmtMoeda(ctx.parsed.y)}`,
             afterBody: (items) => {
               if (!items.length) return '';
               const d = dadosAcumuladoMensal[items[0].dataIndex];
@@ -3965,9 +3957,9 @@ function renderizarFaturadoPago_() {
       },
       scales: {
         y: {
-          beginAtZero: true, suggestedMax: 100, grid: { color: '#e1e0d9' },
-          ticks: { color: '#898781', callback: (v) => v + '%' },
-          title: { display: true, text: '%', color: '#898781', font: { size: 11, weight: '600' } },
+          beginAtZero: true, grid: { color: '#e1e0d9' },
+          ticks: { color: '#898781' },
+          title: { display: true, text: 'R$', color: '#898781', font: { size: 11, weight: '600' } },
         },
         x: { grid: { display: false }, ticks: { color: '#898781' } },
       },
