@@ -3714,26 +3714,19 @@ function renderizarFaturadoPago_() {
   // Gráfico "Comprometido Utilizado x Emitido (%)" — as 2 linhas que antes
   // eram gráficos separados (Pago ÷ Faturado e Emitido ÷ Faturado, cada
   // uma da própria medição, mesmas janelas de período — ver `linhas`
-  // acima) unificadas num só, com a faixa ENTRE as 2 curvas sombreada e
-  // rotulada com a diferença Emitido − Pago em R$ — pedido explícito, no
-  // formato do gráfico "Dívida Bruta do Governo Geral", agora com 2
-  // séries. Um 3º dataset "fantasma" (sem linha, sem ponto visível,
-  // escondido da legenda) existe só pra ancorar o rótulo da diferença
-  // exatamente no meio das 2 curvas em cada medição — truque padrão pra
-  // anotar o vão entre 2 séries sem precisar de um 2º eixo (nunca dual-
-  // axis: as 2 curvas de verdade continuam na MESMA escala %). A cor da
-  // faixa e do rótulo — a cor do RÓTULO (não da faixa, ver comentário no
-  // dataset "Emitido" abaixo) segue o sinal da diferença (verde quando
-  // Emitido ≥ Pago, vermelho quando Pago > Emitido) — mesma convenção de ▲/▼ usada
-  // no resto do Dashboard.
-  const corDeltaComprometido_ = (v) => (v == null ? '#898781' : v >= 0 ? '#1baf7a' : '#c0392b');
+  // acima) unificadas num só, com a faixa ENTRE as 2 curvas sombreada —
+  // pedido explícito, no formato do gráfico "Dívida Bruta do Governo
+  // Geral", agora com 2 séries. A diferença Emitido − Pago em R$ fica só
+  // no tooltip (afterBody, ao passar o mouse) — chegou a ter um rótulo
+  // fixo em cada ponto (dataset "fantasma" ancorado no meio das 2
+  // curvas), mas foi removido: com muitas medições os rótulos se
+  // sobrepunham e poluíam o gráfico (pedido explícito).
   const dadosComprometidoEmitido = linhas.map((l) => {
     const pagoPct = l.faturado ? (l.pago / l.faturado) * 100 : null;
     const emitidoPct = l.faturado ? (l.emitido / l.faturado) * 100 : null;
     return {
       medicao: l.medicao, pagoPct, emitidoPct,
       deltaReais: l.emitido - l.pago,
-      meioPct: (pagoPct != null && emitidoPct != null) ? (pagoPct + emitidoPct) / 2 : null,
     };
   });
   ultimoDadosComprometidoEmitido = dadosComprometidoEmitido;
@@ -3778,39 +3771,14 @@ function renderizarFaturadoPago_() {
           pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', spanGaps: true,
           datalabels: { display: false },
         },
-        {
-          // Dataset fantasma: só ancora o rótulo da diferença em R$ no
-          // meio das 2 curvas — nunca desenha linha nem ponto, nunca entra
-          // na legenda (ver legend.labels.filter abaixo).
-          label: 'Diferença (R$)',
-          data: dadosComprometidoEmitido.map((d) => d.meioPct),
-          borderWidth: 0, pointRadius: 0, pointHoverRadius: 0, pointHitRadius: 0, showLine: false, fill: false,
-          datalabels: {
-            color: (ctx) => corDeltaComprometido_(dadosComprometidoEmitido[ctx.dataIndex].deltaReais),
-            backgroundColor: 'rgba(252,252,251,0.9)', borderRadius: 3, padding: { top: 1, bottom: 1, left: 3, right: 3 },
-            font: { size: 10, weight: '700' }, align: 'center', anchor: 'center',
-            formatter: (v, ctx) => {
-              const delta = dadosComprometidoEmitido[ctx.dataIndex].deltaReais;
-              if (v == null) return '';
-              const sinal = delta >= 0 ? '+' : '−';
-              return `${sinal}${fmtMoeda(Math.abs(delta))}`;
-            },
-          },
-        },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: {
-          labels: {
-            color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8,
-            filter: (item) => item.text !== 'Diferença (R$)',
-          },
-        },
+        legend: { labels: { color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8 } },
         tooltip: {
-          filter: (item) => item.dataset.label !== 'Diferença (R$)',
           callbacks: {
             label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? 'sem Faturado no período' : ctx.parsed.y.toFixed(1) + '%'}`,
             afterBody: (items) => {
@@ -3887,7 +3855,6 @@ function renderizarFaturadoPago_() {
       mesLabel: `${String(mes + 1).padStart(2, '0')}/${ano}`,
       pagoAcum, emitidoAcum,
       deltaReais: emitidoAcum - pagoAcum,
-      meioReais: (pagoAcum + emitidoAcum) / 2,
       itensPagosAcum, itensEmitidosAcum,
     };
   });
@@ -3915,35 +3882,14 @@ function renderizarFaturadoPago_() {
           pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', spanGaps: true,
           datalabels: { display: false },
         },
-        {
-          label: 'Diferença (R$)',
-          data: dadosAcumuladoMensal.map((d) => d.meioReais),
-          borderWidth: 0, pointRadius: 0, pointHoverRadius: 0, pointHitRadius: 0, showLine: false, fill: false,
-          datalabels: {
-            color: (ctx) => corDeltaComprometido_(dadosAcumuladoMensal[ctx.dataIndex].deltaReais),
-            backgroundColor: 'rgba(252,252,251,0.9)', borderRadius: 3, padding: { top: 1, bottom: 1, left: 3, right: 3 },
-            font: { size: 10, weight: '700' }, align: 'center', anchor: 'center',
-            formatter: (v, ctx) => {
-              const delta = dadosAcumuladoMensal[ctx.dataIndex].deltaReais;
-              const sinal = delta >= 0 ? '+' : '−';
-              return `${sinal}${fmtMoeda(Math.abs(delta))}`;
-            },
-          },
-        },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: {
-          labels: {
-            color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8,
-            filter: (item) => item.text !== 'Diferença (R$)',
-          },
-        },
+        legend: { labels: { color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8 } },
         tooltip: {
-          filter: (item) => item.dataset.label !== 'Diferença (R$)',
           callbacks: {
             label: (ctx) => `${ctx.dataset.label}: ${fmtMoeda(ctx.parsed.y)}`,
             afterBody: (items) => {
