@@ -708,26 +708,14 @@
         </div>
         <div class="painel" style="margin-bottom:18px; width:100%;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
-            <h3 style="font-size:13px; color:var(--azul); margin:0;" title="Pago da própria medição ÷ Faturado da própria medição — mesmas 2 colunas da tabela &quot;Por medição&quot; acima, em %">Comprometido Utilizado (%)</h3>
+            <h3 style="font-size:13px; color:var(--azul); margin:0;" title="Pago (Vencimento) e Emitido (Data Emissão, todos os documentos) ÷ Faturado, cada um da própria medição, em % — a faixa sombreada entre as 2 curvas mostra a diferença entre Emitido e Pago em R$">Comprometido Utilizado x Emitido (%)</h3>
             <div style="display:flex; gap:6px;">
-              <button class="btn secundario small" onclick="expandirGrafico('comprometidoUtilizado', 'Comprometido Utilizado (%) — Pago sobre Faturado, por Medição')">⛶ Expandir</button>
-              <button class="btn secundario small" onclick="exportarXlsx('comprometidoUtilizado')">⬇ Exportar Excel</button>
+              <button class="btn secundario small" onclick="expandirGrafico('comprometidoEmitido', 'Comprometido Utilizado x Emitido (%), por Medição')">⛶ Expandir</button>
+              <button class="btn secundario small" onclick="exportarXlsx('comprometidoEmitido')">⬇ Exportar Excel</button>
             </div>
           </div>
-          <div id="comprometido-utilizado-chart-wrap" class="grafico-altura-tela">
-            <canvas id="chart-comprometido-utilizado"></canvas>
-          </div>
-        </div>
-        <div class="painel" style="margin-bottom:18px; width:100%;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
-            <h3 style="font-size:13px; color:var(--azul); margin:0;" title="Emitido (todos os documentos, ERP + manual, somando toda parcela, pela Data Emissão) ÷ Faturado da própria medição, em % — mesma janela de período da medição, análogo ao Comprometido Utilizado só que pelo lado da emissão do documento, não do vencimento">Emitido no Período (%)</h3>
-            <div style="display:flex; gap:6px;">
-              <button class="btn secundario small" onclick="expandirGrafico('emitidoPeriodo', 'Emitido no Período (%) — Emitido sobre Faturado, por Medição')">⛶ Expandir</button>
-              <button class="btn secundario small" onclick="exportarXlsx('emitidoPeriodo')">⬇ Exportar Excel</button>
-            </div>
-          </div>
-          <div id="emitido-periodo-chart-wrap" class="grafico-altura-tela">
-            <canvas id="chart-emitido-periodo"></canvas>
+          <div id="comprometido-emitido-chart-wrap" class="grafico-altura-tela grafico-altura-tela--com-legenda">
+            <canvas id="chart-comprometido-emitido"></canvas>
           </div>
         </div>
         <div class="painel" style="margin-bottom:18px; width:100%;">
@@ -2818,12 +2806,14 @@ function exportarXlsx(qual) {
   } else if (qual === 'faturadoPagoAcumulado') {
     const linhas = ultimoDadosFaturadoPagoAcumulado.map((a) => [a.medicao === 'hoje' ? 'Hoje' : `Medição ${a.medicao}`, fmtMoeda(a.faturado), fmtMoeda(a.pago), fmtMoeda(a.saldoDisponivel)]);
     baixarXlsx('faturado_pago_saldo_acumulado.xlsx', ['Medição', 'Faturado acumulado', 'Pago / A Pagar acumulado', 'Saldo Disponível acumulado'], linhas);
-  } else if (qual === 'comprometidoUtilizado') {
-    const linhas = ultimoDadosComprometidoUtilizado.map((d) => [`Medição ${d.medicao}`, d.pct == null ? '' : `${d.pct.toFixed(1)}%`]);
-    baixarXlsx('comprometido_utilizado.xlsx', ['Medição', '% Comprometido Utilizado'], linhas);
-  } else if (qual === 'emitidoPeriodo') {
-    const linhas = ultimoDadosEmitidoPeriodo.map((d) => [`Medição ${d.medicao}`, d.pct == null ? '' : `${d.pct.toFixed(1)}%`]);
-    baixarXlsx('emitido_periodo.xlsx', ['Medição', '% Emitido no Período'], linhas);
+  } else if (qual === 'comprometidoEmitido') {
+    const linhas = ultimoDadosComprometidoEmitido.map((d) => [
+      `Medição ${d.medicao}`,
+      d.pagoPct == null ? '' : `${d.pagoPct.toFixed(1)}%`,
+      d.emitidoPct == null ? '' : `${d.emitidoPct.toFixed(1)}%`,
+      fmtMoeda(d.deltaReais),
+    ]);
+    baixarXlsx('comprometido_utilizado_x_emitido.xlsx', ['Medição', '% Comprometido Utilizado', '% Emitido no Período', 'Diferença Emitido − Pago (R$)'], linhas);
   } else if (qual === 'categoriaCusto') {
     const linhas = ultimoDadosCategoriaCusto.map(([cat, baixado, aBaixar, total]) => [cat, fmtMoeda(baixado), fmtMoeda(aBaixar), fmtMoeda(total)]);
     baixarXlsx('custo_por_categoria.xlsx', ['Categoria', 'Baixado', 'A Baixar', 'Total'], linhas);
@@ -2910,11 +2900,10 @@ function atualizarSetasOrdenacao(tabelaId) {
 let chartAging, chartFluxo, chartStatusPagamento, chartPagosAbc, chartAporte;
 let chartCategoriaCusto, chartAbcCategoria, chartMargemGauge, chartFaturadoPagoAcumulado;
 let chartPagoApagarGauge, chartApagarGauge, chartSaldoDisponivelGauge;
-let chartMargemMedicao, chartCategoriaFaturamento, chartComprometidoUtilizado, chartEmitidoPeriodo;
+let chartMargemMedicao, chartCategoriaFaturamento, chartComprometidoEmitido;
 let ultimoDadosFaturadoPago = []; // export: [{medicao, faturado, pago, margem}]
 let ultimoDadosFaturadoPagoAcumulado = []; // export: [{medicao, faturado, pago, saldoDisponivel}]
-let ultimoDadosComprometidoUtilizado = []; // export: [{medicao, pct}]
-let ultimoDadosEmitidoPeriodo = []; // export: [{medicao, pct}]
+let ultimoDadosComprometidoEmitido = []; // export: [{medicao, pagoPct, emitidoPct, deltaReais}]
 let ultimoAbertos = [];
 let ultimoItensAnalise = [];
 
@@ -2936,8 +2925,7 @@ const REGISTRO_GRAFICOS_DASHBOARD_ = {
   pagosAbc: () => chartPagosAbc,
   aporte: () => chartAporte,
   faturadoPagoAcumulado: () => chartFaturadoPagoAcumulado,
-  comprometidoUtilizado: () => chartComprometidoUtilizado,
-  emitidoPeriodo: () => chartEmitidoPeriodo,
+  comprometidoEmitido: () => chartComprometidoEmitido,
   margemMedicao: () => chartMargemMedicao,
   categoriaFaturamento: () => chartCategoriaFaturamento,
 };
@@ -3701,107 +3689,116 @@ function renderizarFaturadoPago_() {
     },
   });
 
-  // Gráfico "Comprometido Utilizado (%)" — Pago ÷ Faturado de CADA medição
-  // (as mesmas duas colunas da tabela "Por medição" logo abaixo, só que em
-  // %), numa única linha de tendência — pedido explícito, no formato do
-  // gráfico "Dívida Bruta do Governo Geral" (uma linha só mostrando quanto
-  // de um valor comprometido já foi utilizado). "Pago" aqui é sempre o
-  // título já vencido dentro da janela da própria medição — nunca A Pagar/
-  // projeção futura (na medição mais recente essa janela já vai só até
-  // ontem/hoje, ver comentário de `linhas` acima) — então o ponto mais
-  // recente do gráfico já nasce "limitado ao dia de hoje", sem precisar de
-  // nenhum corte extra. Ignora o filtro "Medição: todas/N" da tabela (igual
-  // ao gráfico Acumulado acima) — é sempre a série histórica inteira.
-  const dadosComprometidoUtilizado = linhas.map((l) => ({
-    medicao: l.medicao,
-    pct: l.faturado ? (l.pago / l.faturado) * 100 : null,
-  }));
-  ultimoDadosComprometidoUtilizado = dadosComprometidoUtilizado;
-  if (chartComprometidoUtilizado) { chartComprometidoUtilizado.destroy(); chartComprometidoUtilizado = null; }
-  chartComprometidoUtilizado = new Chart(document.getElementById('chart-comprometido-utilizado'), {
-    type: 'line',
-    data: {
-      labels: dadosComprometidoUtilizado.map((d) => `Med. ${d.medicao}`),
-      datasets: [{
-        label: '% Comprometido Utilizado',
-        data: dadosComprometidoUtilizado.map((d) => d.pct),
-        // Área preenchida (pedido explícito, no formato do gráfico de
-        // referência) — fill até a origem do eixo Y (0%), num azul bem
-        // translúcido pra não competir com a linha nem com os rótulos.
-        borderColor: '#2a78d6', backgroundColor: 'rgba(42,120,214,0.16)', fill: 'origin',
-        borderWidth: 3.24, tension: 0.3,
-        pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', pointBackgroundColor: '#2a78d6', spanGaps: true,
-        datalabels: {
-          color: '#1e2430', backgroundColor: 'rgba(252,252,251,0.85)', borderRadius: 3,
-          padding: { top: 1, bottom: 1, left: 3, right: 3 }, font: { size: 10, weight: '600' },
-          align: 'top', anchor: 'end',
-          formatter: (v) => (v == null ? '' : `${v.toFixed(1)}%`),
-        },
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false }, // 1 série só — o título do painel já identifica
-        tooltip: { callbacks: { label: (ctx) => `Comprometido utilizado: ${ctx.parsed.y == null ? 'sem Faturado no período' : ctx.parsed.y.toFixed(1) + '%'}` } },
-      },
-      scales: {
-        y: {
-          beginAtZero: true, suggestedMax: 100, grid: { color: '#e1e0d9' },
-          ticks: { color: '#898781', callback: (v) => v + '%' },
-          title: { display: true, text: '%', color: '#898781', font: { size: 11, weight: '600' } },
-        },
-        x: { grid: { display: false }, ticks: { color: '#898781' } },
-      },
-      onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
-      onClick: (ev, els) => {
-        if (!els.length) return;
-        const d = dadosComprometidoUtilizado[els[0].index];
-        abrirDetalhe(`Pago — Med. ${d.medicao}`, ultimoItensPagosFaturadoPago_(d.medicao));
-      },
-    },
+  // Gráfico "Comprometido Utilizado x Emitido (%)" — as 2 linhas que antes
+  // eram gráficos separados (Pago ÷ Faturado e Emitido ÷ Faturado, cada
+  // uma da própria medição, mesmas janelas de período — ver `linhas`
+  // acima) unificadas num só, com a faixa ENTRE as 2 curvas sombreada e
+  // rotulada com a diferença Emitido − Pago em R$ — pedido explícito, no
+  // formato do gráfico "Dívida Bruta do Governo Geral", agora com 2
+  // séries. Um 3º dataset "fantasma" (sem linha, sem ponto visível,
+  // escondido da legenda) existe só pra ancorar o rótulo da diferença
+  // exatamente no meio das 2 curvas em cada medição — truque padrão pra
+  // anotar o vão entre 2 séries sem precisar de um 2º eixo (nunca dual-
+  // axis: as 2 curvas de verdade continuam na MESMA escala %). A cor da
+  // faixa e do rótulo — a cor do RÓTULO (não da faixa, ver comentário no
+  // dataset "Emitido" abaixo) segue o sinal da diferença (verde quando
+  // Emitido ≥ Pago, vermelho quando Pago > Emitido) — mesma convenção de ▲/▼ usada
+  // no resto do Dashboard.
+  const corDeltaComprometido_ = (v) => (v == null ? '#898781' : v >= 0 ? '#1baf7a' : '#c0392b');
+  const dadosComprometidoEmitido = linhas.map((l) => {
+    const pagoPct = l.faturado ? (l.pago / l.faturado) * 100 : null;
+    const emitidoPct = l.faturado ? (l.emitido / l.faturado) * 100 : null;
+    return {
+      medicao: l.medicao, pagoPct, emitidoPct,
+      deltaReais: l.emitido - l.pago,
+      meioPct: (pagoPct != null && emitidoPct != null) ? (pagoPct + emitidoPct) / 2 : null,
+    };
   });
-
-  // Gráfico "Emitido no Período (%)" — Emitido ÷ Faturado de CADA medição,
-  // em %, no mesmo formato do "Comprometido Utilizado" acima — pedido
-  // explícito. A diferença é só a origem do numerador: em vez do "Pago"
-  // (títulos com VENCIMENTO na janela da medição), aqui é o "Emitido"
-  // (TODOS os documentos — ERP + manual, nenhum filtro por Status — com
-  // DATA EMISSÃO na mesma janela, somando o R$ Valor de toda parcela; ver
-  // `itensEmitidos`/`emitido` no cálculo de `linhas` acima). Cor diferente
-  // (roxo) da do Comprometido Utilizado (azul) só pra não confundir os
-  // dois de relance.
-  const dadosEmitidoPeriodo = linhas.map((l) => ({
-    medicao: l.medicao,
-    pct: l.faturado ? (l.emitido / l.faturado) * 100 : null,
-  }));
-  ultimoDadosEmitidoPeriodo = dadosEmitidoPeriodo;
-  if (chartEmitidoPeriodo) { chartEmitidoPeriodo.destroy(); chartEmitidoPeriodo = null; }
-  chartEmitidoPeriodo = new Chart(document.getElementById('chart-emitido-periodo'), {
+  ultimoDadosComprometidoEmitido = dadosComprometidoEmitido;
+  if (chartComprometidoEmitido) { chartComprometidoEmitido.destroy(); chartComprometidoEmitido = null; }
+  chartComprometidoEmitido = new Chart(document.getElementById('chart-comprometido-emitido'), {
     type: 'line',
     data: {
-      labels: dadosEmitidoPeriodo.map((d) => `Med. ${d.medicao}`),
-      datasets: [{
-        label: '% Emitido no Período',
-        data: dadosEmitidoPeriodo.map((d) => d.pct),
-        borderColor: '#4a3aa7', backgroundColor: 'rgba(74,58,167,0.16)', fill: 'origin',
-        borderWidth: 3.24, tension: 0.3,
-        pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', pointBackgroundColor: '#4a3aa7', spanGaps: true,
-        datalabels: {
-          color: '#1e2430', backgroundColor: 'rgba(252,252,251,0.85)', borderRadius: 3,
-          padding: { top: 1, bottom: 1, left: 3, right: 3 }, font: { size: 10, weight: '600' },
-          align: 'top', anchor: 'end',
-          formatter: (v) => (v == null ? '' : `${v.toFixed(1)}%`),
+      labels: dadosComprometidoEmitido.map((d) => `Med. ${d.medicao}`),
+      datasets: [
+        {
+          label: 'Comprometido Utilizado (%)',
+          data: dadosComprometidoEmitido.map((d) => d.pagoPct),
+          borderColor: '#2a78d6', backgroundColor: '#2a78d6', fill: false,
+          borderWidth: 3.24, tension: 0.3,
+          pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', spanGaps: true,
+          datalabels: { display: false },
         },
-      }],
+        {
+          label: 'Emitido no Período (%)',
+          data: dadosComprometidoEmitido.map((d) => d.emitidoPct),
+          borderColor: '#4a3aa7', backgroundColor: 'rgba(137,135,129,0.16)',
+          // fill: 0 -> preenche até o dataset de índice 0 (Comprometido
+          // Utilizado) em vez de até a origem — é essa faixa que representa
+          // a diferença entre as 2 curvas. Cor NEUTRA (cinza translúcido),
+          // de propósito, não por sinal: uma cor por SEGMENTO (verde/
+          // vermelho) foi tentada e descartada — quando as 2 curvas se
+          // cruzam ENTRE 2 medições, o segmento inteiro só pode pintar de
+          // uma cor (não tem como "trocar de cor no meio"), então perto do
+          // cruzamento a faixa ficava contradizendo o rótulo do ponto mais
+          // próximo (ex.: rótulo verde ao lado de uma faixa vermelha). Quem
+          // carrega o sinal com precisão (sem essa ambiguidade, porque é
+          // calculado ponto a ponto, nunca interpolado) é só o rótulo
+          // colorido (dataset fantasma abaixo) — a faixa cinza só marca
+          // ONDE está o vão entre as curvas, sem arriscar informar errado.
+          fill: 0,
+          // pointBackgroundColor explícito (roxo opaco, não o cinza
+          // translúcido do fill) — sem isso, tanto os pontos quanto a
+          // bolinha da legenda (que usa a cor do 1º ponto, ver
+          // usePointStyle) saem cinza-claros por herdarem backgroundColor.
+          pointBackgroundColor: '#4a3aa7',
+          borderWidth: 3.24, tension: 0.3,
+          pointRadius: 4, pointBorderWidth: 2, pointBorderColor: '#fcfcfb', spanGaps: true,
+          datalabels: { display: false },
+        },
+        {
+          // Dataset fantasma: só ancora o rótulo da diferença em R$ no
+          // meio das 2 curvas — nunca desenha linha nem ponto, nunca entra
+          // na legenda (ver legend.labels.filter abaixo).
+          label: 'Diferença (R$)',
+          data: dadosComprometidoEmitido.map((d) => d.meioPct),
+          borderWidth: 0, pointRadius: 0, pointHoverRadius: 0, pointHitRadius: 0, showLine: false, fill: false,
+          datalabels: {
+            color: (ctx) => corDeltaComprometido_(dadosComprometidoEmitido[ctx.dataIndex].deltaReais),
+            backgroundColor: 'rgba(252,252,251,0.9)', borderRadius: 3, padding: { top: 1, bottom: 1, left: 3, right: 3 },
+            font: { size: 10, weight: '700' }, align: 'center', anchor: 'center',
+            formatter: (v, ctx) => {
+              const delta = dadosComprometidoEmitido[ctx.dataIndex].deltaReais;
+              if (v == null) return '';
+              const sinal = delta >= 0 ? '+' : '−';
+              return `${sinal}${fmtMoeda(Math.abs(delta))}`;
+            },
+          },
+        },
+      ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: (ctx) => `Emitido no período: ${ctx.parsed.y == null ? 'sem Faturado no período' : ctx.parsed.y.toFixed(1) + '%'}` } },
+        legend: {
+          labels: {
+            color: '#52514e', usePointStyle: true, boxWidth: 8, boxHeight: 8,
+            filter: (item) => item.text !== 'Diferença (R$)',
+          },
+        },
+        tooltip: {
+          filter: (item) => item.dataset.label !== 'Diferença (R$)',
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? 'sem Faturado no período' : ctx.parsed.y.toFixed(1) + '%'}`,
+            afterBody: (items) => {
+              if (!items.length) return '';
+              const d = dadosComprometidoEmitido[items[0].dataIndex];
+              const sinal = d.deltaReais >= 0 ? '+' : '−';
+              return `Diferença (Emitido − Pago): ${sinal}${fmtMoeda(Math.abs(d.deltaReais))}`;
+            },
+          },
+        },
       },
       scales: {
         y: {
@@ -3814,8 +3811,15 @@ function renderizarFaturadoPago_() {
       onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
       onClick: (ev, els) => {
         if (!els.length) return;
-        const d = dadosEmitidoPeriodo[els[0].index];
-        abrirDetalhe(`Emitido — Med. ${d.medicao}`, ultimoItensEmitidosFaturadoPago_(d.medicao));
+        const elPago = els.find((e) => e.datasetIndex === 0);
+        const elEmitido = els.find((e) => e.datasetIndex === 1);
+        if (elPago) {
+          const d = dadosComprometidoEmitido[elPago.index];
+          abrirDetalhe(`Pago — Med. ${d.medicao}`, ultimoItensPagosFaturadoPago_(d.medicao));
+        } else if (elEmitido) {
+          const d = dadosComprometidoEmitido[elEmitido.index];
+          abrirDetalhe(`Emitido — Med. ${d.medicao}`, ultimoItensEmitidosFaturadoPago_(d.medicao));
+        }
       },
     },
   });
