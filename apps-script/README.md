@@ -160,6 +160,54 @@ do ERP — a reimportação diária substitui todos os títulos, mas reconhece o
 mesmo título pela combinação Nº Documento + Código Fornecedor + Parcela e
 recoloca o link que já tinha sido salvo para ele.
 
+## Padronização automática de nomes no Drive
+
+A busca automática de anexo (seção acima) só funciona se o arquivo no Drive
+seguir o padrão "TIPO Nº_DOCUMENTO RAZÃO_SOCIAL CÓDIGO_FORNECEDOR.pdf" (ex.:
+"NFS 24610 COPHEL EXPRESS 26846738.pdf") ou, na pasta de comprovantes,
+"COMPROVANTE Nº_DOCUMENTO RAZÃO_SOCIAL CÓDIGO_FORNECEDOR.pdf" — em que
+CÓDIGO_FORNECEDOR são os 8 primeiros dígitos do CNPJ (pessoa jurídica) ou os
+9 primeiros do CPF (pessoa física) de quem emitiu/recebeu. Como nem todo
+arquivo chega já nesse padrão (e-mail, WhatsApp, download manual...), o
+`Code.gs` inclui uma rotina que varre as três pastas de `PASTAS_BUSCA_ANEXO`
+(e todas as subpastas) e corrige os nomes fora do padrão sozinha, **sem usar
+nenhuma IA/LLM em tempo de execução** — a extração de Tipo, Nº Documento,
+Razão Social e CNPJ/CPF é feita por OCR nativo do Google Drive (conversão
+PDF → Google Doc) mais expressões regulares sobre esse texto, tudo rodando
+dentro do próprio Google via gatilho de tempo.
+
+Por segurança, **nenhum arquivo é renomeado sem revisão**: cada sugestão cai
+numa aba nova, **Renomear Pendente**, e só é aplicada quando alguém marca a
+coluna "Aprovar".
+
+**Ativar (uma vez só):**
+1. No editor do Apps Script, confira que `Code.gs` foi atualizado com este
+   trecho e reimplante (mesmos passos 3, 4 e 6 do topo deste arquivo).
+2. Ainda no editor, no menu lateral, clique em **Serviços (+)** e adicione o
+   serviço avançado **Drive API** (o `appsscript.json` deste repositório já
+   declara essa dependência, mas a 1ª execução pode pedir pra confirmar a
+   autorização de acesso ao Drive).
+3. No menu de funções no topo do editor, selecione `configurarGatilhosRenomeacao`
+   e clique em **Executar** — isso instala dois gatilhos: identifica arquivo
+   novo fora do padrão 1x/dia (6h) e aplica as aprovações de hora em hora.
+   Seguro rodar de novo depois (sempre remove os gatilhos antigos antes de
+   criar os novos).
+4. Para zerar o acervo que já existe hoje fora do padrão (antes de contar só
+   com o gatilho diário), rode `identificarArquivosForaDoPadrao` manualmente
+   pelo editor algumas vezes seguidas — cada execução processa um lote
+   limitado (25 arquivos), então repita até o Log mostrar "0 novo(s)".
+
+**Uso do dia a dia:** abra a aba **Renomear Pendente** na planilha de vez em
+quando — cada linha mostra o nome atual, o nome sugerido, a confiança da
+extração ("alta" quando os 4 campos foram identificados sem ambiguidade,
+"revisar" quando faltou algo) e o CNPJ/CPF encontrado. Corrija a coluna
+"Nome Sugerido" quando a extração errou algo (nomes/leiautes de nota variam
+muito entre emissores, então nem sempre acerta de primeira) e marque
+"Aprovar" (TRUE) nas linhas que pode aplicar — o gatilho de hora em hora
+renomeia o arquivo de verdade e marca a linha como "Renomeado" (ou "Erro",
+com o motivo, se o arquivo não existir mais). Não quer aplicar uma sugestão?
+Deixe "Aprovar" desmarcado — a linha continua na fila, sem afetar o arquivo.
+
 ## Detalhamento por clique (dashboard, tabelas e Análise)
 
 Em qualquer lugar que mostre um número agregado — cards do topo, barras/linhas

@@ -1273,3 +1273,351 @@ function configurarGatilhoDiario() {
   });
   ScriptApp.newTrigger('enviarAlertaDiario').timeBased().everyDays(1).atHour(7).create();
 }
+
+// ---------- Padronização de nomes de arquivo (Drive) ----------
+// Mantém os PDFs das pastas de PASTAS_BUSCA_ANEXO (documentos e comprovantes)
+// no padrão "TIPO Nº_DOCUMENTO RAZÃO_SOCIAL CÓDIGO_FORNECEDOR.pdf" (ou
+// "COMPROVANTE ..." na pasta de comprovantes) — o mesmo padrão que
+// api_buscarAnexoDrive já depende para achar anexo automático. Roda 100%
+// dentro do Google (Drive API + regex, sem chamar nenhuma IA/LLM): a
+// extração de texto usa a conversão PDF -> Google Doc com OCR do serviço
+// avançado do Drive (grátis, nativa do Apps Script), e a leitura de
+// TIPO/Nº/Razão Social/CNPJ-CPF é feita com expressões regulares sobre esse
+// texto. NENHUM arquivo é renomeado sozinho: cada sugestão cai na aba
+// "Renomear Pendente" e só é aplicada de fato quando alguém marca a coluna
+// "Aprovar" (aplicarRenomeacoesAprovadas cuida da aplicação) — evita
+// renomear errado um documento de verdade só por causa de uma extração
+// ambígua (razões sociais e leiautes de nota variam demais entre emissores).
+//
+// Uso (uma vez, no editor do Apps Script):
+//  1. identificarArquivosForaDoPadrao — roda a varredura e enche a aba
+//     "Renomear Pendente" com sugestões (repita algumas vezes se o
+//     resultado disser "..." pra esgotar o acervo já existente — cada
+//     execução processa um lote limitado pra não estourar o tempo máximo
+//     de execução do Apps Script).
+//  2. Revise a aba "Renomear Pendente" na planilha, corrija a coluna "Nome
+//     Sugerido" quando a extração errou algo, e marque "Aprovar" (TRUE) nas
+//     linhas que pode aplicar.
+//  3. aplicarRenomeacoesAprovadas — renomeia de fato os arquivos aprovados.
+//  4. configurarGatilhosRenomeacao — instala os gatilhos de tempo pra rodar
+//     os passos 1 e 3 sozinhos daqui pra frente (identifica 1x/dia; aplica
+//     de hora em hora), sem precisar abrir o editor de novo.
+
+var RENOMEAR_HEADERS = [
+  'Data Detecção', 'Pasta', 'ID Arquivo', 'Nome Atual', 'Nome Sugerido',
+  'Confiança', 'CNPJ/CPF Encontrado', 'Aprovar', 'Status', 'Observação',
+];
+var RENOMEAR_LIMITE_OCR_POR_EXECUCAO = 25; // teto de conversões OCR por execução, pra nunca estourar o tempo máximo de um gatilho
+
+// Nome já no padrão -> TIPO/COMPROVANTE conhecido, seguido de algo, seguido
+// de um código de 8 ou 9 dígitos colado no ".pdf" — casa com todos os
+// exemplos reais (ex.: "NFS 24610 COPHEL EXPRESS 26846738.pdf",
+// "COMPROVANTE 1793 VOUDLOG TRANS 037295834.pdf"). Arquivo que já bate aqui
+// nunca precisa de OCR — só os fora desse padrão entram na fila.
+var REGEX_NOME_PADRAO_ = /^(COMPROVANTE|NF|NFS|NF3E|NFAG|DACTE|ND|BOL|FAT|FOL|FGTS|DARF|DAM|REC)\s+\S.*\s(\d{8,9})\.pdf$/i;
+
+function getSheetRenomear_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName('Renomear Pendente');
+  if (!sh) {
+    sh = ss.insertSheet('Renomear Pendente');
+    sh.appendRow(RENOMEAR_HEADERS);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// IDs já presentes na fila (pendente ou já renomeado) — evita reprocessar/
+// reenfileirar o mesmo arquivo em toda execução do gatilho diário.
+function idsJaNaFilaRenomear_() {
+  var sh = getSheetRenomear_();
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha < 2) return {};
+  var idCol = RENOMEAR_HEADERS.indexOf('ID Arquivo') + 1;
+  var valores = sh.getRange(2, idCol, ultimaLinha - 1, 1).getValues();
+  var set = {};
+  valores.forEach(function (l) { if (l[0]) set[l[0]] = true; });
+  return set;
+}
+
+// Lista (id, subpastas incluídas) de todas as subpastas dentro de uma pasta
+// raiz, via Drive API (mais rápido que DriveApp.getFolders() recursivo pra
+// árvores grandes, como a "16 COMPROVANTE PAGTO" organizada por ano/mês).
+function listarPastaEsubpastas_(pastaRaizId) {
+  var pastas = [pastaRaizId];
+  var fila = [pastaRaizId];
+  while (fila.length) {
+    var atual = fila.shift();
+    var pageToken = null;
+    do {
+      var resp = Drive.Files.list({
+        q: "'" + atual + "' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+        maxResults: 200,
+        pageToken: pageToken,
+        fields: 'items(id),nextPageToken',
+      });
+      (resp.items || []).forEach(function (f) { pastas.push(f.id); fila.push(f.id); });
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
+  }
+  return pastas;
+}
+
+function listarPdfsDaPasta_(pastaId) {
+  var arquivos = [];
+  var pageToken = null;
+  do {
+    var resp = Drive.Files.list({
+      q: "'" + pastaId + "' in parents and mimeType = 'application/pdf' and trashed = false",
+      maxResults: 200,
+      pageToken: pageToken,
+      fields: 'items(id,title),nextPageToken',
+    });
+    (resp.items || []).forEach(function (f) { arquivos.push({ id: f.id, nome: f.title }); });
+    pageToken = resp.nextPageToken;
+  } while (pageToken);
+  return arquivos;
+}
+
+// Converte o PDF num Google Doc temporário com OCR (serviço avançado do
+// Drive) só pra extrair o texto, e sempre apaga o Doc temporário depois —
+// funciona tanto pra PDF "nativo" (nota fiscal gerada em PDF) quanto pra PDF
+// escaneado/print de tela (comprovante de banco, comum nas pastas
+// monitoradas). Não usa nenhuma IA/LLM — é OCR nativo do Google Drive.
+function extrairTextoPdfOcr_(idArquivo, nomeArquivo) {
+  var recurso = {
+    title: 'OCR temporário — ' + nomeArquivo,
+    mimeType: MimeType.GOOGLE_DOCS,
+  };
+  var arquivoOriginal = DriveApp.getFileById(idArquivo);
+  var docConvertido = Drive.Files.insert(recurso, arquivoOriginal.getBlob(), { ocr: true, ocrLanguage: 'pt' });
+  try {
+    return DocumentApp.openById(docConvertido.id).getBody().getText();
+  } finally {
+    try { Drive.Files.remove(docConvertido.id); } catch (e) { /* Doc temporário órfão, sem risco — só ocupa um pouco de Lixeira */ }
+  }
+}
+
+// Extrai CNPJ (14 dígitos -> código = 8 primeiros) ou, na ausência de CNPJ,
+// CPF (11 dígitos -> código = 9 primeiros) do texto do documento. Procura
+// primeiro perto do rótulo "CNPJ"/"CPF" (mais confiável) e só cai pro
+// primeiro número no formato certo em qualquer lugar do texto como reforço.
+function extrairCnpjCpf_(texto) {
+  var t = String(texto || '');
+  var mCnpjRotulo = t.match(/CNPJ[^\d]{0,10}(\d[\d.\/-]{12,18}\d)/i);
+  var mCnpjSolto = t.match(/\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/);
+  var candidatoCnpj = mCnpjRotulo ? mCnpjRotulo[1] : (mCnpjSolto ? mCnpjSolto[0] : null);
+  if (candidatoCnpj) {
+    var digitosCnpj = candidatoCnpj.replace(/\D/g, '');
+    if (digitosCnpj.length === 14) {
+      return { tipo: 'CNPJ', formatado: digitosCnpj, codigo: digitosCnpj.slice(0, 8) };
+    }
+  }
+  var mCpfRotulo = t.match(/CPF[^\d]{0,10}(\d[\d.\-]{9,12}\d)/i);
+  if (mCpfRotulo) {
+    var digitosCpf = mCpfRotulo[1].replace(/\D/g, '');
+    if (digitosCpf.length === 11) {
+      return { tipo: 'CPF', formatado: digitosCpf, codigo: digitosCpf.slice(0, 9) };
+    }
+  }
+  return null;
+}
+
+// Palavras-chave -> Tipo (mesmos prefixos usados na Conciliação Bancária e
+// aceitos por api_buscarAnexoDrive). Testadas em ordem — a primeira que
+// aparecer no texto do documento decide o Tipo.
+var PALAVRAS_TIPO_DOCUMENTO_ = [
+  [/NOTA\s+FISCAL\s+DE\s+SERVI[ÇC]OS|NFS-?E/i, 'NFS'],
+  [/NF3E|NOTA\s+FISCAL\s+DE\s+ENERGIA/i, 'NF3E'],
+  [/CT-?E|CONHECIMENTO\s+DE\s+TRANSPORTE|DACTE/i, 'DACTE'],
+  [/BOLETO|FICHA\s+DE\s+COMPENSA[ÇC][ÃA]O/i, 'BOL'],
+  [/FATURA/i, 'FAT'],
+  [/NOTA\s+DE\s+D[ÉE]BITO/i, 'ND'],
+  [/FOLHA\s+DE\s+PAGAMENTO/i, 'FOL'],
+  [/GUIA\s+DO\s+FGTS|FGTS/i, 'FGTS'],
+  [/DARF/i, 'DARF'],
+  [/\bDAM\b/i, 'DAM'],
+  [/RECIBO/i, 'REC'],
+  [/NOTA\s+FISCAL/i, 'NF'],
+];
+
+function inferirTipoDocumento_(texto, ehPastaComprovante) {
+  if (ehPastaComprovante) return 'COMPROVANTE'; // pasta "16 COMPROVANTE PAGTO" é sempre comprovante de pagamento
+  for (var i = 0; i < PALAVRAS_TIPO_DOCUMENTO_.length; i++) {
+    if (PALAVRAS_TIPO_DOCUMENTO_[i][0].test(texto)) return PALAVRAS_TIPO_DOCUMENTO_[i][1];
+  }
+  return null;
+}
+
+// Rótulos comuns em NFS-e/boleto/comprovante pra achar o Nº do documento —
+// tenta cada um, na ordem, e usa o primeiro que achar um número junto.
+var ROTULOS_NUMERO_DOCUMENTO_ = [
+  /N[úu]mero\s+da\s+Nota[^\d]{0,10}(\d{1,15})/i,
+  /N[°ºo]\s*\.?\s*da\s+Nota[^\d]{0,10}(\d{1,15})/i,
+  /Nota\s+Fiscal\s+n[°ºo]?\.?[^\d]{0,10}(\d{1,15})/i,
+  /Fatura\s+n[°ºo]?\.?[^\d]{0,10}(\d{1,15})/i,
+  /Nosso\s+N[úu]mero[^\d]{0,10}(\d{1,15})/i,
+  /N[°ºo]\s*\.?\s*Documento[^\d]{0,10}(\d{1,15})/i,
+  /N[°ºo]\s*\.?\s*do\s+Documento[^\d]{0,10}(\d{1,15})/i,
+];
+
+function inferirNumeroDocumento_(texto) {
+  for (var i = 0; i < ROTULOS_NUMERO_DOCUMENTO_.length; i++) {
+    var m = texto.match(ROTULOS_NUMERO_DOCUMENTO_[i]);
+    if (m) return removerZerosEsquerda_(m[1]);
+  }
+  return null;
+}
+
+// Rótulos comuns pra achar a razão social/nome de quem emitiu ou recebeu —
+// pega o resto da linha depois do rótulo, corta em tamanho razoável e limpa
+// caracteres que não fazem sentido num nome de arquivo.
+var ROTULOS_RAZAO_SOCIAL_ = [
+  /Prestador(?:\s+de\s+Servi[çc]os)?[:\s]+([^\n]{3,80})/i,
+  /Raz[ãa]o\s+Social[:\s]+([^\n]{3,80})/i,
+  /Nome\s*\/\s*Raz[ãa]o\s+Social[:\s]+([^\n]{3,80})/i,
+  /Emitente[:\s]+([^\n]{3,80})/i,
+  /Benefici[áa]rio[:\s]+([^\n]{3,80})/i,
+  /Favorecido[:\s]+([^\n]{3,80})/i,
+];
+
+function inferirRazaoSocial_(texto) {
+  for (var i = 0; i < ROTULOS_RAZAO_SOCIAL_.length; i++) {
+    var m = texto.match(ROTULOS_RAZAO_SOCIAL_[i]);
+    if (m) {
+      var nome = m[1]
+        .replace(/CNPJ.*$/i, '').replace(/CPF.*$/i, '')
+        .replace(/[\\\/:*?"<>|]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (nome.length >= 3) return nome.slice(0, 60).toUpperCase();
+    }
+  }
+  return null;
+}
+
+function sanitizarNomeArquivo_(s) {
+  return String(s || '').replace(/[\\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Monta a sugestão completa pra um arquivo fora do padrão: OCR + regex, sem
+// nenhuma chamada a IA/LLM. "Confiança: alta" só quando TIPO + Nº Documento
+// + Razão Social + CNPJ/CPF foram todos identificados sem ambiguidade — o
+// resto cai como "revisar" pra alguém completar/corrigir na planilha antes
+// de aprovar.
+function montarSugestaoRenomeacao_(idArquivo, nomeAtual, ehPastaComprovante) {
+  var texto;
+  try {
+    texto = extrairTextoPdfOcr_(idArquivo, nomeAtual);
+  } catch (e) {
+    return { nomeSugerido: '', confianca: 'revisar', cnpjCpf: '', observacao: 'Falha ao ler o PDF (OCR): ' + e.message };
+  }
+  var docFiscal = extrairCnpjCpf_(texto);
+  var tipo = inferirTipoDocumento_(texto, ehPastaComprovante);
+  var numero = inferirNumeroDocumento_(texto);
+  var razao = inferirRazaoSocial_(texto);
+
+  var partes = [tipo, numero, razao ? sanitizarNomeArquivo_(razao) : null, docFiscal ? docFiscal.codigo : null]
+    .filter(function (p) { return p; });
+  var completo = !!(tipo && numero && razao && docFiscal);
+  var nomeSugerido = partes.length ? sanitizarNomeArquivo_(partes.join(' ')) + '.pdf' : '';
+
+  return {
+    nomeSugerido: nomeSugerido,
+    confianca: completo ? 'alta' : (partes.length ? 'revisar (incompleto)' : 'revisar (nada identificado)'),
+    cnpjCpf: docFiscal ? (docFiscal.tipo + ' ' + docFiscal.formatado) : '',
+    observacao: completo ? '' : 'Confira/complete antes de aprovar — campo(s) não identificado(s) automaticamente.',
+  };
+}
+
+// Passo 1: varre PASTAS_BUSCA_ANEXO (+ subpastas) atrás de PDF fora do
+// padrão e enche "Renomear Pendente" com sugestões. Não altera nenhum
+// arquivo. Processa no máximo RENOMEAR_LIMITE_OCR_POR_EXECUCAO arquivos por
+// execução (o resto fica pra próxima chamada/gatilho) pra nunca estourar o
+// tempo máximo de execução do Apps Script.
+function identificarArquivosForaDoPadrao() {
+  var sh = getSheetRenomear_();
+  var jaNaFila = idsJaNaFilaRenomear_();
+  var agora = new Date();
+  var linhasNovas = [];
+  var processados = 0;
+
+  for (var p = 0; p < PASTAS_BUSCA_ANEXO.length; p++) {
+    var pastaRaizId = PASTAS_BUSCA_ANEXO[p];
+    var ehPastaComprovante = p === PASTAS_BUSCA_ANEXO.length - 1; // "16 COMPROVANTE PAGTO" é sempre a última da lista (ver comentário acima de PASTAS_BUSCA_ANEXO)
+    var todasAsPastas = listarPastaEsubpastas_(pastaRaizId);
+    for (var i = 0; i < todasAsPastas.length && processados < RENOMEAR_LIMITE_OCR_POR_EXECUCAO; i++) {
+      var pdfs = listarPdfsDaPasta_(todasAsPastas[i]);
+      for (var j = 0; j < pdfs.length && processados < RENOMEAR_LIMITE_OCR_POR_EXECUCAO; j++) {
+        var arq = pdfs[j];
+        if (REGEX_NOME_PADRAO_.test(arq.nome)) continue; // já está no padrão — nem precisa de OCR
+        if (jaNaFila[arq.id]) continue; // já sugerido (ou já renomeado) antes
+
+        var sugestao = montarSugestaoRenomeacao_(arq.id, arq.nome, ehPastaComprovante);
+        processados++;
+        jaNaFila[arq.id] = true;
+        linhasNovas.push([
+          agora, pastaRaizId, arq.id, arq.nome, sugestao.nomeSugerido,
+          sugestao.confianca, sugestao.cnpjCpf, false, 'Pendente', sugestao.observacao,
+        ]);
+      }
+    }
+  }
+
+  if (linhasNovas.length) {
+    sh.getRange(sh.getLastRow() + 1, 1, linhasNovas.length, RENOMEAR_HEADERS.length).setValues(linhasNovas);
+  }
+  registrarLog_('(sistema)', 'Identificar arquivos fora do padrão',
+    linhasNovas.length + ' novo(s) na fila "Renomear Pendente"' +
+    (processados >= RENOMEAR_LIMITE_OCR_POR_EXECUCAO ? ' (limite do lote atingido — rode de novo pra continuar o restante)' : ''));
+}
+
+// Passo 3: aplica de fato as renomeações marcadas com "Aprovar" = TRUE na
+// aba "Renomear Pendente" (Status ainda "Pendente"). Só mexe no arquivo cuja
+// linha foi aprovada manualmente — nunca em massa sem revisão.
+function aplicarRenomeacoesAprovadas() {
+  var sh = getSheetRenomear_();
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha < 2) return;
+  var idCol = RENOMEAR_HEADERS.indexOf('ID Arquivo');
+  var nomeSugeridoCol = RENOMEAR_HEADERS.indexOf('Nome Sugerido');
+  var aprovarCol = RENOMEAR_HEADERS.indexOf('Aprovar');
+  var statusCol = RENOMEAR_HEADERS.indexOf('Status');
+  var observacaoCol = RENOMEAR_HEADERS.indexOf('Observação');
+  var faixa = sh.getRange(2, 1, ultimaLinha - 1, RENOMEAR_HEADERS.length);
+  var dados = faixa.getValues();
+  var aplicados = 0;
+
+  for (var i = 0; i < dados.length; i++) {
+    var linha = dados[i];
+    if (linha[statusCol] !== 'Pendente' || linha[aprovarCol] !== true) continue;
+    var nomeSugerido = String(linha[nomeSugeridoCol] || '').trim();
+    if (!nomeSugerido) continue;
+    try {
+      DriveApp.getFileById(linha[idCol]).setName(nomeSugerido);
+      dados[i][statusCol] = 'Renomeado';
+      dados[i][observacaoCol] = 'Renomeado em ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+      aplicados++;
+    } catch (e) {
+      dados[i][statusCol] = 'Erro';
+      dados[i][observacaoCol] = 'Falha ao renomear: ' + e.message;
+    }
+  }
+
+  if (aplicados) faixa.setValues(dados);
+  if (aplicados) registrarLog_('(sistema)', 'Aplicar renomeações aprovadas', aplicados + ' arquivo(s) renomeado(s)');
+}
+
+// Rode esta função UMA VEZ no editor do Apps Script (mesmo jeito de
+// configurarGatilhoDiario) pra deixar a padronização de nomes rodando
+// sozinha dali pra frente: identifica 1x/dia (novo arquivo fora do padrão) e
+// aplica as aprovações de hora em hora — sem precisar abrir o editor de novo
+// nem gastar nenhum token de IA na execução do dia a dia.
+function configurarGatilhosRenomeacao() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    var fn = t.getHandlerFunction();
+    if (fn === 'identificarArquivosForaDoPadrao' || fn === 'aplicarRenomeacoesAprovadas') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('identificarArquivosForaDoPadrao').timeBased().everyDays(1).atHour(6).create();
+  ScriptApp.newTrigger('aplicarRenomeacoesAprovadas').timeBased().everyHours(1).create();
+}
