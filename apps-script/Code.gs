@@ -1344,6 +1344,17 @@ function idsJaNaFilaRenomear_() {
   return set;
 }
 
+// As 3 pastas de PASTAS_BUSCA_ANEXO ficam dentro de uma estrutura
+// compartilhada (Drive compartilhado/Team Drive, não "Meu Drive") — sem
+// supportsTeamDrives + includeTeamDriveItems, Drive.Files.list() devolve
+// SEMPRE 0 resultado pra qualquer pasta aí dentro, mesmo com a query certa
+// (comportamento silencioso da API v2: não dá erro, só nunca acha nada).
+// Confirmado pela URL real de "03 DOC FISCAL FATURA E RECIBO":
+// .../folders/1srFnPfX6.../ com o breadcrumb "Compartilha... > 4 - CE
+// 007_A... > 4.11 - FIN...", que é o padrão de pastas dentro de um Drive
+// compartilhado. Repassado em toda chamada Drive.Files.list() abaixo.
+var OPCOES_TEAM_DRIVE_ = { supportsTeamDrives: true, includeTeamDriveItems: true };
+
 // Lista (id, subpastas incluídas) de todas as subpastas dentro de uma pasta
 // raiz, via Drive API (mais rápido que DriveApp.getFolders() recursivo pra
 // árvores grandes, como a "16 COMPROVANTE PAGTO" organizada por ano/mês).
@@ -1354,12 +1365,12 @@ function listarPastaEsubpastas_(pastaRaizId) {
     var atual = fila.shift();
     var pageToken = null;
     do {
-      var resp = Drive.Files.list({
+      var resp = Drive.Files.list(Object.assign({
         q: "'" + atual + "' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
         maxResults: 200,
         pageToken: pageToken,
         fields: 'items(id),nextPageToken',
-      });
+      }, OPCOES_TEAM_DRIVE_));
       (resp.items || []).forEach(function (f) { pastas.push(f.id); fila.push(f.id); });
       pageToken = resp.nextPageToken;
     } while (pageToken);
@@ -1371,12 +1382,12 @@ function listarPdfsDaPasta_(pastaId) {
   var arquivos = [];
   var pageToken = null;
   do {
-    var resp = Drive.Files.list({
+    var resp = Drive.Files.list(Object.assign({
       q: "'" + pastaId + "' in parents and mimeType = 'application/pdf' and trashed = false",
       maxResults: 200,
       pageToken: pageToken,
       fields: 'items(id,title),nextPageToken',
-    });
+    }, OPCOES_TEAM_DRIVE_));
     (resp.items || []).forEach(function (f) { arquivos.push({ id: f.id, nome: f.title }); });
     pageToken = resp.nextPageToken;
   } while (pageToken);
@@ -1394,11 +1405,12 @@ function extrairTextoPdfOcr_(idArquivo, nomeArquivo) {
     mimeType: MimeType.GOOGLE_DOCS,
   };
   var arquivoOriginal = DriveApp.getFileById(idArquivo);
-  var docConvertido = Drive.Files.insert(recurso, arquivoOriginal.getBlob(), { ocr: true, ocrLanguage: 'pt' });
+  var docConvertido = Drive.Files.insert(recurso, arquivoOriginal.getBlob(),
+    Object.assign({ ocr: true, ocrLanguage: 'pt' }, OPCOES_TEAM_DRIVE_));
   try {
     return DocumentApp.openById(docConvertido.id).getBody().getText();
   } finally {
-    try { Drive.Files.remove(docConvertido.id); } catch (e) { /* Doc temporário órfão, sem risco — só ocupa um pouco de Lixeira */ }
+    try { Drive.Files.remove(docConvertido.id, OPCOES_TEAM_DRIVE_); } catch (e) { /* Doc temporário órfão, sem risco — só ocupa um pouco de Lixeira */ }
   }
 }
 
