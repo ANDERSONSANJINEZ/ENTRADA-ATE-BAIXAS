@@ -1331,16 +1331,28 @@ function getSheetRenomear_() {
   return sh;
 }
 
-// IDs já presentes na fila (pendente ou já renomeado) — evita reprocessar/
-// reenfileirar o mesmo arquivo em toda execução do gatilho diário.
+// IDs já presentes na fila (pendente com sugestão de verdade, ou já
+// tratado) — evita reprocessar/reenfileirar o mesmo arquivo em toda
+// execução do gatilho diário. Uma linha "Pendente" com Nome Sugerido
+// VAZIO (falha ao ler o PDF — OCR fora do ar, arquivo corrompido etc.) não
+// entra nesse bloqueio: fica marcada como "reprocessável", pra a próxima
+// varredura tentar de novo e substituir a linha velha, em vez de deixar a
+// falha travada na fila pra sempre.
 function idsJaNaFilaRenomear_() {
   var sh = getSheetRenomear_();
   var ultimaLinha = sh.getLastRow();
   if (ultimaLinha < 2) return {};
-  var idCol = RENOMEAR_HEADERS.indexOf('ID Arquivo') + 1;
-  var valores = sh.getRange(2, idCol, ultimaLinha - 1, 1).getValues();
+  var idCol = RENOMEAR_HEADERS.indexOf('ID Arquivo');
+  var nomeSugeridoCol = RENOMEAR_HEADERS.indexOf('Nome Sugerido');
+  var statusCol = RENOMEAR_HEADERS.indexOf('Status');
+  var valores = sh.getRange(2, 1, ultimaLinha - 1, RENOMEAR_HEADERS.length).getValues();
   var set = {};
-  valores.forEach(function (l) { if (l[0]) set[l[0]] = true; });
+  valores.forEach(function (l, i) {
+    var id = l[idCol];
+    if (!id) return;
+    var falhouAntes = l[statusCol] === 'Pendente' && !String(l[nomeSugeridoCol] || '').trim();
+    set[id] = falhouAntes ? { reprocessar: true, linhaPlanilha: i + 2 } : true;
+  });
   return set;
 }
 
@@ -1405,8 +1417,12 @@ function extrairTextoPdfOcr_(idArquivo, nomeArquivo) {
     mimeType: MimeType.GOOGLE_DOCS,
   };
   var arquivoOriginal = DriveApp.getFileById(idArquivo);
+  // convert:true é obrigatório aqui — sem ele o Drive não converte o PDF de
+  // verdade pro Google Docs (só grava o metadado pedindo esse tipo), e o
+  // pedido de OCR falha com "OCR is not supported for files of type
+  // application/vnd.google-apps.document" (o tipo de DESTINO, não do PDF).
   var docConvertido = Drive.Files.insert(recurso, arquivoOriginal.getBlob(),
-    Object.assign({ ocr: true, ocrLanguage: 'pt' }, OPCOES_TEAM_DRIVE_));
+    Object.assign({ ocr: true, ocrLanguage: 'pt', convert: true }, OPCOES_TEAM_DRIVE_));
   try {
     return DocumentApp.openById(docConvertido.id).getBody().getText();
   } finally {
@@ -1556,6 +1572,7 @@ function identificarArquivosForaDoPadrao() {
   var jaNaFila = idsJaNaFilaRenomear_();
   var agora = new Date();
   var linhasNovas = [];
+  var linhasParaApagar = []; // linhas antigas com falha de OCR, substituídas pela nova tentativa
   var processados = 0;
 
   for (var p = 0; p < PASTAS_BUSCA_ANEXO.length; p++) {
@@ -1567,7 +1584,9 @@ function identificarArquivosForaDoPadrao() {
       for (var j = 0; j < pdfs.length && processados < RENOMEAR_LIMITE_OCR_POR_EXECUCAO; j++) {
         var arq = pdfs[j];
         if (REGEX_NOME_PADRAO_.test(arq.nome)) continue; // já está no padrão — nem precisa de OCR
-        if (jaNaFila[arq.id]) continue; // já sugerido (ou já renomeado) antes
+        var existente = jaNaFila[arq.id];
+        if (existente === true) continue; // já sugerido de verdade (ou já renomeado/ignorado) antes
+        if (existente && existente.reprocessar) linhasParaApagar.push(existente.linhaPlanilha);
 
         var sugestao = montarSugestaoRenomeacao_(arq.id, arq.nome, ehPastaComprovante);
         processados++;
@@ -1580,11 +1599,16 @@ function identificarArquivosForaDoPadrao() {
     }
   }
 
+  // Maior linha primeiro — apagar de baixo pra cima, senão o índice das
+  // próximas linhas a apagar desloca a cada deleteRow().
+  linhasParaApagar.sort(function (a, b) { return b - a; }).forEach(function (linha) { sh.deleteRow(linha); });
+
   if (linhasNovas.length) {
     sh.getRange(sh.getLastRow() + 1, 1, linhasNovas.length, RENOMEAR_HEADERS.length).setValues(linhasNovas);
   }
   registrarLog_('(sistema)', 'Identificar arquivos fora do padrão',
     linhasNovas.length + ' novo(s) na fila "Renomear Pendente"' +
+    (linhasParaApagar.length ? ' (' + linhasParaApagar.length + ' nova tentativa de arquivo que tinha falhado antes)' : '') +
     (processados >= RENOMEAR_LIMITE_OCR_POR_EXECUCAO ? ' (limite do lote atingido — rode de novo pra continuar o restante)' : ''));
 }
 
