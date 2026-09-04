@@ -580,6 +580,7 @@
   <button data-aba="analise">Análise</button>
   <button data-aba="historico">Histórico</button>
   <button data-aba="atualizar" id="nav-atualizar">Arquivos de Dados</button>
+  <button data-aba="renomear" id="nav-renomear">Padronizar Nomes</button>
 </nav>
 </div>
 
@@ -995,6 +996,33 @@
         <table id="tabela-historico">
           <colgroup><col style="width:16%"><col style="width:14%"><col style="width:20%"><col style="width:50%"></colgroup>
           <thead><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Detalhes</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="aba-renomear" class="aba">
+    <div class="painel">
+      <div class="cabecalho-painel">
+        <h2>Padronizar Nomes de Arquivo (Drive)</h2>
+        <button class="btn secundario small" id="btn-buscar-renomear" onclick="buscarArquivosForaDoPadrao()">🔍 Buscar arquivos fora do padrão</button>
+      </div>
+      <p style="font-size:13px;color:var(--cinza)">
+        Lista os PDFs das pastas de documentos/comprovantes que ainda não
+        seguem o padrão "TIPO Nº_DOCUMENTO RAZÃO_SOCIAL CÓDIGO_FORNECEDOR.pdf"
+        (ou "COMPROVANTE ..." na pasta de comprovantes) — a extração de
+        Tipo/Nº/Razão Social/CNPJ-CPF é feita por OCR do próprio Google
+        Drive, sem nenhuma IA. <strong>Nenhum arquivo é renomeado sem
+        aprovação</strong>: revise/corrija o "Nome sugerido" antes de clicar
+        em Aprovar — o botão "Buscar" pode levar até 1 minuto.
+      </p>
+      <input id="busca-renomear" class="busca-tabela" placeholder="Buscar em nome atual ou sugerido…">
+      <div id="total-renomear" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
+      <div class="tabela-scroll">
+        <table id="tabela-renomear">
+          <colgroup><col style="width:26%"><col style="width:32%"><col style="width:11%"><col style="width:13%"><col style="width:18%"></colgroup>
+          <thead><tr><th>Nome atual</th><th>Nome sugerido</th><th>Confiança</th><th>CNPJ/CPF</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -1835,6 +1863,10 @@ document.querySelectorAll('nav button').forEach(btn => {
     // com uma leitura que quase ninguém abre) — busca só quando a aba é
     // clicada, e só a primeira vez (cache em ultimoLogCarregado).
     if (btn.dataset.aba === 'historico' && !ultimoLogCarregado) carregarHistorico();
+    // Padronizar Nomes: busca só quando a aba é aberta (primeira vez) — a
+    // consulta lê a fila já pronta ("Renomear Pendente"), rápida mesmo sem
+    // ter rodado a varredura OCR nesta visita.
+    if (btn.dataset.aba === 'renomear' && !ultimoRenomearCarregado) carregarRenomear();
     // Arquivos de Dados: só faz sentido checar o Drive com edição
     // habilitada (o painel "Títulos (baixas)" fica escondido em modo
     // leitura, ver atualizarUiModoLeitura) — reconfere toda vez que a aba é
@@ -6639,6 +6671,89 @@ function renderizarHistorico() {
 }
 document.getElementById('busca-historico').addEventListener('input', renderizarHistorico);
 
+// ---------- Padronizar Nomes (Drive) ----------
+let ultimoRenomearCarregado = null; // null = ainda não buscou; [] = buscou e está vazio
+
+async function carregarRenomear() {
+  const tbody = document.querySelector('#tabela-renomear tbody');
+  tbody.innerHTML = '<tr><td colspan="5" style="color:var(--cinza)">Carregando…</td></tr>';
+  try {
+    const dados = await chamarServidor('carregarRenomeacoes', {});
+    ultimoRenomearCarregado = dados.itens || [];
+    renderizarRenomear();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--vermelho)">Falha ao carregar: ${e.message}</td></tr>`;
+  }
+}
+
+function renderizarRenomear() {
+  if (!ultimoRenomearCarregado) return;
+  const busca = document.getElementById('busca-renomear').value.trim().toLowerCase();
+  let linhas = ultimoRenomearCarregado;
+  if (busca) linhas = linhas.filter((l) => contemBusca([l.nomeAtual, l.nomeSugerido], busca));
+
+  document.querySelector('#tabela-renomear tbody').innerHTML = linhas.map((l) => `<tr>
+      <td title="${escaparHtml(l.nomeAtual)}">${escaparHtml(l.nomeAtual)}</td>
+      <td>
+        <input type="text" value="${escaparHtml(l.nomeSugerido)}" data-id-arquivo="${escaparHtml(l.idArquivo)}"
+          class="input-nome-renomear" ${MODO_LEITURA ? 'disabled' : ''} style="width:100%;box-sizing:border-box">
+        ${l.observacao ? `<div style="font-size:11px;color:var(--cinza)">${escaparHtml(l.observacao)}</div>` : ''}
+      </td>
+      <td>${escaparHtml(l.confianca)}</td>
+      <td>${escaparHtml(l.cnpjCpf)}</td>
+      <td style="white-space:nowrap">
+        ${MODO_LEITURA ? '' : `
+          <button class="btn small" onclick="aprovarRenomeacao('${l.idArquivo}')">✔ Aprovar</button>
+          <button class="btn secundario small" onclick="ignorarRenomeacao('${l.idArquivo}')">Ignorar</button>
+        `}
+      </td>
+    </tr>`).join('') || '<tr><td colspan="5" style="color:var(--cinza)">Nenhuma sugestão pendente — todos os arquivos já estão no padrão (ou clique em "Buscar arquivos fora do padrão" para varrer de novo).</td></tr>';
+  document.getElementById('total-renomear').textContent = `${linhas.length.toLocaleString('pt-BR')} pendente(s)`;
+}
+document.getElementById('busca-renomear').addEventListener('input', renderizarRenomear);
+
+async function aprovarRenomeacao(idArquivo) {
+  const input = document.querySelector(`.input-nome-renomear[data-id-arquivo="${idArquivo}"]`);
+  const nomeSugerido = input ? input.value.trim() : '';
+  if (!nomeSugerido) { toast('Preencha o nome sugerido antes de aprovar.'); return; }
+  try {
+    await chamarServidor('aprovarRenomeacao', { idArquivo, nomeSugerido });
+    ultimoRenomearCarregado = (ultimoRenomearCarregado || []).filter((l) => l.idArquivo !== idArquivo);
+    renderizarRenomear();
+    toast('Arquivo renomeado no Drive.');
+  } catch (e) {
+    toast('Erro ao renomear: ' + e.message);
+  }
+}
+
+async function ignorarRenomeacao(idArquivo) {
+  try {
+    await chamarServidor('ignorarRenomeacao', { idArquivo });
+    ultimoRenomearCarregado = (ultimoRenomearCarregado || []).filter((l) => l.idArquivo !== idArquivo);
+    renderizarRenomear();
+  } catch (e) {
+    toast('Erro: ' + e.message);
+  }
+}
+
+async function buscarArquivosForaDoPadrao() {
+  const btn = document.getElementById('btn-buscar-renomear');
+  btn.disabled = true;
+  const textoOriginal = btn.textContent;
+  btn.textContent = 'Buscando… (pode levar até 1 minuto)';
+  try {
+    const dados = await chamarServidor('identificarRenomeacoesAgora', {});
+    ultimoRenomearCarregado = dados.itens || [];
+    renderizarRenomear();
+    toast('Busca concluída.');
+  } catch (e) {
+    toast('Erro ao buscar: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+  }
+}
+
 // ---------- Conciliação Bancária ----------
 // Casamento por valor idêntico (tolerância de 1 centavo) entre um título já
 // baixado e um lançamento de DÉBITO do extrato — na mesma data (Conciliado)
@@ -7514,6 +7629,8 @@ function atualizarUiModoLeitura() {
   if (MODO_LEITURA) fecharModalLancamentoManual(); // voltar pra leitura com o pop-up aberto não deveria deixar editar
   const btnRemoverDuplicados = document.getElementById('btn-remover-duplicados');
   if (btnRemoverDuplicados) btnRemoverDuplicados.style.display = MODO_LEITURA ? 'none' : '';
+  document.getElementById('btn-buscar-renomear').style.display = MODO_LEITURA ? 'none' : '';
+  renderizarRenomear(); // esconde/mostra os botões Aprovar/Ignorar de cada linha conforme o modo
   const btnAcesso = document.getElementById('btn-acesso');
   // Perfil de acesso restrito: nem mostra a opção de tentar editar — sem
   // isso, alguém com o link do Sandro poderia tentar uma senha de edição

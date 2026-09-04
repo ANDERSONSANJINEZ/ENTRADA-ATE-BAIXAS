@@ -1100,6 +1100,10 @@ function doPost(e) {
     else if (acao === 'carregarLog') resultado = api_carregarLog(payload);
     else if (acao === 'salvarConciliacao') resultado = api_salvarConciliacao(payload);
     else if (acao === 'faturamentoPorMedicao') resultado = api_faturamentoPorMedicao(payload);
+    else if (acao === 'carregarRenomeacoes') resultado = api_carregarRenomeacoes(payload);
+    else if (acao === 'aprovarRenomeacao') resultado = api_aprovarRenomeacao(payload);
+    else if (acao === 'ignorarRenomeacao') resultado = api_ignorarRenomeacao(payload);
+    else if (acao === 'identificarRenomeacoesAgora') resultado = api_identificarRenomeacoesAgora(payload);
     else throw new Error('Ação desconhecida: ' + acao);
     resultado.ok = true;
     return ContentService
@@ -1613,6 +1617,110 @@ function aplicarRenomeacoesAprovadas() {
 // sozinha dali pra frente: identifica 1x/dia (novo arquivo fora do padrão) e
 // aplica as aprovações de hora em hora — sem precisar abrir o editor de novo
 // nem gastar nenhum token de IA na execução do dia a dia.
+// ---------- Ações da aba "Padronizar Nomes" na tela do app ----------
+// Mesma fila "Renomear Pendente" usada pelos gatilhos automáticos acima,
+// só que com ações imediatas pelo clique na tela — não depende de esperar
+// o gatilho de hora em hora nem de abrir a planilha.
+function localizarLinhaRenomear_(idArquivo) {
+  var sh = getSheetRenomear_();
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha < 2) return null;
+  var idCol = RENOMEAR_HEADERS.indexOf('ID Arquivo');
+  var statusCol = RENOMEAR_HEADERS.indexOf('Status');
+  var faixa = sh.getRange(2, 1, ultimaLinha - 1, RENOMEAR_HEADERS.length);
+  var dados = faixa.getValues();
+  for (var i = 0; i < dados.length; i++) {
+    if (String(dados[i][idCol]) === String(idArquivo) && dados[i][statusCol] === 'Pendente') {
+      return { faixa: faixa, dados: dados, indice: i };
+    }
+  }
+  return null;
+}
+
+// Leitura pura (sem senha) — só as sugestões ainda não tratadas ("Pendente"),
+// pra alimentar a tabela da aba "Padronizar Nomes".
+function api_carregarRenomeacoes(payload) {
+  var sh = getSheetRenomear_();
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha < 2) return { itens: [] };
+  var valores = sh.getRange(2, 1, ultimaLinha - 1, RENOMEAR_HEADERS.length).getValues();
+  var idCol = RENOMEAR_HEADERS.indexOf('ID Arquivo');
+  var nomeAtualCol = RENOMEAR_HEADERS.indexOf('Nome Atual');
+  var nomeSugeridoCol = RENOMEAR_HEADERS.indexOf('Nome Sugerido');
+  var confiancaCol = RENOMEAR_HEADERS.indexOf('Confiança');
+  var cnpjCpfCol = RENOMEAR_HEADERS.indexOf('CNPJ/CPF Encontrado');
+  var observacaoCol = RENOMEAR_HEADERS.indexOf('Observação');
+  var statusCol = RENOMEAR_HEADERS.indexOf('Status');
+  var itens = valores
+    .filter(function (l) { return l[statusCol] === 'Pendente'; })
+    .map(function (l) {
+      return {
+        idArquivo: l[idCol],
+        nomeAtual: l[nomeAtualCol],
+        nomeSugerido: l[nomeSugeridoCol],
+        confianca: l[confiancaCol],
+        cnpjCpf: l[cnpjCpfCol],
+        observacao: l[observacaoCol],
+      };
+    });
+  return { itens: itens };
+}
+
+function api_aprovarRenomeacao(payload) {
+  var nomeUsuario = validarAcessoEdicao_(payload);
+  var encontrado = localizarLinhaRenomear_(payload.idArquivo);
+  if (!encontrado) throw new Error('Sugestão não encontrada (pode já ter sido tratada por outra pessoa — atualize a lista).');
+  var nomeFinal = sanitizarNomeArquivo_(String(payload.nomeSugerido || '').trim());
+  if (!nomeFinal) throw new Error('Informe um nome de arquivo válido antes de aprovar.');
+  if (!/\.pdf$/i.test(nomeFinal)) nomeFinal += '.pdf';
+
+  var idCol = RENOMEAR_HEADERS.indexOf('ID Arquivo');
+  var nomeAtualCol = RENOMEAR_HEADERS.indexOf('Nome Atual');
+  var nomeSugeridoCol = RENOMEAR_HEADERS.indexOf('Nome Sugerido');
+  var statusCol = RENOMEAR_HEADERS.indexOf('Status');
+  var observacaoCol = RENOMEAR_HEADERS.indexOf('Observação');
+  var idArquivo = encontrado.dados[encontrado.indice][idCol];
+
+  DriveApp.getFileById(idArquivo).setName(nomeFinal); // única linha que de fato mexe no arquivo — só roda depois do clique em "Aprovar"
+
+  var nomeAntigo = encontrado.dados[encontrado.indice][nomeAtualCol];
+  encontrado.dados[encontrado.indice][nomeSugeridoCol] = nomeFinal;
+  encontrado.dados[encontrado.indice][statusCol] = 'Renomeado';
+  encontrado.dados[encontrado.indice][observacaoCol] = 'Renomeado por ' + nomeUsuario + ' em ' +
+    Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') + ' (via tela)';
+  encontrado.faixa.setValues(encontrado.dados);
+
+  registrarLog_(nomeUsuario, 'Renomear arquivo (Drive)', nomeAntigo + ' → ' + nomeFinal);
+  return { ok: true };
+}
+
+function api_ignorarRenomeacao(payload) {
+  var nomeUsuario = validarAcessoEdicao_(payload);
+  var encontrado = localizarLinhaRenomear_(payload.idArquivo);
+  if (!encontrado) throw new Error('Sugestão não encontrada (pode já ter sido tratada por outra pessoa — atualize a lista).');
+
+  var nomeAtualCol = RENOMEAR_HEADERS.indexOf('Nome Atual');
+  var statusCol = RENOMEAR_HEADERS.indexOf('Status');
+  var observacaoCol = RENOMEAR_HEADERS.indexOf('Observação');
+  encontrado.dados[encontrado.indice][statusCol] = 'Ignorado';
+  encontrado.dados[encontrado.indice][observacaoCol] = 'Ignorado por ' + nomeUsuario + ' em ' +
+    Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+  encontrado.faixa.setValues(encontrado.dados);
+
+  registrarLog_(nomeUsuario, 'Ignorar sugestão de renomeação (Drive)', encontrado.dados[encontrado.indice][nomeAtualCol]);
+  return { ok: true };
+}
+
+// Dispara a varredura na hora, pelo botão da tela (mesma
+// identificarArquivosForaDoPadrao usada pelo gatilho diário) — exige edição
+// habilitada porque grava sugestões novas na planilha. Pode levar até cerca
+// de 1 minuto (lote de até RENOMEAR_LIMITE_OCR_POR_EXECUCAO arquivos com OCR).
+function api_identificarRenomeacoesAgora(payload) {
+  validarAcessoEdicao_(payload);
+  identificarArquivosForaDoPadrao();
+  return api_carregarRenomeacoes();
+}
+
 function configurarGatilhosRenomeacao() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     var fn = t.getHandlerFunction();
