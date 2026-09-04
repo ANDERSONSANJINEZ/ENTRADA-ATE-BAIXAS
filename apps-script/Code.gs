@@ -1313,12 +1313,25 @@ var RENOMEAR_HEADERS = [
 ];
 var RENOMEAR_LIMITE_OCR_POR_EXECUCAO = 25; // teto de conversões OCR por execução, pra nunca estourar o tempo máximo de um gatilho
 
-// Nome já no padrão -> TIPO/COMPROVANTE conhecido, seguido de algo, seguido
-// de um código de 8 ou 9 dígitos colado no ".pdf" — casa com todos os
-// exemplos reais (ex.: "NFS 24610 COPHEL EXPRESS 26846738.pdf",
-// "COMPROVANTE 1793 VOUDLOG TRANS 037295834.pdf"). Arquivo que já bate aqui
-// nunca precisa de OCR — só os fora desse padrão entram na fila.
-var REGEX_NOME_PADRAO_ = /^(COMPROVANTE|NF|NFS|NF3E|NFAG|DACTE|ND|BOL|FAT|FOL|FGTS|DARF|DAM|REC)\s+\S.*\s(\d{8,9})\.pdf$/i;
+// TIPO/COMPROVANTE reconhecidos — mesma lista usada em vários pontos deste
+// módulo (checagem de "já no padrão", inferência de Tipo a partir do nome
+// atual, prefixos aceitos pela Conciliação Bancária e api_buscarAnexoDrive).
+var TIPOS_DOCUMENTO_RECONHECIDOS_ = ['COMPROVANTE', 'NF', 'NFS', 'NF3E', 'NFAG', 'DACTE', 'ND', 'BOL', 'FAT', 'FOL', 'FGTS', 'DARF', 'DAM', 'REC'];
+var REGEX_TIPO_INICIAL_ = new RegExp('^(' + TIPOS_DOCUMENTO_RECONHECIDOS_.join('|') + ')\\s+(.+)\\.pdf$', 'i');
+
+// Nome já no padrão -> começa com TIPO/COMPROVANTE conhecido E tem um
+// código de 8 ou 9 dígitos (CNPJ/CPF) como palavra isolada em algum lugar
+// do nome — NÃO precisa ser a última coisa antes do ".pdf": é normal o
+// nome trazer informação adicional depois do código (ex.: "BOL 4754 RESERVE
+// IMOBILIARIA 27682961 ALUGUEL (MARCELO) R HUMBERTO HOLANDA CASSUNDA
+// 322.pdf" já está no padrão mínimo exigido — Tipo+Nº+Razão+Código —, só
+// tem mais detalhe do imóvel depois). Arquivo que já bate aqui nunca
+// precisa de OCR — só os fora desse padrão mínimo entram na fila.
+function nomeArquivoJaNoPadrao_(nome) {
+  var m = REGEX_TIPO_INICIAL_.exec(String(nome || ''));
+  if (!m) return false;
+  return /(^|\D)\d{8,9}(\D|$)/.test(m[2]);
+}
 
 function getSheetRenomear_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1421,8 +1434,27 @@ function extrairTextoPdfOcr_(idArquivo, nomeArquivo) {
   // origem — resource só precisa do título.
   var recurso = { title: 'OCR temporário — ' + nomeArquivo };
   var arquivoOriginal = DriveApp.getFileById(idArquivo);
-  var docConvertido = Drive.Files.insert(recurso, arquivoOriginal.getBlob(),
-    Object.assign({ ocr: true, ocrLanguage: 'pt', convert: true }, OPCOES_TEAM_DRIVE_));
+  var blob = arquivoOriginal.getBlob();
+  var opcoesInsert = Object.assign({ ocr: true, ocrLanguage: 'pt', convert: true }, OPCOES_TEAM_DRIVE_);
+
+  // O OCR do Drive tem uma cota curta por minuto ("User rate limit
+  // exceeded for OCR") — processar vários arquivos seguidos na mesma
+  // execução estoura essa cota fácil. Tenta de novo (com espera maior a
+  // cada vez) só quando o erro for claramente de limite de uso; qualquer
+  // outro erro (PDF corrompido, sem permissão etc.) desiste na hora, sem
+  // ficar tentando à toa.
+  var docConvertido;
+  var tentativas = 0;
+  while (true) {
+    try {
+      docConvertido = Drive.Files.insert(recurso, blob, opcoesInsert);
+      break;
+    } catch (e) {
+      tentativas++;
+      if (tentativas >= 3 || !/rate limit/i.test(e.message)) throw e;
+      Utilities.sleep(5000 * tentativas); // 5s, depois 10s
+    }
+  }
   try {
     return DocumentApp.openById(docConvertido.id).getBody().getText();
   } finally {
@@ -1473,8 +1505,22 @@ var PALAVRAS_TIPO_DOCUMENTO_ = [
   [/NOTA\s+FISCAL/i, 'NF'],
 ];
 
-function inferirTipoDocumento_(texto, ehPastaComprovante) {
+// O nome atual do arquivo já costuma começar com o Tipo certo (só falta o
+// resto do padrão) — é um sinal bem mais confiável do que tentar adivinhar
+// via palavra-chave no texto do OCR, que aparece solta em qualquer lugar
+// do documento (rodapé, cláusula, texto de outro serviço citado) e já
+// causou Tipo errado em boleto/conta de concessionária sem nada a ver
+// (ex.: "conhecimento de transporte" citado à toa virando DACTE). Só cai
+// pro OCR quando o nome atual não começa com nenhum Tipo reconhecido.
+function inferirTipoDoNomeAtual_(nomeAtual) {
+  var m = REGEX_TIPO_INICIAL_.exec(String(nomeAtual || ''));
+  return m ? m[1].toUpperCase() : null;
+}
+
+function inferirTipoDocumento_(texto, ehPastaComprovante, nomeAtual) {
   if (ehPastaComprovante) return 'COMPROVANTE'; // pasta "16 COMPROVANTE PAGTO" é sempre comprovante de pagamento
+  var doNome = inferirTipoDoNomeAtual_(nomeAtual);
+  if (doNome) return doNome;
   for (var i = 0; i < PALAVRAS_TIPO_DOCUMENTO_.length; i++) {
     if (PALAVRAS_TIPO_DOCUMENTO_[i][0].test(texto)) return PALAVRAS_TIPO_DOCUMENTO_[i][1];
   }
@@ -1499,6 +1545,19 @@ function inferirNumeroDocumento_(texto) {
     if (m) return removerZerosEsquerda_(m[1]);
   }
   return null;
+}
+
+// Reforço quando o OCR não achou nenhum rótulo de Nº de documento (comum em
+// boleto/conta de concessionária, que não usam esse rótulo) — o nome atual
+// já costuma trazer Tipo seguido do Nº do documento logo em seguida (ex.:
+// "BOL 4754 RESERVE IMOBILIARIA..."), então esse número é um palpite melhor
+// do que deixar o campo vazio. Só usado como ÚLTIMO recurso — ver chamada
+// em montarSugestaoRenomeacao_.
+function inferirNumeroDoNomeAtual_(nomeAtual) {
+  var m = REGEX_TIPO_INICIAL_.exec(String(nomeAtual || ''));
+  if (!m) return null;
+  var mNumero = /^(\d{1,15})\b/.exec(m[2].trim());
+  return mNumero ? removerZerosEsquerda_(mNumero[1]) : null;
 }
 
 // Rótulos comuns pra achar a razão social/nome de quem emitiu ou recebeu —
@@ -1545,8 +1604,8 @@ function montarSugestaoRenomeacao_(idArquivo, nomeAtual, ehPastaComprovante) {
     return { nomeSugerido: '', confianca: 'revisar', cnpjCpf: '', observacao: 'Falha ao ler o PDF (OCR): ' + e.message };
   }
   var docFiscal = extrairCnpjCpf_(texto);
-  var tipo = inferirTipoDocumento_(texto, ehPastaComprovante);
-  var numero = inferirNumeroDocumento_(texto);
+  var tipo = inferirTipoDocumento_(texto, ehPastaComprovante, nomeAtual);
+  var numero = inferirNumeroDocumento_(texto) || inferirNumeroDoNomeAtual_(nomeAtual);
   var razao = inferirRazaoSocial_(texto);
 
   var partes = [tipo, numero, razao ? sanitizarNomeArquivo_(razao) : null, docFiscal ? docFiscal.codigo : null]
@@ -1583,11 +1642,14 @@ function identificarArquivosForaDoPadrao() {
       var pdfs = listarPdfsDaPasta_(todasAsPastas[i]);
       for (var j = 0; j < pdfs.length && processados < RENOMEAR_LIMITE_OCR_POR_EXECUCAO; j++) {
         var arq = pdfs[j];
-        if (REGEX_NOME_PADRAO_.test(arq.nome)) continue; // já está no padrão — nem precisa de OCR
+        if (nomeArquivoJaNoPadrao_(arq.nome)) continue; // já está no padrão — nem precisa de OCR
         var existente = jaNaFila[arq.id];
         if (existente === true) continue; // já sugerido de verdade (ou já renomeado/ignorado) antes
         if (existente && existente.reprocessar) linhasParaApagar.push(existente.linhaPlanilha);
 
+        // Espaça as chamadas de OCR (cota curta por minuto no Drive) — não
+        // espera antes da primeira do lote, só entre uma e outra.
+        if (processados > 0) Utilities.sleep(1200);
         var sugestao = montarSugestaoRenomeacao_(arq.id, arq.nome, ehPastaComprovante);
         processados++;
         jaNaFila[arq.id] = true;
