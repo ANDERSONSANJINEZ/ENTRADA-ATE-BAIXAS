@@ -1412,15 +1412,15 @@ function listarPdfsDaPasta_(pastaId) {
 // escaneado/print de tela (comprovante de banco, comum nas pastas
 // monitoradas). Não usa nenhuma IA/LLM — é OCR nativo do Google Drive.
 function extrairTextoPdfOcr_(idArquivo, nomeArquivo) {
-  var recurso = {
-    title: 'OCR temporário — ' + nomeArquivo,
-    mimeType: MimeType.GOOGLE_DOCS,
-  };
+  // NÃO declarar mimeType: MimeType.GOOGLE_DOCS aqui — isso faz o Drive
+  // achar que o conteúdo enviado JÁ É um Google Doc (e não um PDF cru), e a
+  // checagem de OCR rejeita com "OCR is not supported for files of type
+  // application/vnd.google-apps.document" (não é o PDF sendo enviado, é
+  // esse mimeType de DESTINO que a própria chamada declarou). O tipo final
+  // (Google Docs) já vem de convert:true sozinho, a partir do PDF de
+  // origem — resource só precisa do título.
+  var recurso = { title: 'OCR temporário — ' + nomeArquivo };
   var arquivoOriginal = DriveApp.getFileById(idArquivo);
-  // convert:true é obrigatório aqui — sem ele o Drive não converte o PDF de
-  // verdade pro Google Docs (só grava o metadado pedindo esse tipo), e o
-  // pedido de OCR falha com "OCR is not supported for files of type
-  // application/vnd.google-apps.document" (o tipo de DESTINO, não do PDF).
   var docConvertido = Drive.Files.insert(recurso, arquivoOriginal.getBlob(),
     Object.assign({ ocr: true, ocrLanguage: 'pt', convert: true }, OPCOES_TEAM_DRIVE_));
   try {
