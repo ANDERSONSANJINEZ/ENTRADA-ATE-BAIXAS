@@ -1322,7 +1322,7 @@ var RENOMEAR_LIMITE_OCR_POR_EXECUCAO = 25; // teto de conversões OCR por execu�
 // reprocessável (ver idsJaNaFilaRenomear_), então a fila se autocorrige
 // sozinha na próxima varredura — ninguém precisa lembrar de rodar
 // limparFilaRenomearPendentes toda vez que a extração é ajustada.
-var VERSAO_LOGICA_EXTRACAO_ = 2;
+var VERSAO_LOGICA_EXTRACAO_ = 3;
 
 // TIPO/COMPROVANTE reconhecidos — mesma lista usada em vários pontos deste
 // módulo (checagem de "já no padrão", inferência de Tipo a partir do nome
@@ -1612,6 +1612,27 @@ function inferirNumeroDoNomeAtual_(nomeAtual) {
   return mNumero ? removerZerosEsquerda_(mNumero[1]) : null;
 }
 
+// Muito comum o nome atual já trazer Tipo+Nº+Razão Social certinhos, só
+// faltando o Código do Fornecedor no final (ex.: "NF 28456 JOSE DE
+// ARIMATEIA.pdf") — nesse caso a Razão Social do próprio nome é bem mais
+// confiável do que procurar de novo no texto do OCR, que às vezes pega o
+// nome de outra parte/pessoa citada no documento por engano. Só aproveita
+// quando o que sobra depois do Nº parece mesmo só um nome (sem vírgula —
+// sinal de endereço tipo "RUA X, 123" — sem outro número de 5+ dígitos
+// solto no meio — CEP, apto etc. — e de tamanho razoável); nesses casos
+// mais confusos, deixa pro OCR tentar (inferirRazaoSocial_) mesmo.
+function inferirRazaoSocialDoNomeAtual_(nomeAtual) {
+  var m = REGEX_TIPO_INICIAL_.exec(String(nomeAtual || ''));
+  if (!m) return null;
+  var resto = m[2].replace(/\.pdf$/i, '').trim();
+  var mNumero = /^\d{1,15}\s*/.exec(resto);
+  if (!mNumero) return null;
+  resto = resto.slice(mNumero[0].length).trim();
+  if (!resto || resto.length > 50 || /,/.test(resto) || /\d{5,}/.test(resto)) return null;
+  var nome = sanitizarNomeArquivo_(resto);
+  return nome.length >= 3 ? nome.toUpperCase() : null;
+}
+
 // Rótulos comuns pra achar a razão social/nome de quem emitiu ou recebeu —
 // pega o resto da linha depois do rótulo, corta em tamanho razoável e limpa
 // caracteres que não fazem sentido num nome de arquivo.
@@ -1666,7 +1687,11 @@ function montarSugestaoRenomeacao_(idArquivo, nomeAtual, ehPastaComprovante) {
   var docFiscal = extrairCnpjCpf_(texto);
   var tipo = inferirTipoDocumento_(texto, ehPastaComprovante, nomeAtual);
   var numero = inferirNumeroDocumento_(texto) || inferirNumeroDoNomeAtual_(nomeAtual);
-  var razao = inferirRazaoSocial_(texto);
+  // Prioriza a Razão Social que já está no nome atual (quando dá pra
+  // aproveitar com segurança) sobre a busca no texto do OCR — é mais
+  // confiável nesses casos e evita o texto do documento contaminar com o
+  // nome de outra parte citada nele.
+  var razao = inferirRazaoSocialDoNomeAtual_(nomeAtual) || inferirRazaoSocial_(texto);
 
   var partes = [tipo, numero, razao ? sanitizarNomeArquivo_(razao) : null, docFiscal ? docFiscal.codigo : null]
     .filter(function (p) { return p; });
