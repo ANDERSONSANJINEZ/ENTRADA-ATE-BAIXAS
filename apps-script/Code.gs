@@ -1322,7 +1322,7 @@ var RENOMEAR_LIMITE_OCR_POR_EXECUCAO = 25; // teto de conversões OCR por execu�
 // reprocessável (ver idsJaNaFilaRenomear_), então a fila se autocorrige
 // sozinha na próxima varredura — ninguém precisa lembrar de rodar
 // limparFilaRenomearPendentes toda vez que a extração é ajustada.
-var VERSAO_LOGICA_EXTRACAO_ = 5;
+var VERSAO_LOGICA_EXTRACAO_ = 6;
 
 // TIPO/COMPROVANTE reconhecidos — mesma lista usada em vários pontos deste
 // módulo (checagem de "já no padrão", inferência de Tipo a partir do nome
@@ -1686,12 +1686,20 @@ function inferirRazaoSocial_(texto) {
     while ((m = regex.exec(texto)) !== null) {
       var nome = m[1]
         .replace(/CNPJ.*$/i, '').replace(/CPF.*$/i, '')
+        // Corta CNPJ colado no COMEÇO, antes do nome, sem rótulo (comum no
+        // Banco Inter: "Beneficiário\n54.595.488/0001-76 - ALIVE IMOVEIS
+        // LTDA" -> só "ALIVE IMOVEIS LTDA").
+        .replace(/^\s*\d[\d.\/\- ]{10,19}\d\s*-\s*/, '')
         // Corta parênteses com número dentro em qualquer posição — comum em
         // boleto ter o CNPJ colado ali sem rótulo nenhum (ex.: "RESERVE
         // CORRETORA DE IMOVEIS LTDA (27.682.961 0001-80) Avenida...").
         .replace(/\([^()]*\d[^()]*\)/g, '')
-        // Corta a partir da 1ª vírgula — início de endereço ("..., 326
-        // Sala")/complemento, nunca faz parte do nome da empresa.
+        // Corta a partir do início de um endereço colado logo depois do
+        // nome, sem vírgula nenhuma entre os dois (ex.: "...LTDA Avenida
+        // Ministro Jose Americo, 326") — e, reforço, a partir da 1ª
+        // vírgula que sobrar (endereço/complemento nunca faz parte do
+        // nome da empresa).
+        .replace(/\s+(?:Avenida|Av\.|Rua|R\.|Alameda|Al\.|Travessa|Rodovia|Pra[çc]a)\b.*$/i, '')
         .replace(/,.*$/, '')
         .replace(/[\\\/:*?"<>|]/g, ' ')
         .replace(/\s+/g, ' ')
