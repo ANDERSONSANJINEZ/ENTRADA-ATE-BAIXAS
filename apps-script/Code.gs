@@ -1310,8 +1310,19 @@ function configurarGatilhoDiario() {
 var RENOMEAR_HEADERS = [
   'Data Detecção', 'Pasta', 'ID Arquivo', 'Nome Atual', 'Nome Sugerido',
   'Confiança', 'CNPJ/CPF Encontrado', 'Aprovar', 'Status', 'Observação',
+  'Versão Lógica',
 ];
 var RENOMEAR_LIMITE_OCR_POR_EXECUCAO = 25; // teto de conversões OCR por execução, pra nunca estourar o tempo máximo de um gatilho
+
+// Sobe 1 número cada vez que a lógica de extração (Tipo/Nº/Razão
+// Social/CNPJ-CPF em montarSugestaoRenomeacao_ e funções auxiliares) muda de
+// um jeito que valha a pena reprocessar sugestões antigas — ex.: a correção
+// que passou a nunca escolher o CONSÓRCIO como se fosse o fornecedor. Uma
+// linha "Pendente" gravada com uma versão mais antiga é tratada como
+// reprocessável (ver idsJaNaFilaRenomear_), então a fila se autocorrige
+// sozinha na próxima varredura — ninguém precisa lembrar de rodar
+// limparFilaRenomearPendentes toda vez que a extração é ajustada.
+var VERSAO_LOGICA_EXTRACAO_ = 2;
 
 // TIPO/COMPROVANTE reconhecidos — mesma lista usada em vários pontos deste
 // módulo (checagem de "já no padrão", inferência de Tipo a partir do nome
@@ -1340,17 +1351,29 @@ function getSheetRenomear_() {
     sh = ss.insertSheet('Renomear Pendente');
     sh.appendRow(RENOMEAR_HEADERS);
     sh.setFrozenRows(1);
+    return sh;
+  }
+  // Mesma lógica de getSheet_ (ERP/Manual): se RENOMEAR_HEADERS ganhou
+  // coluna nova desde que esta aba foi criada (ex.: "Versão Lógica"),
+  // completa o cabeçalho sem mexer nas linhas já gravadas.
+  if (sh.getLastColumn() < RENOMEAR_HEADERS.length) {
+    sh.getRange(1, 1, 1, RENOMEAR_HEADERS.length).setValues([RENOMEAR_HEADERS]);
   }
   return sh;
 }
 
-// IDs já presentes na fila (pendente com sugestão de verdade, ou já
-// tratado) — evita reprocessar/reenfileirar o mesmo arquivo em toda
-// execução do gatilho diário. Uma linha "Pendente" com Nome Sugerido
-// VAZIO (falha ao ler o PDF — OCR fora do ar, arquivo corrompido etc.) não
-// entra nesse bloqueio: fica marcada como "reprocessável", pra a próxima
-// varredura tentar de novo e substituir a linha velha, em vez de deixar a
-// falha travada na fila pra sempre.
+// IDs já presentes na fila (pendente com sugestão de verdade E gerada pela
+// versão atual da lógica de extração, ou já tratado) — evita
+// reprocessar/reenfileirar o mesmo arquivo em toda execução do gatilho
+// diário. Uma linha "Pendente" entra como "reprocessável" (a próxima
+// varredura tenta de novo e substitui a linha velha) em dois casos: Nome
+// Sugerido VAZIO (falha ao ler o PDF — OCR fora do ar, arquivo corrompido
+// etc.) OU gravada com uma "Versão Lógica" mais antiga que
+// VERSAO_LOGICA_EXTRACAO_ (a extração mudou desde então — a sugestão pode
+// estar desatualizada/errada pelo jeito antigo, ex.: apontando o consórcio
+// como fornecedor antes da correção). Uma linha sem "Versão Lógica"
+// nenhuma (gravada antes dessa coluna existir) conta como versão 0 —
+// sempre mais antiga que a atual, sempre reprocessável.
 function idsJaNaFilaRenomear_() {
   var sh = getSheetRenomear_();
   var ultimaLinha = sh.getLastRow();
@@ -1358,13 +1381,17 @@ function idsJaNaFilaRenomear_() {
   var idCol = RENOMEAR_HEADERS.indexOf('ID Arquivo');
   var nomeSugeridoCol = RENOMEAR_HEADERS.indexOf('Nome Sugerido');
   var statusCol = RENOMEAR_HEADERS.indexOf('Status');
+  var versaoCol = RENOMEAR_HEADERS.indexOf('Versão Lógica');
   var valores = sh.getRange(2, 1, ultimaLinha - 1, RENOMEAR_HEADERS.length).getValues();
   var set = {};
   valores.forEach(function (l, i) {
     var id = l[idCol];
     if (!id) return;
-    var falhouAntes = l[statusCol] === 'Pendente' && !String(l[nomeSugeridoCol] || '').trim();
-    set[id] = falhouAntes ? { reprocessar: true, linhaPlanilha: i + 2 } : true;
+    var pendente = l[statusCol] === 'Pendente';
+    var semSugestao = !String(l[nomeSugeridoCol] || '').trim();
+    var versaoDesatualizada = Number(l[versaoCol] || 0) < VERSAO_LOGICA_EXTRACAO_;
+    var reprocessar = pendente && (semSugestao || versaoDesatualizada);
+    set[id] = reprocessar ? { reprocessar: true, linhaPlanilha: i + 2 } : true;
   });
   return set;
 }
@@ -1712,6 +1739,7 @@ function identificarArquivosForaDoPadrao_semTrava_() {
         linhasNovas.push([
           agora, pastaRaizId, arq.id, arq.nome, sugestao.nomeSugerido,
           sugestao.confianca, sugestao.cnpjCpf, false, 'Pendente', sugestao.observacao,
+          VERSAO_LOGICA_EXTRACAO_,
         ]);
       }
     }
@@ -1901,13 +1929,14 @@ function configurarGatilhosRenomeacao() {
   ScriptApp.newTrigger('aplicarRenomeacoesAprovadas').timeBased().everyHours(1).create();
 }
 
-// Rode esta função UMA VEZ no editor (mesmo jeito de configurarGatilhoDiario)
-// só quando quiser jogar fora todas as sugestões ainda "Pendente" e deixar a
-// próxima varredura recomeçar do zero — útil depois de uma melhoria na
-// extração (Tipo/Nº/Razão Social/CNPJ), pra não ficar com sugestões antigas
-// (geradas pela versão anterior do código, potencialmente erradas) misturadas
-// com as novas. Nunca mexe numa linha já "Renomeado" (é arquivo de verdade
-// já renomeado no Drive, não uma sugestão) nem "Ignorado".
+// Desde que existe VERSAO_LOGICA_EXTRACAO_, a fila já se autocorrige sozinha
+// toda vez que a extração melhora (ver idsJaNaFilaRenomear_) — normalmente
+// NÃO é preciso rodar esta função. Ela continua aqui só como atalho manual
+// pra forçar tudo a ser refeito na hora (sem esperar a próxima varredura) ou
+// pra limpar sugestões velhas por qualquer outro motivo. Rode pelo editor
+// (mesmo jeito de configurarGatilhoDiario). Nunca mexe numa linha já
+// "Renomeado" (é arquivo de verdade já renomeado no Drive, não uma
+// sugestão) nem "Ignorado".
 function limparFilaRenomearPendentes() {
   var sh = getSheetRenomear_();
   var ultimaLinha = sh.getLastRow();

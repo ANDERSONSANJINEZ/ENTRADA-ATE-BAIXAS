@@ -218,10 +218,14 @@ mesmo tempo. Se quiser cancelar uma cadeia em andamento, apague o gatilho
 `identificarArquivosForaDoPadrao` pendente na tela de **Gatilhos** (ícone de
 relógio) do editor.
 
-**Depois de atualizar o código de extração:** rode `limparFilaRenomearPendentes`
-uma vez pelo editor — apaga só as sugestões ainda "Pendente" (nada que já foi
-renomeado é afetado) pra não misturar sugestão antiga, gerada pela versão
-anterior do código, com a nova.
+**Depois de atualizar o código de extração:** não precisa fazer nada manual —
+toda sugestão "Pendente" carrega a versão da lógica que a gerou
+(`VERSAO_LOGICA_EXTRACAO_` em `Code.gs`); quando essa versão sobe (porque a
+extração foi corrigida/melhorada), a próxima varredura já reconhece sozinha
+que aquelas sugestões estão desatualizadas e as refaz do zero, sem misturar
+sugestão antiga com a nova. `limparFilaRenomearPendentes` continua disponível
+pelo editor como atalho manual (força tudo a ser refeito na hora, sem esperar
+a próxima varredura), mas normalmente não é preciso rodá-la.
 
 **Uso do dia a dia:** abra a aba **Padronizar Nomes** no app (ou **Renomear
 Pendente** direto na planilha) de vez em quando — cada linha mostra o nome
