@@ -1322,7 +1322,7 @@ var RENOMEAR_LIMITE_OCR_POR_EXECUCAO = 25; // teto de conversões OCR por execu�
 // reprocessável (ver idsJaNaFilaRenomear_), então a fila se autocorrige
 // sozinha na próxima varredura — ninguém precisa lembrar de rodar
 // limparFilaRenomearPendentes toda vez que a extração é ajustada.
-var VERSAO_LOGICA_EXTRACAO_ = 4;
+var VERSAO_LOGICA_EXTRACAO_ = 5;
 
 // TIPO/COMPROVANTE reconhecidos — mesma lista usada em vários pontos deste
 // módulo (checagem de "já no padrão", inferência de Tipo a partir do nome
@@ -1500,7 +1500,11 @@ function extrairTextoPdfOcr_(idArquivo, nomeArquivo) {
 // continua procurando outro) quanto em inferirRazaoSocial_ (pula esse
 // nome, continua procurando outro rótulo).
 var CNPJ_CONSORCIO_ = '61596238000116';
-var REGEX_NOME_CONSORCIO_ = /CONSORCIO\s+VLT\s*A?ERO\s*CASTEL[AÃ]O/i;
+// Tolerante ao meio da palavra (ex.: real "CONSORCIO VLT ARTOCASTELAO" —
+// variação/erro de digitação de quem emitiu o documento, "AERO" virou
+// "ARTO") — ancorado em "CONSORCIO VLT" (bem específico) + "CASTEL[AÃ]O"
+// no final, tolerando qualquer coisa no meio.
+var REGEX_NOME_CONSORCIO_ = /CONSORCIO\s+VLT[\s\S]{0,20}CASTEL[AÃ]O/i;
 
 // Extrai CNPJ (14 dígitos -> código = 8 primeiros) ou, na ausência de CNPJ,
 // CPF (11 dígitos -> código = 9 primeiros) do texto do documento. Procura
@@ -1513,7 +1517,12 @@ function extrairCnpjCpf_(texto) {
   var t = String(texto || '');
   var m;
 
-  var regexCnpjRotulo = /CNPJ[^\d]{0,10}(\d[\d.\/-]{12,18}\d)/gi;
+  // Gap maior (25, não 10) pra cobrir rótulos compostos comuns na NFS-e
+  // nacional (ex.: "CNPJ / CPF / NIF") e variações de espaçamento do OCR
+  // entre o rótulo e o número de verdade.
+  // Aceita espaço no lugar da barra (ex.: "10.260.249 0003-51") — comum em
+  // DANFE convertido por OCR, que às vezes perde a "/" da caixa de CNPJ.
+  var regexCnpjRotulo = /CNPJ[^\d]{0,25}(\d[\d.\/\- ]{12,18}\d)/gi;
   while ((m = regexCnpjRotulo.exec(t)) !== null) {
     var digitosRotulo = m[1].replace(/\D/g, '');
     if (digitosRotulo.length === 14 && digitosRotulo !== CNPJ_CONSORCIO_) {
@@ -1582,19 +1591,25 @@ function inferirTipoDocumento_(texto, ehPastaComprovante, nomeAtual) {
 // Rótulos comuns em NFS-e/boleto/comprovante pra achar o Nº do documento —
 // tenta cada um, na ordem, e usa o primeiro que achar um número junto.
 var ROTULOS_NUMERO_DOCUMENTO_ = [
-  /N[úu]mero\s+da\s+Nota[^\d]{0,10}(\d{1,15})/i,
-  /N[°ºo]\s*\.?\s*da\s+Nota[^\d]{0,10}(\d{1,15})/i,
-  /Nota\s+Fiscal\s+n[°ºo]?\.?[^\d]{0,10}(\d{1,15})/i,
-  /Fatura\s+n[°ºo]?\.?[^\d]{0,10}(\d{1,15})/i,
-  /Nosso\s+N[úu]mero[^\d]{0,10}(\d{1,15})/i,
-  /N[°ºo]\s*\.?\s*Documento[^\d]{0,10}(\d{1,15})/i,
-  /N[°ºo]\s*\.?\s*do\s+Documento[^\d]{0,10}(\d{1,15})/i,
+  /N[úu]mero\s+da\s+Nota[^\d]{0,10}(\d[\d.]{0,16}\d|\d)/i,
+  /N[úu]mero\s+da\s+NFS-?e[^\d]{0,10}(\d[\d.]{0,16}\d|\d)/i, // NFS-e nacional (DANFSe)
+  /N[°ºo]\s*\.?\s*da\s+Nota[^\d]{0,10}(\d[\d.]{0,16}\d|\d)/i,
+  /Nota\s+Fiscal\s+n[°ºo]?\.?[^\d]{0,10}(\d[\d.]{0,16}\d|\d)/i,
+  /Fatura\s+n[°ºo]?\.?[^\d]{0,10}(\d[\d.]{0,16}\d|\d)/i,
+  /Nosso\s+N[úu]mero[^\d]{0,10}(\d[\d.]{0,16}\d|\d)/i,
+  /N[°ºo]\s*\.?\s*Documento[^\d]{0,10}(\d[\d.]{0,16}\d|\d)/i,
+  /N[°ºo]\s*\.?\s*do\s+Documento[^\d]{0,10}(\d[\d.]{0,16}\d|\d)/i,
+  // DANFE clássico: caixa "Nº.XXXXXX" / "Nº XXX.XXX.XXX" solta, sem
+  // nenhuma palavra além do próprio "Nº" — só "SÉRIE"/"FL." aparece perto
+  // (na mesma caixa do cabeçalho), então usa isso como âncora de segurança
+  // pra não confundir com qualquer outro "Nº" solto no resto do documento.
+  /N[°ºo]\.?\s*(\d[\d.]{0,16}\d|\d)[\s\S]{0,30}?(?:S[ÉE]RIE|FL\.)/i,
 ];
 
 function inferirNumeroDocumento_(texto) {
   for (var i = 0; i < ROTULOS_NUMERO_DOCUMENTO_.length; i++) {
     var m = texto.match(ROTULOS_NUMERO_DOCUMENTO_[i]);
-    if (m) return removerZerosEsquerda_(m[1]);
+    if (m) return removerZerosEsquerda_(m[1].replace(/\D/g, ''));
   }
   return null;
 }
@@ -1636,12 +1651,26 @@ function inferirRazaoSocialDoNomeAtual_(nomeAtual) {
 // Rótulos comuns pra achar a razão social/nome de quem emitiu ou recebeu —
 // pega o resto da linha depois do rótulo, corta em tamanho razoável e limpa
 // caracteres que não fazem sentido num nome de arquivo.
+// "Razão Social"/"Nome Empresarial" vêm ANTES de "Prestador" de propósito:
+// "PRESTADOR (DE SERVIÇOS)" muitas vezes é só o título da seção (sem dois
+// pontos, sem valor colado), com o rótulo de verdade ("Razão Social" etc.)
+// numa linha separada logo abaixo — testando "Prestador" primeiro, ele
+// engolia o título inteiro e capturava a PRÓXIMA LINHA (o rótulo seguinte,
+// tipo "Razão Social") como se fosse o nome da empresa.
 var ROTULOS_RAZAO_SOCIAL_ = [
-  /Prestador(?:\s+de\s+Servi[çc]os)?[:\s]+([^\n]{3,80})/i,
   /Raz[ãa]o\s+Social[:\s]+([^\n]{3,80})/i,
   /Nome\s*\/\s*Raz[ãa]o\s+Social[:\s]+([^\n]{3,80})/i,
+  /Nome\s*\/\s*Nome\s+Empresarial[:\s]+([^\n]{3,80})/i, // NFS-e nacional (DANFSe)
+  /Nome\s+Empresarial[:\s]+([^\n]{3,80})/i,
+  // "Prestador" só conta com dois-pontos explícito ("Prestador: NOME") —
+  // sem isso, corria o mesmo risco de engolir um título de seção sem valor
+  // (ex.: "PRESTADOR / FORNECEDOR", "PRESTADOR DE SERVIÇOS" sem dois
+  // pontos) e capturar lixo do que vem depois.
+  /Prestador(?:\s+de\s+Servi[çc]os)?\s*:\s*([^\n]{3,80})/i,
   /Emitente[:\s]+([^\n]{3,80})/i,
-  /Benefici[áa]rio[:\s]+([^\n]{3,80})/i,
+  // "Beneficiário" sozinho ou com um qualificador (ex.: "Beneficiário
+  // final:", comum em boleto com "Beneficiário final" x "Cedente").
+  /Benefici[áa]rio(?:\s+\w+)?[:\s]+([^\n]{3,80})/i,
   /Favorecido[:\s]+([^\n]{3,80})/i,
 ];
 
@@ -1657,6 +1686,13 @@ function inferirRazaoSocial_(texto) {
     while ((m = regex.exec(texto)) !== null) {
       var nome = m[1]
         .replace(/CNPJ.*$/i, '').replace(/CPF.*$/i, '')
+        // Corta parênteses com número dentro em qualquer posição — comum em
+        // boleto ter o CNPJ colado ali sem rótulo nenhum (ex.: "RESERVE
+        // CORRETORA DE IMOVEIS LTDA (27.682.961 0001-80) Avenida...").
+        .replace(/\([^()]*\d[^()]*\)/g, '')
+        // Corta a partir da 1ª vírgula — início de endereço ("..., 326
+        // Sala")/complemento, nunca faz parte do nome da empresa.
+        .replace(/,.*$/, '')
         .replace(/[\\\/:*?"<>|]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
