@@ -1322,7 +1322,7 @@ var RENOMEAR_LIMITE_OCR_POR_EXECUCAO = 25; // teto de conversões OCR por execu�
 // reprocessável (ver idsJaNaFilaRenomear_), então a fila se autocorrige
 // sozinha na próxima varredura — ninguém precisa lembrar de rodar
 // limparFilaRenomearPendentes toda vez que a extração é ajustada.
-var VERSAO_LOGICA_EXTRACAO_ = 3;
+var VERSAO_LOGICA_EXTRACAO_ = 4;
 
 // TIPO/COMPROVANTE reconhecidos — mesma lista usada em vários pontos deste
 // módulo (checagem de "já no padrão", inferência de Tipo a partir do nome
@@ -1599,12 +1599,12 @@ function inferirNumeroDocumento_(texto) {
   return null;
 }
 
-// Reforço quando o OCR não achou nenhum rótulo de Nº de documento (comum em
-// boleto/conta de concessionária, que não usam esse rótulo) — o nome atual
-// já costuma trazer Tipo seguido do Nº do documento logo em seguida (ex.:
-// "BOL 4754 RESERVE IMOBILIARIA..."), então esse número é um palpite melhor
-// do que deixar o campo vazio. Só usado como ÚLTIMO recurso — ver chamada
-// em montarSugestaoRenomeacao_.
+// O nome atual já costuma trazer Tipo seguido do Nº do documento logo em
+// seguida (ex.: "BOL 4754 RESERVE IMOBILIARIA...", "FAT 14322 UNIDAS...")
+// — usado COM PRIORIDADE sobre o texto do OCR (ver montarSugestaoRenomeacao_),
+// porque um rótulo de OCR batendo em outro número do documento por engano
+// (nº de matrícula, CEP, código interno...) sobrescrevia o número certo que
+// já estava bem na frente do nome do arquivo.
 function inferirNumeroDoNomeAtual_(nomeAtual) {
   var m = REGEX_TIPO_INICIAL_.exec(String(nomeAtual || ''));
   if (!m) return null;
@@ -1686,11 +1686,16 @@ function montarSugestaoRenomeacao_(idArquivo, nomeAtual, ehPastaComprovante) {
   }
   var docFiscal = extrairCnpjCpf_(texto);
   var tipo = inferirTipoDocumento_(texto, ehPastaComprovante, nomeAtual);
-  var numero = inferirNumeroDocumento_(texto) || inferirNumeroDoNomeAtual_(nomeAtual);
-  // Prioriza a Razão Social que já está no nome atual (quando dá pra
-  // aproveitar com segurança) sobre a busca no texto do OCR — é mais
-  // confiável nesses casos e evita o texto do documento contaminar com o
-  // nome de outra parte citada nele.
+  // Nº do Documento e Razão Social: prioriza o que já está no nome atual
+  // (quando dá pra aproveitar com segurança) sobre a busca no texto do
+  // OCR — quando o arquivo já começa com Tipo reconhecido, o número logo
+  // depois já é o Nº do Documento de verdade (é assim que esse mesmo
+  // padrão é montado em todo o resto do sistema); só cai pro OCR quando o
+  // nome atual não permite aproveitar (ex.: não começa com Tipo
+  // reconhecido). Sem essa prioridade, um rótulo de OCR batendo em outro
+  // número do documento por engano (ex.: nº de matrícula, CEP) sobrescrevia
+  // o número certo que já estava bem na frente do arquivo.
+  var numero = inferirNumeroDoNomeAtual_(nomeAtual) || inferirNumeroDocumento_(texto);
   var razao = inferirRazaoSocialDoNomeAtual_(nomeAtual) || inferirRazaoSocial_(texto);
 
   var partes = [tipo, numero, razao ? sanitizarNomeArquivo_(razao) : null, docFiscal ? docFiscal.codigo : null]
