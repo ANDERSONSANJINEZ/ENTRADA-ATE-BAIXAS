@@ -1462,24 +1462,49 @@ function extrairTextoPdfOcr_(idArquivo, nomeArquivo) {
   }
 }
 
+// O CONSÓRCIO VLT AEROCASTELÃO é sempre quem RECEBE o serviço/produto
+// nesses documentos (tomador/destinatário/consumidor/pagador) — nunca o
+// fornecedor. Ele aparece em TODO documento das pastas monitoradas (é
+// sempre o mesmo comprador), então, sem filtrar isso, o próprio CNPJ ou
+// nome do consórcio podia ser escolhido por engano em vez do fornecedor de
+// verdade — foi exatamente o que aconteceu num teste real (Nota de Débito
+// da MAGNA BQ LOCAÇÕES saiu sugerida como "...CONSORCIO VLT
+// AEROCASTELAO..."). Usado tanto em extrairCnpjCpf_ (pula esse CNPJ,
+// continua procurando outro) quanto em inferirRazaoSocial_ (pula esse
+// nome, continua procurando outro rótulo).
+var CNPJ_CONSORCIO_ = '61596238000116';
+var REGEX_NOME_CONSORCIO_ = /CONSORCIO\s+VLT\s*A?ERO\s*CASTEL[AÃ]O/i;
+
 // Extrai CNPJ (14 dígitos -> código = 8 primeiros) ou, na ausência de CNPJ,
 // CPF (11 dígitos -> código = 9 primeiros) do texto do documento. Procura
 // primeiro perto do rótulo "CNPJ"/"CPF" (mais confiável) e só cai pro
-// primeiro número no formato certo em qualquer lugar do texto como reforço.
+// primeiro número no formato certo em qualquer lugar do texto como reforço
+// — em ambos os casos, percorre TODAS as ocorrências (não só a primeira) e
+// pula qualquer uma que seja o próprio CNPJ do consórcio, já que ele
+// aparece em todo documento como comprador, nunca como fornecedor.
 function extrairCnpjCpf_(texto) {
   var t = String(texto || '');
-  var mCnpjRotulo = t.match(/CNPJ[^\d]{0,10}(\d[\d.\/-]{12,18}\d)/i);
-  var mCnpjSolto = t.match(/\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/);
-  var candidatoCnpj = mCnpjRotulo ? mCnpjRotulo[1] : (mCnpjSolto ? mCnpjSolto[0] : null);
-  if (candidatoCnpj) {
-    var digitosCnpj = candidatoCnpj.replace(/\D/g, '');
-    if (digitosCnpj.length === 14) {
-      return { tipo: 'CNPJ', formatado: digitosCnpj, codigo: digitosCnpj.slice(0, 8) };
+  var m;
+
+  var regexCnpjRotulo = /CNPJ[^\d]{0,10}(\d[\d.\/-]{12,18}\d)/gi;
+  while ((m = regexCnpjRotulo.exec(t)) !== null) {
+    var digitosRotulo = m[1].replace(/\D/g, '');
+    if (digitosRotulo.length === 14 && digitosRotulo !== CNPJ_CONSORCIO_) {
+      return { tipo: 'CNPJ', formatado: digitosRotulo, codigo: digitosRotulo.slice(0, 8) };
     }
   }
-  var mCpfRotulo = t.match(/CPF[^\d]{0,10}(\d[\d.\-]{9,12}\d)/i);
-  if (mCpfRotulo) {
-    var digitosCpf = mCpfRotulo[1].replace(/\D/g, '');
+
+  var regexCnpjSolto = /\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g;
+  while ((m = regexCnpjSolto.exec(t)) !== null) {
+    var digitosSolto = m[0].replace(/\D/g, '');
+    if (digitosSolto.length === 14 && digitosSolto !== CNPJ_CONSORCIO_) {
+      return { tipo: 'CNPJ', formatado: digitosSolto, codigo: digitosSolto.slice(0, 8) };
+    }
+  }
+
+  var regexCpfRotulo = /CPF[^\d]{0,10}(\d[\d.\-]{9,12}\d)/gi;
+  while ((m = regexCpfRotulo.exec(t)) !== null) {
+    var digitosCpf = m[1].replace(/\D/g, '');
     if (digitosCpf.length === 11) {
       return { tipo: 'CPF', formatado: digitosCpf, codigo: digitosCpf.slice(0, 9) };
     }
@@ -1574,14 +1599,22 @@ var ROTULOS_RAZAO_SOCIAL_ = [
 
 function inferirRazaoSocial_(texto) {
   for (var i = 0; i < ROTULOS_RAZAO_SOCIAL_.length; i++) {
-    var m = texto.match(ROTULOS_RAZAO_SOCIAL_[i]);
-    if (m) {
+    // Com 'g': percorre TODAS as ocorrências desse rótulo no documento, não
+    // só a primeira — precisa pular a do consórcio (comprador) quando o
+    // rótulo "Razão Social" aparecer como "Tomador do Serviço - Razão
+    // Social" (documento do próprio consórcio, não do fornecedor) e
+    // continuar procurando a próxima ocorrência real do fornecedor.
+    var regex = new RegExp(ROTULOS_RAZAO_SOCIAL_[i].source, 'gi');
+    var m;
+    while ((m = regex.exec(texto)) !== null) {
       var nome = m[1]
         .replace(/CNPJ.*$/i, '').replace(/CPF.*$/i, '')
         .replace(/[\\\/:*?"<>|]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
-      if (nome.length >= 3) return nome.slice(0, 60).toUpperCase();
+      if (nome.length >= 3 && !REGEX_NOME_CONSORCIO_.test(nome)) {
+        return nome.slice(0, 60).toUpperCase();
+      }
     }
   }
   return null;
@@ -1826,4 +1859,24 @@ function configurarGatilhosRenomeacao() {
   });
   ScriptApp.newTrigger('identificarArquivosForaDoPadrao').timeBased().everyDays(1).atHour(6).create();
   ScriptApp.newTrigger('aplicarRenomeacoesAprovadas').timeBased().everyHours(1).create();
+}
+
+// Rode esta função UMA VEZ no editor (mesmo jeito de configurarGatilhoDiario)
+// só quando quiser jogar fora todas as sugestões ainda "Pendente" e deixar a
+// próxima varredura recomeçar do zero — útil depois de uma melhoria na
+// extração (Tipo/Nº/Razão Social/CNPJ), pra não ficar com sugestões antigas
+// (geradas pela versão anterior do código, potencialmente erradas) misturadas
+// com as novas. Nunca mexe numa linha já "Renomeado" (é arquivo de verdade
+// já renomeado no Drive, não uma sugestão) nem "Ignorado".
+function limparFilaRenomearPendentes() {
+  var sh = getSheetRenomear_();
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha < 2) return;
+  var statusCol = RENOMEAR_HEADERS.indexOf('Status');
+  var dados = sh.getRange(2, 1, ultimaLinha - 1, RENOMEAR_HEADERS.length).getValues();
+  var linhasParaApagar = [];
+  dados.forEach(function (l, i) { if (l[statusCol] === 'Pendente') linhasParaApagar.push(i + 2); });
+  linhasParaApagar.sort(function (a, b) { return b - a; }).forEach(function (linha) { sh.deleteRow(linha); });
+  registrarLog_('(sistema)', 'Limpar fila de renomeação pendente',
+    linhasParaApagar.length + ' sugestão(ões) pendente(s) removida(s) pra recomeçar do zero');
 }
