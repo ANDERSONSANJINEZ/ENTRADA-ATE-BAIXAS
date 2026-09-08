@@ -177,11 +177,20 @@ PDF → Google Doc) mais expressões regulares sobre esse texto, tudo rodando
 dentro do próprio Google via gatilho de tempo.
 
 Por segurança, **nenhum arquivo é renomeado sem revisão**: cada sugestão cai
-numa aba nova, **Renomear Pendente**, e só é aplicada quando alguém marca a
-coluna "Aprovar".
+numa fila, **Renomear Pendente** (aba nova na planilha), e só é aplicada
+quando alguém aprova aquela linha — pela aba **Padronizar Nomes** da própria
+tela do app (mais prático) ou marcando a coluna "Aprovar" direto na planilha.
+
+O CONSÓRCIO VLT AEROCASTELÃO (CNPJ 61.596.238/0001-16) é sempre quem
+**recebe** o serviço/produto nesses documentos, nunca o fornecedor — a
+extração nunca escolhe o nome/CNPJ dele para o arquivo, mesmo que apareça
+antes do fornecedor no texto do PDF (comum em campos como "Tomador do
+Serviço"); quando o fornecedor de verdade não é identificado, o campo fica
+em branco para revisão manual, em vez de arriscar pegar a empresa errada.
 
 **Ativar (uma vez só):**
-1. No editor do Apps Script, confira que `Code.gs` foi atualizado com este
+1. No editor do Apps Script, confira que `Code.gs` (e `Index.html`, se for
+   usar a aba **Padronizar Nomes** na tela) foram atualizados com este
    trecho e reimplante (mesmos passos 3, 4 e 6 do topo deste arquivo).
 2. Ainda no editor, no menu lateral, clique em **Serviços (+)** e adicione o
    serviço avançado **Drive API** (o `appsscript.json` deste repositório já
@@ -192,21 +201,39 @@ coluna "Aprovar".
    novo fora do padrão 1x/dia (6h) e aplica as aprovações de hora em hora.
    Seguro rodar de novo depois (sempre remove os gatilhos antigos antes de
    criar os novos).
-4. Para zerar o acervo que já existe hoje fora do padrão (antes de contar só
-   com o gatilho diário), rode `identificarArquivosForaDoPadrao` manualmente
-   pelo editor algumas vezes seguidas — cada execução processa um lote
-   limitado (25 arquivos), então repita até o Log mostrar "0 novo(s)".
+4. Para zerar o acervo que já existe hoje fora do padrão, clique em
+   **"🔍 Buscar arquivos fora do padrão"** na aba Padronizar Nomes (ou rode
+   `identificarArquivosForaDoPadrao` pelo editor) — cada execução processa um
+   lote limitado (25 arquivos, ~1 min), mas **continua sozinha em segundo
+   plano** a cada ~2 min até esgotar o acervo inteiro, sem precisar clicar de
+   novo nem deixar a tela aberta (ver "Continuação automática" abaixo).
 
-**Uso do dia a dia:** abra a aba **Renomear Pendente** na planilha de vez em
-quando — cada linha mostra o nome atual, o nome sugerido, a confiança da
-extração ("alta" quando os 4 campos foram identificados sem ambiguidade,
-"revisar" quando faltou algo) e o CNPJ/CPF encontrado. Corrija a coluna
-"Nome Sugerido" quando a extração errou algo (nomes/leiautes de nota variam
-muito entre emissores, então nem sempre acerta de primeira) e marque
-"Aprovar" (TRUE) nas linhas que pode aplicar — o gatilho de hora em hora
-renomeia o arquivo de verdade e marca a linha como "Renomeado" (ou "Erro",
-com o motivo, se o arquivo não existir mais). Não quer aplicar uma sugestão?
-Deixe "Aprovar" desmarcado — a linha continua na fila, sem afetar o arquivo.
+**Continuação automática (sem gastar token nenhum de IA):** sempre que a
+varredura encontra mais arquivo do que cabe num lote, ela mesma agenda sua
+próxima execução (~2 min depois) via gatilho de disparo único — dá pra
+processar centenas de arquivos assim, tudo dentro do Apps Script, sem depender
+de repetir cliques nem de um agente de IA lendo cada PDF (o que gastaria
+token à toa). Uma trava (`LockService`) evita duas varreduras rodando ao
+mesmo tempo. Se quiser cancelar uma cadeia em andamento, apague o gatilho
+`identificarArquivosForaDoPadrao` pendente na tela de **Gatilhos** (ícone de
+relógio) do editor.
+
+**Depois de atualizar o código de extração:** rode `limparFilaRenomearPendentes`
+uma vez pelo editor — apaga só as sugestões ainda "Pendente" (nada que já foi
+renomeado é afetado) pra não misturar sugestão antiga, gerada pela versão
+anterior do código, com a nova.
+
+**Uso do dia a dia:** abra a aba **Padronizar Nomes** no app (ou **Renomear
+Pendente** direto na planilha) de vez em quando — cada linha mostra o nome
+atual, o nome sugerido, a confiança da extração ("alta" quando os 4 campos
+foram identificados sem ambiguidade, "revisar" quando faltou algo) e o
+CNPJ/CPF encontrado. Corrija o nome sugerido quando a extração errou algo
+(nomes/leiautes de nota variam muito entre emissores, então nem sempre acerta
+de primeira) e aprove as que pode aplicar — o gatilho de hora em hora (ou o
+clique em "Aprovar" na tela) renomeia o arquivo de verdade e marca a linha
+como "Renomeado" (ou "Erro", com o motivo, se o arquivo não existir mais).
+Não quer aplicar uma sugestão? Deixe sem aprovar (ou clique "Ignorar" na
+tela) — a linha some da fila de pendentes, sem afetar o arquivo.
 
 ## Detalhamento por clique (dashboard, tabelas e Análise)
 

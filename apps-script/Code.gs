@@ -1657,9 +1657,32 @@ function montarSugestaoRenomeacao_(idArquivo, nomeAtual, ehPastaComprovante) {
 // Passo 1: varre PASTAS_BUSCA_ANEXO (+ subpastas) atrás de PDF fora do
 // padrão e enche "Renomear Pendente" com sugestões. Não altera nenhum
 // arquivo. Processa no máximo RENOMEAR_LIMITE_OCR_POR_EXECUCAO arquivos por
-// execução (o resto fica pra próxima chamada/gatilho) pra nunca estourar o
-// tempo máximo de execução do Apps Script.
+// execução (pra nunca estourar o tempo máximo de execução do Apps Script) —
+// mas, se sobrar mais arquivo pra processar, agenda sozinha a continuação
+// (ver agendarProximoLoteRenomear_) em vez de esperar alguém clicar "Buscar"
+// de novo: dá pra rodar o acervo inteiro em segundo plano, sem gastar
+// nenhum token de IA (tudo roda dentro do Apps Script) e sem precisar da
+// tela aberta.
 function identificarArquivosForaDoPadrao() {
+  // LockService evita duas varreduras rodando ao mesmo tempo (ex.: alguém
+  // clica "Buscar" na tela bem na hora em que a continuação agendada em
+  // segundo plano também estava prestes a disparar) — se não conseguir a
+  // trava em 5s, é sinal de que já tem uma rodando; desiste sem duplicar
+  // trabalho (a que já está rodando cobre o mesmo lote de qualquer jeito).
+  var trava = LockService.getScriptLock();
+  if (!trava.tryLock(5000)) {
+    registrarLog_('(sistema)', 'Identificar arquivos fora do padrão', 'Pulado — já tem uma varredura rodando agora.');
+    return;
+  }
+  try {
+    identificarArquivosForaDoPadrao_semTrava_();
+  } finally {
+    trava.releaseLock();
+  }
+}
+
+function identificarArquivosForaDoPadrao_semTrava_() {
+  PropertiesService.getScriptProperties().deleteProperty(PROP_RENOMEAR_CADEIA_ATIVA_); // esta execução já cumpre a continuação agendada, se havia uma
   var sh = getSheetRenomear_();
   var jaNaFila = idsJaNaFilaRenomear_();
   var agora = new Date();
@@ -1701,10 +1724,32 @@ function identificarArquivosForaDoPadrao() {
   if (linhasNovas.length) {
     sh.getRange(sh.getLastRow() + 1, 1, linhasNovas.length, RENOMEAR_HEADERS.length).setValues(linhasNovas);
   }
+
+  var aindaTemMais = processados >= RENOMEAR_LIMITE_OCR_POR_EXECUCAO;
+  if (aindaTemMais) agendarProximoLoteRenomear_();
+
   registrarLog_('(sistema)', 'Identificar arquivos fora do padrão',
     linhasNovas.length + ' novo(s) na fila "Renomear Pendente"' +
     (linhasParaApagar.length ? ' (' + linhasParaApagar.length + ' nova tentativa de arquivo que tinha falhado antes)' : '') +
-    (processados >= RENOMEAR_LIMITE_OCR_POR_EXECUCAO ? ' (limite do lote atingido — rode de novo pra continuar o restante)' : ''));
+    (aindaTemMais ? ' (ainda tem mais — continuação agendada sozinha em ~2 min, sem precisar clicar de novo)' : ''));
+}
+
+// Propriedade que guarda se já existe uma continuação agendada — evita
+// empilhar mais de um gatilho de continuação (ex.: dois lotes seguidos, cada
+// um achando que precisa agendar o próximo).
+var PROP_RENOMEAR_CADEIA_ATIVA_ = 'renomearCadeiaAtiva';
+
+// Cria um gatilho de disparo único (não recorrente — dispara 1x e some
+// sozinho) pra rodar identificarArquivosForaDoPadrao de novo daqui a ~2
+// minutos, só quando ainda sobra arquivo fora do padrão pra processar.
+// Isso permite esgotar o acervo inteiro sozinho, em segundo plano, mesmo
+// com a aba do navegador fechada — sem depender de ninguém clicar
+// "Buscar" repetidas vezes nem esperar o gatilho diário (configurarGatilhosRenomeacao).
+function agendarProximoLoteRenomear_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty(PROP_RENOMEAR_CADEIA_ATIVA_) === 'true') return; // já tem uma continuação agendada
+  props.setProperty(PROP_RENOMEAR_CADEIA_ATIVA_, 'true');
+  ScriptApp.newTrigger('identificarArquivosForaDoPadrao').timeBased().after(2 * 60 * 1000).create();
 }
 
 // Passo 3: aplica de fato as renomeações marcadas com "Aprovar" = TRUE na
@@ -1743,11 +1788,6 @@ function aplicarRenomeacoesAprovadas() {
   if (aplicados) registrarLog_('(sistema)', 'Aplicar renomeações aprovadas', aplicados + ' arquivo(s) renomeado(s)');
 }
 
-// Rode esta função UMA VEZ no editor do Apps Script (mesmo jeito de
-// configurarGatilhoDiario) pra deixar a padronização de nomes rodando
-// sozinha dali pra frente: identifica 1x/dia (novo arquivo fora do padrão) e
-// aplica as aprovações de hora em hora — sem precisar abrir o editor de novo
-// nem gastar nenhum token de IA na execução do dia a dia.
 // ---------- Ações da aba "Padronizar Nomes" na tela do app ----------
 // Mesma fila "Renomear Pendente" usada pelos gatilhos automáticos acima,
 // só que com ações imediatas pelo clique na tela — não depende de esperar
