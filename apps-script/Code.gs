@@ -1319,7 +1319,7 @@ var RENOMEAR_LIMITE_OCR_POR_EXECUCAO = 25; // teto de conversões OCR por execu�
 // um jeito que valha a pena reprocessar sugestões antigas — ex.: a correção
 // que passou a nunca escolher o CONSÓRCIO como se fosse o fornecedor. Uma
 // linha "Pendente" gravada com uma versão mais antiga é tratada como
-// reprocessável (ver idsJaNaFilaRenomear_), então a fila se autocorrige
+// reprocessável (ver infoFilaRenomearPorId_), então a fila se autocorrige
 // sozinha na próxima varredura — ninguém precisa lembrar de rodar
 // limparFilaRenomearPendentes toda vez que a extração é ajustada.
 var VERSAO_LOGICA_EXTRACAO_ = 6;
@@ -1362,19 +1362,20 @@ function getSheetRenomear_() {
   return sh;
 }
 
-// IDs já presentes na fila (pendente com sugestão de verdade E gerada pela
-// versão atual da lógica de extração, ou já tratado) — evita
-// reprocessar/reenfileirar o mesmo arquivo em toda execução do gatilho
-// diário. Uma linha "Pendente" entra como "reprocessável" (a próxima
-// varredura tenta de novo e substitui a linha velha) em dois casos: Nome
-// Sugerido VAZIO (falha ao ler o PDF — OCR fora do ar, arquivo corrompido
-// etc.) OU gravada com uma "Versão Lógica" mais antiga que
-// VERSAO_LOGICA_EXTRACAO_ (a extração mudou desde então — a sugestão pode
-// estar desatualizada/errada pelo jeito antigo, ex.: apontando o consórcio
-// como fornecedor antes da correção). Uma linha sem "Versão Lógica"
-// nenhuma (gravada antes dessa coluna existir) conta como versão 0 —
-// sempre mais antiga que a atual, sempre reprocessável.
-function idsJaNaFilaRenomear_() {
+// Status/linha de cada ID de arquivo já presente na fila — usado tanto pra
+// decidir se reprocessa (Nome Sugerido VAZIO — falha de OCR — OU gravado
+// com "Versão Lógica" mais antiga que VERSAO_LOGICA_EXTRACAO_, contando
+// uma linha sem essa coluna como versão 0, sempre reprocessável) quanto
+// pra LIMPAR uma sugestão "Pendente" que ficou obsoleta porque o arquivo
+// passou a ser reconhecido como já dentro do padrão numa varredura
+// seguinte (ex.: depois que nomeArquivoJaNoPadrao_ passou a aceitar
+// informação extra depois do código — um arquivo que já tinha os 4 campos
+// certos, mas ficou preso numa sugestão errada de antes dessa correção,
+// senão nunca mais seria tocado: a varredura passaria a pular ele
+// silenciosamente por já estar "no padrão", sem nunca apagar a sugestão
+// velha). Nunca mexe em linha "Renomeado"/"Ignorado" — é histórico, não
+// sugestão.
+function infoFilaRenomearPorId_() {
   var sh = getSheetRenomear_();
   var ultimaLinha = sh.getLastRow();
   if (ultimaLinha < 2) return {};
@@ -1383,17 +1384,18 @@ function idsJaNaFilaRenomear_() {
   var statusCol = RENOMEAR_HEADERS.indexOf('Status');
   var versaoCol = RENOMEAR_HEADERS.indexOf('Versão Lógica');
   var valores = sh.getRange(2, 1, ultimaLinha - 1, RENOMEAR_HEADERS.length).getValues();
-  var set = {};
+  var mapa = {};
   valores.forEach(function (l, i) {
     var id = l[idCol];
     if (!id) return;
-    var pendente = l[statusCol] === 'Pendente';
-    var semSugestao = !String(l[nomeSugeridoCol] || '').trim();
-    var versaoDesatualizada = Number(l[versaoCol] || 0) < VERSAO_LOGICA_EXTRACAO_;
-    var reprocessar = pendente && (semSugestao || versaoDesatualizada);
-    set[id] = reprocessar ? { reprocessar: true, linhaPlanilha: i + 2 } : true;
+    mapa[id] = {
+      status: l[statusCol],
+      linhaPlanilha: i + 2,
+      semSugestao: !String(l[nomeSugeridoCol] || '').trim(),
+      versaoDesatualizada: Number(l[versaoCol] || 0) < VERSAO_LOGICA_EXTRACAO_,
+    };
   });
-  return set;
+  return mapa;
 }
 
 // As 3 pastas de PASTAS_BUSCA_ANEXO ficam dentro de uma estrutura
@@ -1785,10 +1787,10 @@ function identificarArquivosForaDoPadrao() {
 function identificarArquivosForaDoPadrao_semTrava_() {
   PropertiesService.getScriptProperties().deleteProperty(PROP_RENOMEAR_CADEIA_ATIVA_); // esta execução já cumpre a continuação agendada, se havia uma
   var sh = getSheetRenomear_();
-  var jaNaFila = idsJaNaFilaRenomear_();
+  var infoPorId = infoFilaRenomearPorId_();
   var agora = new Date();
   var linhasNovas = [];
-  var linhasParaApagar = []; // linhas antigas com falha de OCR, substituídas pela nova tentativa
+  var linhasParaApagar = []; // linhas antigas obsoletas (falha de OCR, versão velha, ou o arquivo já ficou dentro do padrão), substituídas ou simplesmente removidas
   var processados = 0;
 
   for (var p = 0; p < PASTAS_BUSCA_ANEXO.length; p++) {
@@ -1799,17 +1801,32 @@ function identificarArquivosForaDoPadrao_semTrava_() {
       var pdfs = listarPdfsDaPasta_(todasAsPastas[i]);
       for (var j = 0; j < pdfs.length && processados < RENOMEAR_LIMITE_OCR_POR_EXECUCAO; j++) {
         var arq = pdfs[j];
-        if (nomeArquivoJaNoPadrao_(arq.nome)) continue; // já está no padrão — nem precisa de OCR
-        var existente = jaNaFila[arq.id];
-        if (existente === true) continue; // já sugerido de verdade (ou já renomeado/ignorado) antes
-        if (existente && existente.reprocessar) linhasParaApagar.push(existente.linhaPlanilha);
+        var info = infoPorId[arq.id];
+
+        if (nomeArquivoJaNoPadrao_(arq.nome)) {
+          // Arquivo já está dentro do padrão agora — nem precisa de OCR.
+          // Se sobrou uma sugestão "Pendente" antiga pra ele (de antes de
+          // alguma melhoria reconhecer esse nome como já certo, ex.:
+          // aceitar informação extra depois do código), ela não faz mais
+          // sentido: apaga. Nunca mexe se já é "Renomeado"/"Ignorado"
+          // (histórico, não sugestão).
+          if (info && info.status === 'Pendente') linhasParaApagar.push(info.linhaPlanilha);
+          continue;
+        }
+
+        if (info) {
+          if (info.status !== 'Pendente') continue; // já tratado (Renomeado/Ignorado) antes
+          var precisaReprocessar = info.semSugestao || info.versaoDesatualizada;
+          if (!precisaReprocessar) continue; // já tem sugestão pendente válida e atual — não reprocessa
+          linhasParaApagar.push(info.linhaPlanilha);
+        }
 
         // Espaça as chamadas de OCR (cota curta por minuto no Drive) — não
         // espera antes da primeira do lote, só entre uma e outra.
         if (processados > 0) Utilities.sleep(1200);
         var sugestao = montarSugestaoRenomeacao_(arq.id, arq.nome, ehPastaComprovante);
         processados++;
-        jaNaFila[arq.id] = true;
+        infoPorId[arq.id] = { status: 'Pendente', linhaPlanilha: -1, semSugestao: false, versaoDesatualizada: false };
         linhasNovas.push([
           agora, pastaRaizId, arq.id, arq.nome, sugestao.nomeSugerido,
           sugestao.confianca, sugestao.cnpjCpf, false, 'Pendente', sugestao.observacao,
@@ -2004,7 +2021,7 @@ function configurarGatilhosRenomeacao() {
 }
 
 // Desde que existe VERSAO_LOGICA_EXTRACAO_, a fila já se autocorrige sozinha
-// toda vez que a extração melhora (ver idsJaNaFilaRenomear_) — normalmente
+// toda vez que a extração melhora (ver infoFilaRenomearPorId_) — normalmente
 // NÃO é preciso rodar esta função. Ela continua aqui só como atalho manual
 // pra forçar tudo a ser refeito na hora (sem esperar a próxima varredura) ou
 // pra limpar sugestões velhas por qualquer outro motivo. Rode pelo editor
