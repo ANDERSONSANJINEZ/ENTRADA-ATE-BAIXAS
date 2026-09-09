@@ -421,6 +421,15 @@
      ao rolar. */
   #tabela-detalhe-aporte { table-layout: fixed; min-width: 700px; }
   #tabela-detalhe-aporte th { position: sticky; top: 0; z-index: 3; }
+  /* Mesmo motivo: sem table-layout:fixed aqui, o <input> e os botões de
+     cada linha (largura de conteúdo) empurravam a tabela pra fora da caixa
+     e forçavam rolagem horizontal, além da vertical de .tabela-scroll —
+     table-layout:fixed fica só nas % do <colgroup>, e .tabela-scroll-fluida
+     (ver aba-renomear) tira o limite de altura/rolagem própria, deixando a
+     tabela fluir com a rolagem da página inteira — mesmo efeito de
+     #tabela-lancamentos, sem precisar da rolagem sincronizada dela (só 5
+     colunas aqui, cabem sem isso). */
+  #tabela-renomear { table-layout: fixed; min-width: 640px; }
   .filtros { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
   .filtros input, .filtros select { padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; font-size: 13px; }
   .btn { background: var(--azul); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
@@ -1023,7 +1032,7 @@
       </p>
       <input id="busca-renomear" class="busca-tabela" placeholder="Buscar em nome atual ou sugerido…">
       <div id="total-renomear" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
-      <div class="tabela-scroll">
+      <div class="tabela-scroll tabela-scroll-fluida">
         <table id="tabela-renomear">
           <colgroup><col style="width:26%"><col style="width:32%"><col style="width:11%"><col style="width:13%"><col style="width:18%"></colgroup>
           <thead><tr><th>Nome atual</th><th>Nome sugerido</th><th>Confiança</th><th>CNPJ/CPF</th><th></th></tr></thead>
