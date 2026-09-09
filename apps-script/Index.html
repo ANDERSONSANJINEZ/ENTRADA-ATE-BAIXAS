@@ -1016,6 +1016,7 @@
     </div>
     <div class="painel" id="painel-atualizar-baixas">
       <h2>Títulos (baixas) — TOTVS Protheus</h2>
+      <div id="card-aprovacao-remessa" style="margin-bottom:14px;"></div>
       <div id="resumo-importacao"></div>
       <button class="btn secundario small" onclick="verificarEImportarDoDrive()">🔄 Atualizar dados</button>
     </div>
@@ -7391,6 +7392,62 @@ function base64ParaArrayBuffer_(base64) {
   return bytes.buffer;
 }
 
+// Card "Aprovação de Remessa" (aba Arquivos de Dados, painel "Títulos
+// (baixas) — TOTVS Protheus") — pedido explícito: cruza as colunas D (Nº
+// Documento), F (Código Fornecedor) e G (Razão Social) do arquivo do
+// TOTVS Protheus com a coluna S (Aprovação Remessa — ver SRC.aprovacao),
+// trazendo só os títulos classificados como "Aguardando" ou "Aprovado".
+// "Cruzar D/F/G" = agrupar por título (Nº Documento + Código Fornecedor)
+// antes de contar — um título com várias parcelas aparece em várias
+// linhas do arquivo (uma por parcela), então contar linha a linha
+// inflaria a quantidade; agrupado, cada título entra 1 vez só, com o
+// valor somado de todas as suas parcelas. Um título com parcelas em
+// status diferentes (raro) fica no grupo da ÚLTIMA linha lida pra aquele
+// título — sem tratamento especial além disso, pedido não detalhou esse
+// caso.
+function renderizarCardAprovacaoRemessa_() {
+  const el = document.getElementById('card-aprovacao-remessa');
+  if (!el) return;
+  const normalizado_ = (v) => String(v || '').trim().toUpperCase();
+  const grupos = { AGUARDANDO: {}, APROVADO: {} };
+  state.erp.forEach((i) => {
+    const status = normalizado_(i['Aprovação Remessa']);
+    if (status !== 'AGUARDANDO' && status !== 'APROVADO') return;
+    const chave = `${i['Nº Documento'] || ''}|${i['Código Fornecedor'] || ''}`;
+    const grupo = grupos[status];
+    if (!grupo[chave]) grupo[chave] = { valor: 0, itens: [] };
+    grupo[chave].valor += paraNumero(i['R$ Valor']);
+    grupo[chave].itens.push(i);
+  });
+  const resumir_ = (grupo) => {
+    const chaves = Object.keys(grupo);
+    return {
+      qtde: chaves.length,
+      valor: chaves.reduce((s, k) => s + grupo[k].valor, 0),
+      itens: chaves.flatMap((k) => grupo[k].itens),
+    };
+  };
+  const aguardando = resumir_(grupos.AGUARDANDO);
+  const aprovado = resumir_(grupos.APROVADO);
+  el.innerHTML = `
+    <div class="card" style="max-width:420px; text-align:left;">
+      <div class="rotulo">Aprovação de Remessa (Nº Doc. / Fornecedor / Razão Social)</div>
+      <div class="card-valores" style="display:flex; flex-direction:column; gap:10px; margin-top:4px;">
+        <div class="clicavel" id="linha-aguardando-remessa" style="cursor:pointer;">
+          <div class="card-qtde" style="font-size:18px;">${aguardando.qtde.toLocaleString('pt-BR')} <span style="font-size:12px; font-weight:normal; color:var(--cinza);">título(s) Aguardando</span></div>
+          <div class="card-rs">${fmtMoeda(aguardando.valor)}</div>
+        </div>
+        <div class="clicavel" id="linha-aprovado-remessa" style="cursor:pointer;">
+          <div class="card-qtde" style="font-size:18px;">${aprovado.qtde.toLocaleString('pt-BR')} <span style="font-size:12px; font-weight:normal; color:var(--cinza);">título(s) Aprovado</span></div>
+          <div class="card-rs">${fmtMoeda(aprovado.valor)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('linha-aguardando-remessa').addEventListener('click', () => abrirDetalhe('Aguardando Aprovação de Remessa', aguardando.itens));
+  document.getElementById('linha-aprovado-remessa').addEventListener('click', () => abrirDetalhe('Aprovado — Remessa', aprovado.itens));
+}
+
 // A aba Arquivos de Dados, ao ser aberta (ver o forEach de "nav button"
 // mais abaixo), só CHECA sozinha se existe um arquivo mais novo do que o
 // último já importado na pasta do Google Drive do Protheus — não importa
@@ -7540,6 +7597,7 @@ function renderizarTudo() {
   popularSelectAporteDetalhe();
   renderizarDetalheAporte();
   renderizarAnalise();
+  renderizarCardAprovacaoRemessa_();
 }
 carregarTudo();
 carregarFaturamento();
