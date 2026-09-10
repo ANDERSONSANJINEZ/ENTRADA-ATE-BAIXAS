@@ -452,6 +452,18 @@
   .badge-atencao { background: #fef3c7; color: #92400e; }
   .toast { position: fixed; bottom: 20px; right: 20px; background: #1e2430; color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none; }
   .toast.mostrar { opacity: 1; }
+  /* Monitor flutuante da varredura automática de anexos (ver
+     iniciarVarredurAnexosAutomatica_) — pedido explícito: um "pop-up" que
+     mostre a atualização acontecendo por trás, já que o processo em si não
+     mexe em nada visível na tela sozinho. Fica acima do canto onde o toast
+     aparece (bottom:20px) pra nunca sobrepor o toast final da varredura. */
+  #monitor-anexos { position: fixed; bottom: 78px; right: 20px; width: 280px; background: #fff; border: 1px solid var(--borda); border-radius: 10px; box-shadow: 0 6px 20px rgba(30,36,48,.18); padding: 12px 14px; font-size: 13px; z-index: 400; display: none; }
+  #monitor-anexos.mostrar { display: block; }
+  #monitor-anexos .monitor-anexos-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: bold; color: var(--azul); margin-bottom: 6px; }
+  #monitor-anexos .monitor-anexos-fechar { border: none; background: none; cursor: pointer; color: var(--cinza); font-size: 15px; line-height: 1; padding: 2px 4px; }
+  #monitor-anexos .monitor-anexos-msg { color: var(--cinza); }
+  #monitor-anexos .monitor-anexos-barra { height: 6px; border-radius: 3px; background: var(--azul-claro); overflow: hidden; margin-top: 8px; }
+  #monitor-anexos .monitor-anexos-barra-interna { height: 100%; width: 0%; background: var(--azul); transition: width .2s; }
   canvas { max-height: 320px; }
   #badge-data-base.desatualizada { background: #fbbf24; color: #1e2430; font-weight: bold; }
   /* Calendário do filtro De/Até — construído do zero em vez de usar o
@@ -1280,6 +1292,19 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Monitor da varredura automática de anexos (ver
+     iniciarVarredurAnexosAutomatica_) — mostra ao vivo, num canto da tela,
+     que a busca por documento/comprovante no Drive está rodando sozinha e
+     como ela terminou; some sozinho ao fim, ou clicando no ✕. -->
+<div id="monitor-anexos">
+  <div class="monitor-anexos-topo">
+    <span>🔍 Varredura de anexos</span>
+    <button type="button" class="monitor-anexos-fechar" onclick="fecharMonitorAnexos_()" title="Fechar">✕</button>
+  </div>
+  <div class="monitor-anexos-msg" id="monitor-anexos-msg"></div>
+  <div class="monitor-anexos-barra"><div class="monitor-anexos-barra-interna" id="monitor-anexos-barra"></div></div>
+</div>
 
 <script>
 // Injetado pelo doGet (ScriptApp.getService().getUrl()) — a página roda
@@ -6093,18 +6118,36 @@ function atualizarModalLinhaSeAberto_(id) {
 // anexo costumam aparecer (carregamento inicial, login/habilitar edição e
 // importação do Drive), sem precisar de nenhum clique.
 //
-// Roda "oculta": não trava a tela (cada busca é sequencial, com uma pequena
-// pausa entre elas pra não sobrecarregar a busca do Drive) e não dispara o
-// re-render pesado do app inteiro (postarAcao/renderizarTudo) a cada acerto
-// — só grava no servidor (chamarServidor direto) e atualiza a própria
-// linha na tabela e/ou o pop-up de detalhe, se estiverem na tela. Um título
-// sem anexo encontrado simplesmente continua pendente (nada é gravado) —
-// os botões seguem do jeito que estavam, prontos pro cadastro manual de
+// Roda em segundo plano — não trava a tela nem precisa de clique (cada
+// busca é sequencial, com uma pequena pausa entre elas pra não sobrecarregar
+// a busca do Drive) e não dispara o re-render pesado do app inteiro
+// (postarAcao/renderizarTudo) a cada acerto — só grava no servidor
+// (chamarServidor direto) e atualiza a própria linha na tabela e/ou o
+// pop-up de detalhe, se estiverem na tela. Mas NÃO é invisível: sempre que
+// há pelo menos 1 pendente pra checar, abre o monitor flutuante (canto
+// inferior direito — #monitor-anexos) mostrando o progresso ao vivo, e
+// fecha com o resultado — sem isso não dava pra saber se a varredura rodou
+// de verdade ou nem chegou a disparar (pedido explícito). Um título sem
+// anexo encontrado simplesmente continua pendente (nada é gravado) — os
+// botões seguem do jeito que estavam, prontos pro cadastro manual de
 // sempre; a própria varredura tenta de novo no próximo gatilho (ex.: a
 // próxima vez que o app for aberto), caso o arquivo apareça no Drive depois.
 let varredurAnexosEmAndamento_ = false;
 let varredurAnexosNovaRodadaPendente_ = false;
+let varredurAnexosMonitorToken_ = 0;
 function aguardar_(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+function mostrarMonitorAnexos_() { document.getElementById('monitor-anexos').classList.add('mostrar'); }
+function fecharMonitorAnexos_() { document.getElementById('monitor-anexos').classList.remove('mostrar'); }
+// tokenAtual evita que uma rodada mais nova (ex.: importou de novo enquanto
+// o "some sozinho depois de 8s" da rodada anterior ainda estava contando)
+// feche ou sobrescreva o monitor de uma rodada que já começou depois dela.
+function atualizarMonitorAnexos_(texto, pct, tokenAtual) {
+  if (tokenAtual !== varredurAnexosMonitorToken_) return;
+  document.getElementById('monitor-anexos-msg').textContent = texto;
+  document.getElementById('monitor-anexos-barra').style.width = pct + '%';
+  mostrarMonitorAnexos_();
+}
 
 async function iniciarVarredurAnexosAutomatica_() {
   // Precisa de senha de edição válida — a busca no servidor
@@ -6118,6 +6161,7 @@ async function iniciarVarredurAnexosAutomatica_() {
   if (MODO_LEITURA) return;
   if (varredurAnexosEmAndamento_) { varredurAnexosNovaRodadaPendente_ = true; return; }
   varredurAnexosEmAndamento_ = true;
+  const meuToken = ++varredurAnexosMonitorToken_;
   try {
     do {
       varredurAnexosNovaRodadaPendente_ = false;
@@ -6126,9 +6170,12 @@ async function iniciarVarredurAnexosAutomatica_() {
         if (!item['Link Documento']) pendentes.push({ item, tipo: 'documento' });
         if (!item['Link Comprovante']) pendentes.push({ item, tipo: 'comprovante' });
       });
+      if (!pendentes.length) continue; // nada pendente agora — nem abre o monitor
       let encontrados = 0;
-      for (const { item, tipo } of pendentes) {
+      for (let i = 0; i < pendentes.length; i++) {
         if (MODO_LEITURA) break; // voltou pra leitura no meio da varredura — para por aqui
+        const { item, tipo } = pendentes[i];
+        atualizarMonitorAnexos_(`Verificando… (${i + 1}/${pendentes.length})`, Math.round(((i + 1) / pendentes.length) * 100), meuToken);
         const url = await buscarMelhorAnexoDrive_(item, tipo);
         if (url) {
           try {
@@ -6144,7 +6191,12 @@ async function iniciarVarredurAnexosAutomatica_() {
         }
         await aguardar_(250); // dá um respiro pra não martelar a busca do Drive
       }
-      if (encontrados) toast(`🔍 ${encontrados} anexo(s) encontrado(s) e vinculado(s) automaticamente.`);
+      const resultado = encontrados
+        ? `✅ ${encontrados} de ${pendentes.length} anexo(s) encontrado(s) e vinculado(s) automaticamente.`
+        : `Concluído — nenhum encontrado ainda entre ${pendentes.length} pendente(s). Tenta de novo no próximo carregamento.`;
+      atualizarMonitorAnexos_(resultado, 100, meuToken);
+      if (encontrados) toast(`🔍 ${encontrados} anexo(s) encontrado(s) automaticamente.`, 6000);
+      setTimeout(() => { if (meuToken === varredurAnexosMonitorToken_) fecharMonitorAnexos_(); }, 8000);
     } while (varredurAnexosNovaRodadaPendente_);
   } finally {
     varredurAnexosEmAndamento_ = false;
