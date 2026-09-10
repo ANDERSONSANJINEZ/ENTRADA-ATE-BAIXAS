@@ -93,6 +93,10 @@
   }
   nav button.ativo { color: var(--azul); border-bottom-color: var(--azul); font-weight: bold; }
   main { padding: 24px; max-width: 1600px; margin: 0 auto; width: 100%; }
+  /* Só o Dashboard ocupa a largura inteira da tela (sem o teto de
+     1600px) — as demais abas mantêm o max-width acima, que existe pra
+     tabelas/formulários não ficarem esticados demais em telas ultra-wide. */
+  main:has(> #aba-dashboard.ativa) { max-width: none; }
   .aba { display: none; }
   .aba.ativa { display: block; }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
