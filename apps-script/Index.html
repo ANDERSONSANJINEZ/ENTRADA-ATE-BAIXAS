@@ -1776,6 +1776,7 @@ async function carregarTudo() {
     usuariosConfiguradosNoServidor = !!dados.usuariosConfigurados;
     atualizarUiModoLeitura();
     renderizarTudo();
+    iniciarVarredurAnexosAutomatica_(); // dispara sozinha, sem travar o carregamento (ver definição)
   } catch (e) {
     if (minhaRequisicao === requisicaoAtual) toast('Erro ao carregar dados: ' + e.message);
   }
@@ -5705,10 +5706,16 @@ function atualizarStatusLancamentos(totalItens) {
 // (renderizarLancamentos) quanto pelo carregamento incremental
 // (carregarMaisLancamentos), pra nunca duplicar a lógica das 2 colunas
 // fixas (Anexos/Ação) e das colunas reordenáveis.
-function linhaLancamentoHtml_(i, colunasEmOrdem) {
-  const acao = (!MODO_LEITURA && i.Origem === 'Manual')
-    ? `<button class="btn perigo small" title="Remover lançamento manual" onclick="removerManual('${i.ID}')">🗑️</button>`
-    : '';
+// Documento = azul, Comprovante = verde (cores diferentes pra distinguir
+// rápido qual botão é qual) — Remover é vermelho. Os 3 ficam juntos no
+// mesmo grupo flex (mesmo espaçamento entre eles), em vez de Remover morar
+// numa coluna própria separada por uma linha divisória — pedido explícito,
+// pra aproximar o botão dos outros dois.
+// Isolado de linhaLancamentoHtml_ pra poder recriar só esta célula (ver
+// atualizarLinhaAnexosSeVisivel_) sem redesenhar a linha inteira, quando a
+// varredura automática de anexos (iniciarVarredurAnexosAutomatica_) acha e
+// grava um link sozinha, em segundo plano.
+function celulaAnexosLancamento_(i) {
   const idEsc = escaparAtributo(i.ID);
   const linkDoc = i['Link Documento'] || '';
   const linkComp = i['Link Comprovante'] || '';
@@ -5718,23 +5725,46 @@ function linhaLancamentoHtml_(i, colunasEmOrdem) {
   const tituloComp = MODO_LEITURA
     ? (linkComp ? 'Abrir comprovante' : 'Nenhum comprovante cadastrado')
     : (linkComp ? 'Abrir/editar link do comprovante' : 'Adicionar link do comprovante');
-  // Documento = azul, Comprovante = verde (cores diferentes pra distinguir
-  // rápido qual botão é qual) — Remover é vermelho. Os 3 ficam juntos no
-  // mesmo grupo flex (mesmo espaçamento entre eles), em vez de Remover
-  // morar numa coluna própria separada por uma linha divisória — pedido
-  // explícito, pra aproximar o botão dos outros dois.
-  const anexos = `<td class="col-anexos"><div class="anexos-col">
+  const acao = (!MODO_LEITURA && i.Origem === 'Manual')
+    ? `<button class="btn perigo small" title="Remover lançamento manual" onclick="removerManual('${idEsc}')">🗑️</button>`
+    : '';
+  return `<div class="anexos-col">
       <button class="btn secundario small anexo-doc ${linkDoc ? 'anexo-definido' : ''}" title="${tituloDoc}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','documento','${escaparAtributo(linkDoc)}')">📄</button>
       <button class="btn secundario small anexo-comp ${linkComp ? 'anexo-definido-verde' : ''}" title="${tituloComp}" onclick="definirOuAbrirAnexo('${idEsc}','${i.Origem}','comprovante','${escaparAtributo(linkComp)}')">🧾</button>
       ${acao}
-    </div></td>`;
+    </div>`;
+}
+
+function linhaLancamentoHtml_(i, colunasEmOrdem) {
+  const idEsc = escaparAtributo(i.ID);
+  const anexos = `<td class="col-anexos">${celulaAnexosLancamento_(i)}</td>`;
   const celulasDados = colunasEmOrdem.map((chave) => celulaLancamento_(chave, i)).join('');
   const classeDuplicado = i.Status === 'Duplicado – revisar' ? ' class="linha-duplicada"' : '';
-  return `<tr${classeDuplicado} onclick="abrirDetalheLinha(event, '${idEsc}', '${i.Origem}')" title="Clique para ver o lançamento por completo">
+  return `<tr${classeDuplicado} data-id="${idEsc}" onclick="abrirDetalheLinha(event, '${idEsc}', '${i.Origem}')" title="Clique para ver o lançamento por completo">
     ${celulasDados}
     ${anexos}
     <td class="col-acao"></td>
   </tr>`;
+}
+
+// Atualiza só a célula de Anexos de UMA linha já desenhada na tabela (sem
+// redesenhar a tabela inteira) — usada pela varredura automática em segundo
+// plano (iniciarVarredurAnexosAutomatica_) depois de achar e gravar um link
+// sozinha, pra refletir na tela sem precisar esperar o próximo filtro/
+// ordenação disparar um renderizarLancamentos() completo. Se a linha não
+// estiver na página carregada agora (paginação/filtro), não faz nada — na
+// próxima vez que aparecer, já vem com o link certo (lido de state.erp/
+// state.manual, que já foi atualizado por quem chamou).
+function atualizarLinhaAnexosSeVisivel_(id) {
+  const linhas = document.querySelectorAll('#tabela-lancamentos tbody tr[data-id]');
+  for (const tr of linhas) {
+    if (tr.dataset.id !== id) continue;
+    const item = state.erp.concat(state.manual).find((i) => i.ID === id);
+    if (!item) return;
+    const td = tr.querySelector('td.col-anexos');
+    if (td) td.innerHTML = celulaAnexosLancamento_(item);
+    return;
+  }
 }
 
 function renderizarLancamentos() {
@@ -6053,6 +6083,74 @@ function atualizarModalLinhaSeAberto_(id) {
   renderizarModalLinha();
 }
 
+// ---------- Varredura automática de anexos ----------
+// Antes, achar o link do documento/comprovante de um título exigia clicar
+// no botão dele (definirOuAbrirAnexo busca no Drive só quando alguém
+// clica); pedido explícito: eliminar esse clique. Isto aqui roda a MESMA
+// busca (buscarMelhorAnexoDrive_) sozinha, em segundo plano, pra todo
+// lançamento (ERP e Manual) que ainda não tem um link de documento e/ou de
+// comprovante gravado — dispara nos pontos em que novos lançamentos sem
+// anexo costumam aparecer (carregamento inicial, login/habilitar edição e
+// importação do Drive), sem precisar de nenhum clique.
+//
+// Roda "oculta": não trava a tela (cada busca é sequencial, com uma pequena
+// pausa entre elas pra não sobrecarregar a busca do Drive) e não dispara o
+// re-render pesado do app inteiro (postarAcao/renderizarTudo) a cada acerto
+// — só grava no servidor (chamarServidor direto) e atualiza a própria
+// linha na tabela e/ou o pop-up de detalhe, se estiverem na tela. Um título
+// sem anexo encontrado simplesmente continua pendente (nada é gravado) —
+// os botões seguem do jeito que estavam, prontos pro cadastro manual de
+// sempre; a própria varredura tenta de novo no próximo gatilho (ex.: a
+// próxima vez que o app for aberto), caso o arquivo apareça no Drive depois.
+let varredurAnexosEmAndamento_ = false;
+let varredurAnexosNovaRodadaPendente_ = false;
+function aguardar_(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+async function iniciarVarredurAnexosAutomatica_() {
+  // Precisa de senha de edição válida — a busca no servidor
+  // (api_buscarAnexoDrive) exige edição, e em modo leitura não há como
+  // gravar o link achado mesmo. Também nunca roda 2 varreduras ao mesmo
+  // tempo: se uma já está em andamento (ex.: importação disparou de novo
+  // enquanto a do carregamento inicial ainda não terminou), só marca que
+  // deve rodar mais uma rodada completa assim que a atual acabar — cobre
+  // os itens que só passaram a existir depois que a rodada em andamento já
+  // tinha montado sua lista.
+  if (MODO_LEITURA) return;
+  if (varredurAnexosEmAndamento_) { varredurAnexosNovaRodadaPendente_ = true; return; }
+  varredurAnexosEmAndamento_ = true;
+  try {
+    do {
+      varredurAnexosNovaRodadaPendente_ = false;
+      const pendentes = [];
+      state.erp.concat(state.manual).forEach((item) => {
+        if (!item['Link Documento']) pendentes.push({ item, tipo: 'documento' });
+        if (!item['Link Comprovante']) pendentes.push({ item, tipo: 'comprovante' });
+      });
+      let encontrados = 0;
+      for (const { item, tipo } of pendentes) {
+        if (MODO_LEITURA) break; // voltou pra leitura no meio da varredura — para por aqui
+        const url = await buscarMelhorAnexoDrive_(item, tipo);
+        if (url) {
+          try {
+            await chamarServidor('definirAnexo', { id: item.ID, origem: item.Origem, tipo, url });
+            item[tipo === 'comprovante' ? 'Link Comprovante' : 'Link Documento'] = url;
+            atualizarLinhaAnexosSeVisivel_(item.ID);
+            atualizarModalLinhaSeAberto_(item.ID);
+            encontrados++;
+          } catch (erro) {
+            // Falha ao gravar (ex.: senha expirou no meio da varredura) —
+            // não interrompe o resto da fila, só este item continua pendente.
+          }
+        }
+        await aguardar_(250); // dá um respiro pra não martelar a busca do Drive
+      }
+      if (encontrados) toast(`🔍 ${encontrados} anexo(s) encontrado(s) e vinculado(s) automaticamente.`);
+    } while (varredurAnexosNovaRodadaPendente_);
+  } finally {
+    varredurAnexosEmAndamento_ = false;
+  }
+}
+
 // Ao sair do campo Código Fornecedor, tenta preencher a Razão Social
 // automaticamente com base em um lançamento já existente com esse código.
 document.querySelector('#form-manual input[name="Código Fornecedor"]').addEventListener('blur', function () {
@@ -6137,6 +6235,7 @@ document.getElementById('form-manual').addEventListener('submit', async (ev) => 
     prefillUsuarioInclusor();
     fecharModalLancamentoManual();
     toast('Lançamento manual salvo com sucesso.');
+    iniciarVarredurAnexosAutomatica_(); // tenta achar o anexo do lançamento recém-criado sozinho
   } catch (erro) {
     // erro já mostrado via toast dentro de postarAcao
   } finally {
@@ -7475,6 +7574,7 @@ async function verificarEImportarDoDrive() {
     resumoEl.innerHTML =
       `<div class="aviso">${itens.length} títulos importados com sucesso a partir de "${resposta.nomeArquivo}" (Google Drive). Veja o resultado no Dashboard e em Lançamentos.</div>`;
     toast('Importação concluída.');
+    iniciarVarredurAnexosAutomatica_(); // títulos recém-importados também entram na varredura, sem precisar clicar
   } catch (e) {
     resumoEl.innerHTML = `<div class="aviso">Falha ao importar: ${e.message}</div>`;
   }
@@ -7509,6 +7609,7 @@ async function habilitarEdicao() {
     } else {
       toast(usuarioEdicaoNome ? `Edição habilitada — bem-vindo(a), ${usuarioEdicaoNome}!` : 'Edição habilitada.');
     }
+    iniciarVarredurAnexosAutomatica_(); // só dá pra buscar/gravar anexo com edição habilitada (ver definição)
   } catch (e) {
     toast('Senha de edição incorreta.');
   }
