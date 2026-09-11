@@ -19,7 +19,15 @@ var HEADERS = [
   'Forma Pagamento', 'Código Fornecedor', 'Parcela', 'Data Baixa',
   'Vencimento', 'R$ Valor', 'Usuário Inclusor', 'Razão Social',
   'Aprovação Remessa', 'Remessa', 'Histórico', 'Origem', 'Status',
-  'Link Documento', 'Link Comprovante', 'Chave Pix', 'Observação', 'Categoria'
+  'Link Documento', 'Link Comprovante', 'Chave Pix', 'Observação', 'Categoria',
+  // Data da última vez que a varredura automática de anexos (ver
+  // iniciarVarredurAnexosAutomatica_ no Index.html) procurou este
+  // documento/comprovante no Drive e NÃO achou nada — sem isso, toda vez
+  // que o app é aberto ela repetia a busca dos milhares de títulos antigos
+  // sem anexo do zero. Com a marca, ela só tenta de novo automaticamente o
+  // que ainda não tem marca nenhuma (título novo) — o histórico continua
+  // disponível pra reclique manual a qualquer momento no botão da linha.
+  'Anexo Documento Verificado', 'Anexo Comprovante Verificado',
 ];
 
 // Perfis de acesso restrito por link próprio: ?usuario=<chave> na URL do
@@ -771,6 +779,38 @@ function api_definirAnexo(payload) {
   throw new Error('Lançamento não encontrado (pode ter sido removido ou reimportado).');
 }
 
+// Marca que a varredura automática (ver iniciarVarredurAnexosAutomatica_ no
+// Index.html) já procurou este documento/comprovante no Drive e NÃO achou
+// nada — é o "checkpoint" que evita repetir a busca de milhares de títulos
+// antigos sem anexo toda vez que o app é aberto (ela só tenta de novo
+// automaticamente o que ainda não tem marca nenhuma). Bem mais leve que
+// api_definirAnexo de propósito: não registra log (rodaria centenas/milhares
+// de vezes por varredura, inundando o histórico) nem devolve api_carregar()
+// inteiro (só grava a marca e confirma) — chamada muitas vezes em sequência
+// pela varredura, sem custar uma releitura+serialização de toda a planilha
+// a cada uma. Nunca falha por linha não encontrada (pode ter sido removida/
+// reimportada entre a varredura montar a lista e chegar nesta linha) — é só
+// uma marca de apoio, não dado crítico.
+function api_marcarAnexoVerificado(payload) {
+  validarAcessoEdicao_(payload);
+  var origem = payload.origem === 'Manual' ? 'Manual' : 'ERP';
+  var coluna = payload.tipo === 'comprovante' ? 'Anexo Comprovante Verificado' : 'Anexo Documento Verificado';
+  var colIdx = HEADERS.indexOf(coluna) + 1;
+  var idCol = HEADERS.indexOf('ID') + 1;
+
+  var sh = getSheet_(origem);
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha < 2) return { ok: true };
+  var ids = sh.getRange(2, idCol, ultimaLinha - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (ids[i][0] === payload.id) {
+      sh.getRange(i + 2, colIdx).setValue(new Date());
+      break;
+    }
+  }
+  return { ok: true };
+}
+
 // Observação livre por lançamento — mesma lógica de api_definirAnexo (só
 // grava 1 coluna, funciona pra ERP e Manual) mas pra texto livre em vez de
 // link. Sobrevive a reimportação do ERP (ver substituirErp_).
@@ -1093,6 +1133,7 @@ function doPost(e) {
     else if (acao === 'removerManual') resultado = api_removerManual(payload);
     else if (acao === 'removerDuplicados') resultado = api_removerDuplicados(payload);
     else if (acao === 'definirAnexo') resultado = api_definirAnexo(payload);
+    else if (acao === 'marcarAnexoVerificado') resultado = api_marcarAnexoVerificado(payload);
     else if (acao === 'buscarAnexoDrive') resultado = api_buscarAnexoDrive(payload);
     else if (acao === 'definirObservacao') resultado = api_definirObservacao(payload);
     else if (acao === 'definirCategoria') resultado = api_definirCategoria(payload);
