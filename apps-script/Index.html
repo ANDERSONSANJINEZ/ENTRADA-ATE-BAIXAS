@@ -6041,7 +6041,7 @@ async function buscarMelhorAnexoDrive_(item, tipo) {
   try {
     const dados = await chamarServidor('buscarAnexoDrive', {
       nDocumento: item['Nº Documento'], codigoFornecedor: item['Código Fornecedor'], razaoSocial: item['Razão Social'],
-      tipoDocumento: item['Tipo'], tipo,
+      tipoDocumento: item['Tipo'], tipo, parcela: item['Parcela'],
     });
     const candidatos = (dados && dados.candidatos) || [];
     return candidatos.length ? candidatos[0].url : null;

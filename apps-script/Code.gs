@@ -993,6 +993,15 @@ function api_buscarAnexoDrive(payload) {
   var palavrasFornecedor = normalizarTextoBusca_(payload.razaoSocial).split(' ')
     .filter(function (p) { return p.length >= 4; });
   var buscandoComprovante = payload.tipo === 'comprovante';
+  // Parcela do título (ex.: "1", "2", "3") — usada só pra comprovante (ver
+  // marca "NxM" no nome do arquivo, checada mais abaixo): um título com
+  // várias parcelas tem várias linhas com o MESMO Nº Documento + Código
+  // Fornecedor, cada uma com sua própria Parcela, mas cada comprovante
+  // bancário só quita UMA parcela por vez. Sem esse filtro, o 1º comprovante
+  // achado (ex.: da parcela 1) batia igual em qualquer uma das outras linhas
+  // (2, 3...) desse mesmo título, marcando parcelas ainda não pagas como se
+  // já tivessem comprovante.
+  var parcelaAlvo = removerZerosEsquerda_(String(payload.parcela || '')).trim();
 
   // Combina Nº Documento + Código Fornecedor (nas duas larguras possíveis,
   // 8 e 9 dígitos) na busca sempre que o código estiver disponível (é o
@@ -1054,6 +1063,24 @@ function api_buscarAnexoDrive(payload) {
     var primeiroToken = tokens[0];
     var ehComprovante = PREFIXOS_COMPROVANTE.indexOf(primeiroToken) !== -1;
     if (buscandoComprovante !== ehComprovante) continue;
+    // Descrição do boleto (extraída pelo "Separar comprovantes bancários",
+    // ver comprovanteNomeArquivo no Index.html) traz a parcela nesse formato
+    // quando o título tem mais de uma: "N" + "X" + total, ex.: "1X3" pro
+    // comprovante que quita a parcela 1 de 3 — vira um token só depois de
+    // normalizarTextoBusca_ (X é alfanumérico, não é separador). Se o nome
+    // do arquivo tem essa marca e ela aponta pra OUTRA parcela que não a
+    // deste título, não é o comprovante certo pra ele — pula, mesmo que o
+    // resto do nome bata (Nº Documento e Código Fornecedor são iguais em
+    // todas as parcelas do mesmo título, então sozinhos não distinguem
+    // qual parcela cada comprovante realmente quita).
+    if (buscandoComprovante && parcelaAlvo) {
+      var marcaParcela = null;
+      for (var t = 0; t < tokens.length; t++) {
+        var m = tokens[t].match(/^0*(\d+)X0*(\d+)$/);
+        if (m) { marcaParcela = m; break; }
+      }
+      if (marcaParcela && marcaParcela[1] !== parcelaAlvo) continue;
+    }
     candidatos.push({ nome: nome, url: arquivo.getUrl(), pontuacao: pontuacao });
   }
 

@@ -154,6 +154,17 @@ A busca automática exige que o nome do arquivo no Drive siga o padrão
 DISTRIBUIDORA.pdf", "COMPROVANTE 351 RENOVE DISTRIB 15466144.pdf") — sem
 isso ela não encontra o arquivo e cai direto no cadastro manual.
 
+Título parcelado tem uma linha por parcela, todas com o mesmo Nº Documento
+e Código Fornecedor — só o comprovante bancário muda de uma parcela pra
+outra. Quando o nome do arquivo traz a marca "NxM" (ex.: "1X3" no
+comprovante que quita a parcela 1 de 3, no formato da descrição do boleto),
+a busca de **comprovante** só sugere o arquivo pra linha da parcela
+correspondente — um comprovante da parcela 1 não é mais sugerido/gravado
+como se fosse também da parcela 2 ou 3 do mesmo título. Arquivo sem essa
+marca no nome (título sem parcelamento) continua batendo normalmente. A
+busca de **documento** (a NF em si, igual pra todas as parcelas do título)
+não usa esse filtro.
+
 Os links ficam guardados nas colunas `Link Documento`/`Link Comprovante` da
 planilha (abas `ERP` e `Manual`) e são **preservados entre reimportações**
 do ERP — a reimportação diária substitui todos os títulos, mas reconhece o
