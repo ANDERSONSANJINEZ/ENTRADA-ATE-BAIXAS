@@ -1074,11 +1074,7 @@ function api_buscarAnexoDrive(payload) {
     // todas as parcelas do mesmo título, então sozinhos não distinguem
     // qual parcela cada comprovante realmente quita).
     if (buscandoComprovante && parcelaAlvo) {
-      var marcaParcela = null;
-      for (var t = 0; t < tokens.length; t++) {
-        var m = tokens[t].match(/^0*(\d+)X0*(\d+)$/);
-        if (m) { marcaParcela = m; break; }
-      }
+      var marcaParcela = extrairMarcaParcela_(tokens);
       if (marcaParcela && marcaParcela[1] !== parcelaAlvo) continue;
     }
     candidatos.push({ nome: nome, url: arquivo.getUrl(), pontuacao: pontuacao });
@@ -1086,6 +1082,120 @@ function api_buscarAnexoDrive(payload) {
 
   candidatos.sort(function (a, b) { return b.pontuacao - a.pontuacao; });
   return { candidatos: candidatos.slice(0, 5) };
+}
+
+// Acha a marca "NxM" (parcela/total) num nome de arquivo já normalizado e
+// dividido em tokens — ex.: ["COMPROVANTE","558258","PRD","1X3","03461082"]
+// devolve o match de "1X3" (grupo 1 = parcela do arquivo, grupo 2 = total).
+// null se o nome não tiver essa marca (arquivo de título sem parcelamento,
+// ou que não segue esse padrão). Compartilhado entre api_buscarAnexoDrive
+// (filtra candidato na hora de buscar) e corrigirVinculosComprovanteParcela_
+// (audita o que já foi gravado antes desse filtro existir).
+function extrairMarcaParcela_(tokens) {
+  for (var t = 0; t < tokens.length; t++) {
+    var m = tokens[t].match(/^0*(\d+)X0*(\d+)$/);
+    if (m) return m;
+  }
+  return null;
+}
+
+// ---------- Correção pontual: comprovantes vinculados à parcela errada ----------
+// Rotina de manutenção — roda 1 vez só (ou quantas vezes quiser: é
+// idempotente, não mexe em quem já está certo). NÃO é chamada pela tela; só
+// direto do editor do Apps Script (Extensões → Apps Script → no menu de
+// funções no topo, selecionar corrigirVinculosComprovanteParcela_ →
+// Executar).
+//
+// Corrige o efeito colateral do bug já resolvido em api_buscarAnexoDrive:
+// antes do filtro de parcela existir, o comprovante de UMA parcela podia
+// ter sido gravado como Link Comprovante de OUTRAS parcelas do mesmo título
+// (mesmo Nº Documento + Código Fornecedor, Parcela diferente), porque a
+// busca automática não conferia a parcela — só corrigir a busca (já feito)
+// não desfaz o que já ficou errado gravado antes. Esta rotina varre ERP e
+// Manual e, para cada linha com Parcela preenchida e Link Comprovante já
+// gravado, confere se o nome do arquivo no Drive tem a marca "NxM" (mesma
+// lógica de extrairMarcaParcela_/api_buscarAnexoDrive); se a marca existir
+// e apontar pra OUTRA parcela que não a da própria linha, o link está
+// errado — a rotina limpa o Link Comprovante e o checkpoint "Anexo
+// Comprovante Verificado" dessa linha, pra que a varredura automática (ou
+// um clique manual no botão 🧾 da linha) ache o comprovante certo depois,
+// já com a busca corrigida. Nunca apaga nada do Drive — só o link gravado
+// na planilha, que sempre pode ser buscado de novo. Arquivo sem a marca
+// "NxM" no nome (título sem parcelamento, ou nome fora do padrão) nunca é
+// mexido — sem a marca não dá pra saber se está errado, então não arrisca.
+//
+// Por padrão roda em modo SIMULAÇÃO (DRY_RUN = true): só lista no Log de
+// execução (Execução → Ver registros, no editor do Apps Script) o que
+// seria corrigido, sem gravar nada na planilha. Confira a lista, troque a
+// constante abaixo pra false e rode de novo pra aplicar de verdade.
+function corrigirVinculosComprovanteParcela_() {
+  var DRY_RUN = true; // true = só lista o que seria corrigido; false = aplica de verdade
+
+  var parcelaCol = HEADERS.indexOf('Parcela');
+  var linkCompCol = HEADERS.indexOf('Link Comprovante');
+  var verificadoCol = HEADERS.indexOf('Anexo Comprovante Verificado');
+  var docCol = HEADERS.indexOf('Nº Documento');
+  var razaoCol = HEADERS.indexOf('Razão Social');
+
+  var resumo = [];
+  var totalCorrigido = 0;
+  var totalNaoVerificavel = 0;
+
+  ['ERP', 'Manual'].forEach(function (origem) {
+    var sh = getSheet_(origem);
+    var ultimaLinha = sh.getLastRow();
+    if (ultimaLinha < 2) return;
+    var dados = sh.getRange(2, 1, ultimaLinha - 1, HEADERS.length).getValues();
+
+    dados.forEach(function (linha, idx) {
+      var parcela = removerZerosEsquerda_(String(linha[parcelaCol] || '')).trim();
+      var linkComp = String(linha[linkCompCol] || '').trim();
+      if (!parcela || !linkComp) return;
+
+      var idArquivo = extrairIdArquivoDrive_(linkComp);
+      if (!idArquivo) { totalNaoVerificavel++; return; } // não é link do Drive — não dá pra conferir, deixa como está
+
+      var nome;
+      try {
+        nome = DriveApp.getFileById(idArquivo).getName();
+      } catch (e) {
+        totalNaoVerificavel++; // arquivo removido/sem permissão — não mexe, evita apagar link por engano
+        return;
+      }
+
+      var marcaParcela = extrairMarcaParcela_(normalizarTextoBusca_(nome).split(' '));
+      if (!marcaParcela || marcaParcela[1] === parcela) return; // sem marca, ou marca bate — nada a corrigir
+
+      totalCorrigido++;
+      resumo.push(origem + ' | Nº ' + linha[docCol] + ' | ' + linha[razaoCol] + ' | Parcela ' + parcela +
+        ' | link era da parcela ' + marcaParcela[1] + '/' + marcaParcela[2] + ' | ' + nome);
+
+      if (!DRY_RUN) {
+        sh.getRange(idx + 2, linkCompCol + 1).setValue('');
+        sh.getRange(idx + 2, verificadoCol + 1).setValue('');
+      }
+    });
+  });
+
+  Logger.log((DRY_RUN ? '[SIMULAÇÃO] ' : '') + totalCorrigido + ' link(s) de comprovante com parcela errada ' +
+    (DRY_RUN ? 'encontrados (nada foi alterado ainda — troque DRY_RUN pra false e rode de novo pra aplicar):' : 'corrigidos (link removido, pronto pra busca automática achar o certo):'));
+  resumo.forEach(function (l) { Logger.log(l); });
+  if (totalNaoVerificavel) Logger.log(totalNaoVerificavel + ' link(s) não puderam ser conferidos (não é link do Drive, ou arquivo removido/sem permissão) — deixados como estavam.');
+
+  if (!DRY_RUN && totalCorrigido) {
+    registrarLog_('(script manual)', 'Corrigir vínculos de comprovante por parcela',
+      totalCorrigido + ' link(s) de comprovante removido(s) por apontar pra parcela errada do mesmo título — ver Execução do Apps Script para a lista.');
+  }
+  return totalCorrigido;
+}
+
+// Extrai o ID de um arquivo a partir de um link do Google Drive, nos
+// formatos mais comuns ("/file/d/<ID>/...", ".../open?id=<ID>",
+// ".../uc?id=<ID>"). null se o link não for reconhecido.
+function extrairIdArquivoDrive_(url) {
+  var s = String(url || '');
+  var m = s.match(/\/d\/([a-zA-Z0-9_-]{10,})/) || s.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+  return m ? m[1] : null;
 }
 
 // Campos que o modal de detalhamento pode alterar num lançamento MANUAL —

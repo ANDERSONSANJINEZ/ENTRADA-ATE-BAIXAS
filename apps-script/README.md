@@ -165,6 +165,19 @@ marca no nome (título sem parcelamento) continua batendo normalmente. A
 busca de **documento** (a NF em si, igual pra todas as parcelas do título)
 não usa esse filtro.
 
+Esse filtro só vale pra buscas feitas depois dele existir — não corrige
+sozinho um `Link Comprovante` que já tinha sido gravado errado (de outra
+parcela do mesmo título) antes dessa correção. Pra limpar o que já ficou
+errado, rode 1 vez a função `corrigirVinculosComprovanteParcela_` direto do
+editor do Apps Script (Extensões → Apps Script → menu de funções no topo →
+selecione `corrigirVinculosComprovanteParcela_` → **Executar**). Por padrão
+ela roda em modo simulação (só lista em Execução → Ver registros o que
+seria corrigido, sem gravar nada); depois de conferir a lista, troque a
+constante `DRY_RUN` pra `false` no início da função e rode de novo pra
+aplicar. Ela nunca apaga arquivo nenhum do Drive — só limpa o link errado
+na planilha, pra que a busca automática (já corrigida) ache o comprovante
+certo depois.
+
 Os links ficam guardados nas colunas `Link Documento`/`Link Comprovante` da
 planilha (abas `ERP` e `Manual`) e são **preservados entre reimportações**
 do ERP — a reimportação diária substitui todos os títulos, mas reconhece o
