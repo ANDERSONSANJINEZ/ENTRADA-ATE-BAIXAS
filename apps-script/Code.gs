@@ -1061,6 +1061,295 @@ function api_buscarAnexoDrive(payload) {
   return { candidatos: candidatos.slice(0, 5) };
 }
 
+// ---------- Índice de anexos + varredura automática por gatilho de tempo ----------
+// api_buscarAnexoDrive acima (usada pelo clique manual no botão da linha) faz
+// uma busca AO VIVO no Drive a cada chamada — ótimo pra 1 título só, mas
+// martelar o Drive um título de cada vez pra milhares de pendentes (ver
+// iniciarVarredurAnexosAutomatica_ no Index.html) é caro e trava atrás de a
+// pessoa manter a aba aberta o tempo todo. As duas peças abaixo resolvem os
+// dois problemas juntos: (1) um índice próprio dos PDFs das pastas de
+// PASTAS_BUSCA_ANEXO, guardado numa aba (bem mais barato de consultar que
+// perguntar ao Drive de novo pra cada título) e (2) uma função pensada pra
+// rodar sozinha, por um gatilho de tempo do Apps Script (configurarGatilho
+// VarreduraAnexos, mais abaixo) — sem depender de ninguém com o navegador
+// aberto.
+var SHEET_INDICE_ANEXOS = 'Índice Anexos';
+var HEADERS_INDICE_ANEXOS = ['ID Arquivo', 'Nome', 'URL', 'Nome Normalizado', 'Indexado Em'];
+var PROP_INDICE_BOOTSTRAP_FILA = 'indiceAnexosBootstrapFila';
+var PROP_INDICE_ULTIMA_ATUALIZACAO = 'indiceAnexosUltimaAtualizacao';
+// Teto de tempo por chamada — o limite de execução do Apps Script é 6 min;
+// paramos bem antes disso pra sempre sobrar tempo de gravar o progresso
+// (fila do bootstrap, checkpoints por título) sem perder nada no meio.
+var LIMITE_MS_VARREDURA_ANEXOS = 4.5 * 60 * 1000;
+
+function getSheetIndiceAnexos_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(SHEET_INDICE_ANEXOS);
+  if (!sh) {
+    sh = ss.insertSheet(SHEET_INDICE_ANEXOS);
+    sh.appendRow(HEADERS_INDICE_ANEXOS);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// Carrega o índice inteiro em memória (1 leitura de planilha) — usado pela
+// varredura em lote abaixo pra checar centenas/milhares de títulos sem
+// perguntar ao Drive de novo a cada um.
+function carregarIndiceAnexos_() {
+  var sh = getSheetIndiceAnexos_();
+  var ultimaLinha = sh.getLastRow();
+  if (ultimaLinha < 2) return [];
+  var valores = sh.getRange(2, 1, ultimaLinha - 1, HEADERS_INDICE_ANEXOS.length).getValues();
+  return valores
+    .filter(function (l) { return l[0]; })
+    .map(function (l) { return { id: l[0], nome: l[1], url: l[2], nomeNorm: l[3] }; });
+}
+
+function adicionarAoIndiceAnexos_(sh, arquivos, idsExistentes) {
+  var linhas = [];
+  arquivos.forEach(function (arquivo) {
+    var id = arquivo.getId();
+    if (idsExistentes[id]) return;
+    idsExistentes[id] = true;
+    linhas.push([id, arquivo.getName(), arquivo.getUrl(), normalizarTextoBusca_(arquivo.getName()), new Date()]);
+  });
+  if (linhas.length) sh.getRange(sh.getLastRow() + 1, 1, linhas.length, HEADERS_INDICE_ANEXOS.length).setValues(linhas);
+  return linhas.length;
+}
+
+// 1ª varredura (índice ainda vazio, sem fila salva de uma rodada anterior):
+// caminha pelas 3 pastas de PASTAS_BUSCA_ANEXO E subpastas (necessário —
+// "16 COMPROVANTE PAGTO" é organizada por ano/mês) catalogando todo PDF
+// encontrado. Roda em lotes de até LIMITE_MS_VARREDURA_ANEXOS por chamada,
+// salvando as pastas ainda não visitadas em PROP_INDICE_BOOTSTRAP_FILA —
+// a próxima vez que o gatilho disparar, continua exatamente de onde parou
+// em vez de recomeçar do zero.
+function indexarBootstrap_() {
+  var props = PropertiesService.getScriptProperties();
+  var sh = getSheetIndiceAnexos_();
+  var idsExistentes = {};
+  carregarIndiceAnexos_().forEach(function (r) { idsExistentes[r.id] = true; });
+
+  var filaSalva = props.getProperty(PROP_INDICE_BOOTSTRAP_FILA);
+  var fila = filaSalva ? JSON.parse(filaSalva) : PASTAS_BUSCA_ANEXO.slice();
+
+  var inicio = Date.now();
+  var totalNovos = 0;
+  while (fila.length && (Date.now() - inicio) < LIMITE_MS_VARREDURA_ANEXOS) {
+    var idPasta = fila.shift();
+    var pasta;
+    try {
+      pasta = DriveApp.getFolderById(idPasta);
+    } catch (e) {
+      continue; // pasta inacessível/removida nesse meio tempo — pula, não trava o resto
+    }
+    var arquivosPasta = pasta.getFilesByType(MimeType.PDF);
+    var lote = [];
+    while (arquivosPasta.hasNext()) lote.push(arquivosPasta.next());
+    totalNovos += adicionarAoIndiceAnexos_(sh, lote, idsExistentes);
+
+    var subpastas = pasta.getFolders();
+    while (subpastas.hasNext()) fila.push(subpastas.next().getId());
+  }
+
+  if (fila.length) {
+    props.setProperty(PROP_INDICE_BOOTSTRAP_FILA, JSON.stringify(fila));
+  } else {
+    props.deleteProperty(PROP_INDICE_BOOTSTRAP_FILA);
+    props.setProperty(PROP_INDICE_ULTIMA_ATUALIZACAO, new Date().toISOString());
+  }
+  return { novos: totalNovos, pastasRestantes: fila.length };
+}
+
+// Depois que o bootstrap acima termina 1 vez: só busca PDF modificado desde
+// a última atualização — bem mais barato que reindexar tudo de novo — com
+// o mesmo filtro de pasta de sempre (arquivoDentroDasPastasAlvo_), só que
+// aplicado a poucos arquivos (os recentes), não ao Drive inteiro.
+function indexarIncremental_() {
+  var props = PropertiesService.getScriptProperties();
+  var sh = getSheetIndiceAnexos_();
+  var idsExistentes = {};
+  carregarIndiceAnexos_().forEach(function (r) { idsExistentes[r.id] = true; });
+
+  var ultimaIso = props.getProperty(PROP_INDICE_ULTIMA_ATUALIZACAO) || '2020-01-01T00:00:00Z';
+  var dataConsulta = Utilities.formatDate(new Date(ultimaIso), 'GMT', "yyyy-MM-dd'T'HH:mm:ss");
+  var query = "mimeType = 'application/pdf' and trashed = false and modifiedDate > '" + dataConsulta + "'";
+  var resultados;
+  try {
+    resultados = DriveApp.searchFiles(query);
+  } catch (e) {
+    return { novos: 0, erro: e.message };
+  }
+  var candidatos = [];
+  var verificados = 0;
+  while (resultados.hasNext() && verificados < 2000) {
+    var arquivo = resultados.next();
+    verificados++;
+    if (arquivoDentroDasPastasAlvo_(arquivo)) candidatos.push(arquivo);
+  }
+  var novos = adicionarAoIndiceAnexos_(sh, candidatos, idsExistentes);
+  props.setProperty(PROP_INDICE_ULTIMA_ATUALIZACAO, new Date().toISOString());
+  return { novos: novos };
+}
+
+// Mesma lógica de pontuação de api_buscarAnexoDrive (Nº Documento como
+// palavra inteira + Código Fornecedor no nome + documento/comprovante pelo
+// prefixo), só que aplicada ao índice já carregado em memória em vez de
+// perguntar ao Drive a cada chamada — usada pela varredura em lote abaixo.
+function melhorAnexoNoIndice_(indice, nDocumento, codigoFornecedor, razaoSocial, tipo) {
+  var nDocOriginal = removerZerosEsquerda_(String(nDocumento || '')).trim();
+  var nDocAlvo = normalizarTextoBusca_(nDocOriginal);
+  if (!nDocAlvo) return [];
+  var codigosFornecedor = paddingsFornecedor_(codigoFornecedor);
+  if (!codigosFornecedor.length && nDocAlvo.length < 3) return [];
+  var palavrasFornecedor = normalizarTextoBusca_(razaoSocial).split(' ').filter(function (p) { return p.length >= 4; });
+  var buscandoComprovante = tipo === 'comprovante';
+
+  var candidatos = [];
+  indice.forEach(function (arq) {
+    var tokens = arq.nomeNorm.split(' ');
+    if (tokens.indexOf(nDocAlvo) === -1) return;
+    var pontuacao = 1;
+    var codigoBate = codigosFornecedor.some(function (c) { return arq.nomeNorm.indexOf(c) !== -1; });
+    if (codigoBate) pontuacao += 2;
+    pontuacao += palavrasFornecedor.filter(function (p) { return arq.nomeNorm.indexOf(p) !== -1; }).length;
+    if (!codigoBate && pontuacao < 2) return;
+    var ehComprovante = PREFIXOS_COMPROVANTE.indexOf(tokens[0]) !== -1;
+    if (buscandoComprovante !== ehComprovante) return;
+    candidatos.push({ url: arq.url, pontuacao: pontuacao });
+  });
+  candidatos.sort(function (a, b) { return b.pontuacao - a.pontuacao; });
+  return candidatos;
+}
+
+// Ponto de entrada da varredura automática — chamado pelo gatilho de tempo
+// (ver configurarGatilhoVarreduraAnexos) e também disponível como ação
+// 'varrerAnexosAgora' pra testar/forçar uma rodada sem esperar o horário.
+// LockService evita 2 rodadas ao mesmo tempo (ex.: o gatilho disparou de
+// novo enquanto uma rodada anterior, mais lenta, ainda não tinha terminado).
+//
+// Prioridade: enquanto o índice ainda está no bootstrap (1ª varredura,
+// pastas grandes podem levar mais de uma chamada pra esgotar — ver
+// indexarBootstrap_), a função SÓ avança o índice e não mexe em nenhum
+// título ainda — um índice incompleto marcaria título de verdade como "não
+// achei" só por ainda não ter chegado na pasta dele, e essa marca
+// (Anexo Verificado) é permanente até alguém reclicar manualmente na linha.
+// Só depois que o bootstrap termina é que a varredura passa a gastar o
+// tempo checando os títulos pendentes contra o índice (agora completo).
+function varrerAnexosAutomaticoServidor_() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return { ok: false, motivo: 'já existe uma varredura em andamento' };
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var bootstrapPendente = !!props.getProperty(PROP_INDICE_BOOTSTRAP_FILA) || !props.getProperty(PROP_INDICE_ULTIMA_ATUALIZACAO);
+    if (bootstrapPendente) {
+      var resultadoBootstrap = indexarBootstrap_();
+      registrarLog_('Sistema', 'Índice de anexos (montagem inicial)',
+        resultadoBootstrap.novos + ' arquivo(s) indexado(s) · ' + resultadoBootstrap.pastasRestantes + ' pasta(s) restante(s)');
+      return { ok: true, fase: 'bootstrap', resultado: resultadoBootstrap };
+    }
+
+    var resultadoIncremental = indexarIncremental_();
+    var indice = carregarIndiceAnexos_();
+
+    var erp = lerAba_('ERP');
+    var manual = lerAba_('Manual');
+    var pendentes = [];
+    erp.concat(manual).forEach(function (item) {
+      if (!item['Link Documento'] && !item['Anexo Documento Verificado']) pendentes.push({ item: item, tipo: 'documento' });
+      if (!item['Link Comprovante'] && !item['Anexo Comprovante Verificado']) pendentes.push({ item: item, tipo: 'comprovante' });
+    });
+
+    var shErp = getSheet_('ERP');
+    var shManual = getSheet_('Manual');
+    var idCol = HEADERS.indexOf('ID');
+    var colLinkDoc = HEADERS.indexOf('Link Documento') + 1;
+    var colLinkComp = HEADERS.indexOf('Link Comprovante') + 1;
+    var colVerifDoc = HEADERS.indexOf('Anexo Documento Verificado') + 1;
+    var colVerifComp = HEADERS.indexOf('Anexo Comprovante Verificado') + 1;
+
+    // ID -> nº da linha na planilha certa, montado 1 vez (evita varrer a
+    // aba inteira de novo pra achar a linha de cada pendente).
+    function mapaLinhas_(itens) {
+      var mapa = {};
+      itens.forEach(function (it, idx) { mapa[it.ID] = idx + 2; });
+      return mapa;
+    }
+    var linhasErp = mapaLinhas_(erp);
+    var linhasManual = mapaLinhas_(manual);
+
+    var inicio = Date.now();
+    var encontrados = 0, semAchar = 0, processados = 0;
+    for (var i = 0; i < pendentes.length; i++) {
+      if ((Date.now() - inicio) > LIMITE_MS_VARREDURA_ANEXOS) break; // deixa o resto pra próxima rodada do gatilho
+      var p = pendentes[i];
+      var linha = (p.item.Origem === 'Manual' ? linhasManual : linhasErp)[p.item.ID];
+      if (!linha) continue; // linha sumiu (removida/reimportada) entre a leitura e agora
+      var sh = p.item.Origem === 'Manual' ? shManual : shErp;
+      var candidatos = melhorAnexoNoIndice_(indice, p.item['Nº Documento'], p.item['Código Fornecedor'], p.item['Razão Social'], p.tipo);
+      if (candidatos.length) {
+        sh.getRange(linha, p.tipo === 'comprovante' ? colLinkComp : colLinkDoc).setValue(candidatos[0].url);
+        encontrados++;
+      } else {
+        sh.getRange(linha, p.tipo === 'comprovante' ? colVerifComp : colVerifDoc).setValue(new Date());
+        semAchar++;
+      }
+      processados++;
+    }
+
+    registrarLog_('Sistema', 'Varredura automática de anexos',
+      processados + ' título(s) verificado(s) · ' + encontrados + ' encontrado(s) · ' + semAchar + ' sem anexo no índice · ' +
+      (pendentes.length - processados) + ' pendente(s) pra próxima rodada · índice: +' + resultadoIncremental.novos + ' arquivo(s) novo(s)');
+    return { ok: true, fase: 'varredura', processados: processados, encontrados: encontrados, semAchar: semAchar, pendentesRestantes: pendentes.length - processados };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Roda direto no HTTP (ação 'varrerAnexosAgora') — mesma função do gatilho,
+// só que disparável na hora (pra testar, ou forçar uma rodada extra sem
+// esperar a próxima batida do relógio). Exige edição, igual às outras ações
+// de escrita — mesmo não gravando nada em nome de ninguém específico
+// (roda como 'Sistema' no log), é uma ação que pode mexer em várias linhas.
+function api_varrerAnexosAgora(payload) {
+  validarAcessoEdicao_(payload);
+  return varrerAnexosAutomaticoServidor_();
+}
+
+// Nome fixo da função-alvo do gatilho — usado tanto pra criar quanto pra
+// achar/remover um gatilho já existente (evita duplicar se rodar de novo).
+var NOME_FUNCAO_GATILHO_ANEXOS = 'varrerAnexosAutomaticoServidor_';
+
+// Só dá pra criar um gatilho de tempo EXECUTANDO código, não editando este
+// arquivo — depois de publicar esta versão, abra o editor do Apps Script
+// (script.google.com, dentro do projeto vinculado a esta planilha),
+// selecione "configurarGatilhoVarreduraAnexos" no menu de funções e clique
+// em Executar 1 vez (vai pedir autorização de Drive/planilha, normal). A
+// partir daí a varredura roda sozinha todo santo dia, sem depender de
+// ninguém com o navegador aberto — pra mudar a frequência, troque
+// ".everyHours(1)" abaixo e rode esta função nesse mesmo jeito de novo
+// (idempotente: remove o gatilho antigo antes de criar o novo, nunca
+// duplica).
+function configurarGatilhoVarreduraAnexos() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === NOME_FUNCAO_GATILHO_ANEXOS) ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger(NOME_FUNCAO_GATILHO_ANEXOS)
+    .timeBased()
+    .everyHours(1)
+    .create();
+}
+
+// Idem acima, só que pra desligar a varredura automática (ex.: se algum dia
+// precisar pausar) — também rodado manualmente 1 vez no editor do Apps
+// Script.
+function removerGatilhoVarreduraAnexos() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === NOME_FUNCAO_GATILHO_ANEXOS) ScriptApp.deleteTrigger(t);
+  });
+}
+
 // Campos que o modal de detalhamento pode alterar num lançamento MANUAL —
 // tudo, exceto ID/Origem/Status (Status é sempre recalculado depois, nunca
 // escrito direto pelo cliente). Só existe pra Manual: um título de ERP é
@@ -1135,6 +1424,7 @@ function doPost(e) {
     else if (acao === 'definirAnexo') resultado = api_definirAnexo(payload);
     else if (acao === 'marcarAnexoVerificado') resultado = api_marcarAnexoVerificado(payload);
     else if (acao === 'buscarAnexoDrive') resultado = api_buscarAnexoDrive(payload);
+    else if (acao === 'varrerAnexosAgora') resultado = api_varrerAnexosAgora(payload);
     else if (acao === 'definirObservacao') resultado = api_definirObservacao(payload);
     else if (acao === 'definirCategoria') resultado = api_definirCategoria(payload);
     else if (acao === 'validarEdicao') resultado = api_validarEdicao(payload);
