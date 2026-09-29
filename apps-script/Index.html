@@ -5264,6 +5264,11 @@ const CATEGORIA_POR_FORNECEDOR_ = {
 const CATEGORIA_POR_NOME_FORNECEDOR_ = {
   'NORDBRITA': 'AGREGADO',
   '49.054.895 PALOMA DE ARAUJO': 'PRESTACAO SERVICO',
+  // Pedido explícito: este fornecedor é sempre DORMENTE, independente de
+  // como o Histórico descreve o item (a aproximação por palavra-chave do
+  // Histórico só entra quando o fornecedor não está fixo aqui — ver
+  // categoriaFornecedor_ logo abaixo).
+  'EMPAC DO NOR ARTEF D': 'DORMENTE',
 };
 // Chave pra bater com CATEGORIA_POR_FORNECEDOR_: Código Fornecedor sem
 // zeros à esquerda (mesma normalização feita na importação — ver
@@ -5316,6 +5321,37 @@ const PALAVRAS_CATEGORIA_HISTORICO_ = [
   [/REEMBOLSO CAIXINHA/i, 'REEMBOLSO'],
   [/RESCIS[AÃ]O/i, 'FOLHA PAGTO'],
   [/PRESTA[CÇ][AÃ]O DE SERVI[CÇ]O|SERVI[CÇ]O/i, 'PRESTAÇÃO DE SERVIÇO'],
+  // Pedido explícito: qualquer Histórico com "DORMENTE(S)" vira categoria
+  // DORMENTE, não importa a especificação exata do trilho/fixação (ex.:
+  // "39 R TR45" x "39 RI TR45 S-75") — cobre também fornecedor novo que
+  // ainda não esteja no de-para fixo (ver EMPAC DO NOR ARTEF D em
+  // CATEGORIA_POR_NOME_FORNECEDOR_, que já garante isso pra ESTE
+  // fornecedor mesmo sem "DORMENTE" no Histórico).
+  [/DORMENTES?/i, 'DORMENTE'],
+  // "PRESTACAO DE SERV." abreviado (sem terminar em "SERVICO"/"SERVIÇO")
+  // não batia na regra de PRESTAÇÃO DE SERVIÇO acima — ex.: "PRESTACAO DE
+  // SERV. DE GESTAO...".
+  [/PRESTA[CÇ][AÃ]O DE SERV\.?\s*DE GE/i, 'PRESTAÇÃO DE SERVIÇO'],
+  [/SERV\.?\s*DE IMAGENS/i, 'PRESTAÇÃO DE SERVIÇO'],
+  // Contas recorrentes por apartamento (alojamento) — mês e nº do
+  // apartamento variam a cada lançamento, por isso palavra-chave em vez de
+  // um de-para exato por mês (senão cada mês novo cai fora de novo, mesmo
+  // bug do Dormente). "INTERNET AP" (alojamento) é intencionalmente
+  // diferente de "INTERNET/TELECOM" (de-para fixo abaixo, escritório).
+  [/GAS DE COZINHA/i, 'CONCESSIONARIA'],
+  [/INTERNET AP\b/i, 'CONCESSIONARIA'],
+  [/TAXA DE CONDOMINIO/i, 'ALUGUEL DE IMÓVEL'],
+  // Idem — aluguel de equipamento recorrente, com o período do aluguel
+  // variando a cada lançamento.
+  [/MARTELO DEMOLIDOR/i, 'EQUIPAMENTO LEVE'],
+  // "ALIMENTACAO NOVO COLABORADOR" é benefício de admissão (categoria
+  // diferente da alimentação/refeição normal do canteiro) — checado antes
+  // de qualquer regra futura de "ALIMENTACAO" genérica.
+  [/NOVO COLABOR/i, 'BENEFICIO'],
+  [/CORRE[CÇ][AÃ]O DE VALORES ALIMENTA/i, 'ALIMENTACAO'],
+  [/CALICE INDUSTRIAL/i, 'FERRAMENTA'],
+  [/TINTAS? E DILUENTE/i, 'ESTRUTURA METALICA'],
+  [/CONFORMIDADE LEGAL|\bPCSMO\b/i, 'SEGURANÇA'],
 ];
 // Aproximação de categoria a partir do Tipo/Histórico do lançamento, usada
 // só quando o fornecedor não está no "de-para" fixo. Primeiro tenta pelo
@@ -5368,6 +5404,38 @@ function categoriaDoHistorico_(i) {
 // sem alteração — a lista cobre o que já existia nos dados até agora, mas
 // Histórico/fornecedor novo pode gerar algo ainda não mapeado.
 const DE_PARA_CATEGORIA_ = {
+  // Lote adicionado a partir de um levantamento de Descrição x Categoria
+  // (pedido explícito) — textos exatos de Histórico ainda não vistos antes,
+  // sem palavra-chave clara o bastante pra virar regra em
+  // PALAVRAS_CATEGORIA_HISTORICO_ (nomes de produto/serviço específicos, não
+  // um padrão recorrente). Mantido separado do resto da lista (alfabética)
+  // só pra ficar fácil de auditar este lote depois.
+  'MATERIAL P/ SOLDA ALUMINOTERMICA': 'ESTRUTURA METALICA',
+  'AREIA GROSSA': 'AGREGADO',
+  'CHAPA ACO LAMINADO 1800X6000MM': 'ESTRUTURA METALICA',
+  'CHAPA DE FERRO': 'ESTRUTURA METALICA',
+  'CHAPA DE FERRO 31,50X2440X3000MM': 'ESTRUTURA METALICA',
+  'CHAPA LAMINADA COR350': 'ESTRUTURA METALICA',
+  'CHAPA METALICA INTERNA': 'ESTRUTURA METALICA',
+  'CINTA SLING, PROTECAO DE CINTA': 'EPI/EPC',
+  'CORTADORA K1270 C/GARRA': 'EQUIPAMENTO LEVE',
+  'GAS GLP EM BOTIJAO 45KG': 'CONCESSIONARIA',
+  // Diferente do "AR CONDICIONADO" isolado logo abaixo (compra de
+  // equipamento -> EQUIPAMENTO LEVE): instalação/mão de obra entra como
+  // MOBILIARIO — pedido explícito, categorias diferentes de propósito.
+  'INSTALACAO DE AR CONDICIONADO': 'MOBILIARIO',
+  'LAMPADA PISCA E LAMPADA AUTO': 'MANUTENCAO VEICULO',
+  'MATERIAL PARA VEICULOS LEVE': 'MANUTENCAO VEICULO',
+  'MOTOR DE PARTIDA REMAN 24V': 'MANUTENCAO VEICULO',
+  'P 08/2026 ALIMENTACAO DA OBRA': 'ALIMENTACAO',
+  'PEDRA 3': 'AGREGADO',
+  'PERFIL 2X1 1MM 6M': 'ESTRUTURA METALICA',
+  'PERFIL I W 150X37,1 C/12M': 'ESTRUTURA METALICA',
+  'PREVISAO ALIMENTACAO COLABORADORES': 'ALIMENTACAO',
+  'PREVISAO REEMBOLSO LEONARDO': 'REEMBOLSO',
+  'PROTECAO DE CINTA LARANJA': 'EPI/EPC',
+  'REF. BRINDES DO SETEMBRO AMARELO': 'BENEFICIO',
+  'SEGURO DE VIDA': 'SEGURO',
   'ADESIVOS/SINALIZAÇÃO': 'SINALIZACAO VIARIA',
   'ADIANTAMENTO': 'FOLHA PAGTO',
   'ADIANTAMENTO PARA FORNECEDOR': 'ADIANTAMENTO FORNECEDOR',
@@ -5581,8 +5649,8 @@ const DE_PARA_CATEGORIA_ = {
   'VERGALHÃO': 'ACO TELA TELHA',
   'VERGALHÃO E ARAME': 'ACO TELA TELHA',
   'VIDRO E PEÇAS VEICULARES': 'MANUTENCAO VEICULO',
-  'ÁGUA MINERAL': 'AGUA E ESGOTO',
-  'ÁGUA/ESGOTO': 'AGUA E ESGOTO',
+  'ÁGUA MINERAL': 'CONCESSIONARIA',
+  'ÁGUA/ESGOTO': 'CONCESSIONARIA',
 };
 
 // Categoria exibida na coluna "Categoria" de Todos os lançamentos —
