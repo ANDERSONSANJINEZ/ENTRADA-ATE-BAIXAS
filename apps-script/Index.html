@@ -118,6 +118,11 @@
   .painel { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 16px; margin-bottom: 24px; min-width: 0; }
   .painel h2 { font-size: 15px; margin: 0 0 12px; color: var(--azul); }
   .cabecalho-painel { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  /* Síntese de "quais dados alimentam este gráfico e como ler" — pedido
+     explícito: um texto breve e sempre visível (não só um title de hover,
+     baixa descoberta) embaixo de cada cabeçalho de gráfico do Dashboard.
+     Reaproveita o mesmo estilo que já existia só no painel de Faturamento. */
+  .sintese-grafico { font-size: 12px; color: var(--cinza); margin: -6px 0 14px; line-height: 1.5; }
   /* margin-right:auto no h2 consome todo o espaço livre do flex, então os
      botões que vêm depois (Padrão/Expandir/Exportar etc.) ficam colados uns
      nos outros lá no canto superior direito, em vez de espalhados pelo
@@ -602,7 +607,14 @@
 <main>
 
   <section id="aba-dashboard" class="aba ativa">
-    <input id="busca-dashboard" class="busca-tabela" placeholder="Buscar em Remessa, Aporte, Curva ABC e Categoria…" style="max-width:420px; margin-bottom:16px;">
+    <input id="busca-dashboard" class="busca-tabela" placeholder="Buscar em Remessa, Aporte, Curva ABC e Categoria…" style="max-width:420px; margin-bottom:8px;">
+    <p class="sintese-grafico" style="margin-bottom:16px;">
+      Como ler os gráficos abaixo: salvo aviso em contrário, combinam ERP + lançamentos manuais (sem os marcados como
+      "Duplicado – revisar") e respeitam o filtro <strong>De/Até</strong> do topo da tela, aplicado sobre o
+      <strong>Vencimento</strong> — mude o período ali pra estreitar ou ampliar o que os gráficos mostram. O bloco
+      "Faturamento" é a exceção: segue as datas das próprias medições, não este filtro (ver aviso específico lá).
+      Barras, linhas e pontos costumam ser clicáveis — clique pra ver a lista de títulos por trás do número.
+    </p>
     <div class="dashboard-layout">
       <div class="dashboard-lateral" id="dashboard-lateral">
         <div class="dashboard-lateral-trilho">
@@ -624,6 +636,11 @@
         <h2>Títulos em aberto por faixa de vencimento</h2>
         <button class="btn secundario small" onclick="expandirGrafico('aging', 'Títulos em aberto por faixa de vencimento')">⛶ Expandir</button>
       </div>
+      <p class="sintese-grafico">
+        Cards e gráfico consideram só títulos <strong>em aberto</strong> (sem Data Baixa), agrupados pela distância
+        entre o Vencimento e hoje: a vencer, 1–30, 31–60, 61–90 e 90+ dias de atraso. Clique num card ou numa barra
+        para ver os títulos daquela faixa.
+      </p>
       <div class="cards" id="cards-kpi" style="margin-bottom:18px;"></div>
       <div id="aging-chart-wrap" class="grafico-altura-tela grafico-altura-tela--com-cards">
         <canvas id="chart-aging"></canvas>
@@ -636,6 +653,12 @@
         <h2>Fluxo de caixa projetado (títulos em aberto)</h2>
         <button class="btn secundario small" onclick="expandirGrafico('fluxo', 'Fluxo de caixa projetado (títulos em aberto)')">⛶ Expandir</button>
       </div>
+      <p class="sintese-grafico">
+        Mesma base de títulos em aberto do quadro anterior: o que já venceu vira a barra "Vencido"; o restante é
+        agrupado por mês do Vencimento — quanto sai do caixa em cada mês futuro. A linha vermelha é o saldo
+        acumulado (soma corrida da esquerda pra direita, começando pelo Vencido). Clique numa barra para ver os
+        títulos daquele mês.
+      </p>
       <div id="fluxo-chart-wrap" class="grafico-altura-tela">
         <canvas id="chart-fluxo"></canvas>
       </div>
@@ -647,6 +670,12 @@
         <h2>Situação das baixas</h2>
         <button class="btn secundario small" onclick="expandirGrafico('statusPagamento', 'Situação das baixas')">⛶ Expandir</button>
       </div>
+      <p class="sintese-grafico">
+        Todos os títulos do período (abertos + baixados), agrupados por mês do Vencimento: as 2 linhas são
+        contagens <strong>acumuladas</strong> (soma corrida) — quantos títulos venceram até aquele mês e quantos já
+        foram baixados. Passe o mouse num ponto pra ver a diferença (ainda em aberto); clique nele pra ver os
+        títulos daquele mês.
+      </p>
       <div id="status-pagamento-chart-wrap" class="grafico-altura-tela grafico-altura-tela--com-legenda">
         <canvas id="chart-status-pagamento"></canvas>
       </div>
@@ -660,6 +689,11 @@
         <button class="btn secundario small" onclick="expandirGrafico('remessa', 'Valor por Remessa (últimas 30)')">⛶ Expandir</button>
         <button class="btn secundario small" onclick="exportarXlsx('remessa')">⬇ Exportar Excel</button>
       </div>
+      <p class="sintese-grafico">
+        Soma o R$ Valor de cada título por número de Remessa — só do <strong>ERP</strong> (lançamento manual não tem
+        Remessa) — mostrando as 30 remessas mais recentes (a exportação em Excel traz todas). Clique numa barra
+        para ver os títulos daquela remessa.
+      </p>
       <div id="remessa-chart-wrap" class="grafico-altura-tela">
         <canvas id="chart-remessa"></canvas>
       </div>
@@ -672,13 +706,15 @@
       </div>
       <div id="faturado-pago-aviso" style="display:none; font-size:13px; color:var(--vermelho); margin-bottom:14px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:10px 12px; line-height:1.5;"></div>
       <div id="faturado-pago-conteudo">
-        <p style="font-size:12px; color:var(--cinza); margin-top:0;">
-          Faturado vem do "Valor Líquido (R$)" da planilha de Faturamento (NFS-e por medição dos prestadores). Pago é o
-          total com Vencimento no período entre a medição anterior e esta — na última medição, esse período vai até
-          ontem, pra emendar direto com o "A Pagar" (ver abaixo) sem deixar lacuna nem duplicar título nenhum. Saldo
-          Bruto = Faturado − Pago (na tabela "Por medição" essa mesma conta aparece como Margem). A Pagar é a soma dos
-          títulos com Vencimento a partir de hoje até o último título; Saldo Disponível = Saldo Bruto − A Pagar.
-          Clique numa barra "Pago" ou numa linha da tabela para ver os títulos.
+        <p class="sintese-grafico" style="margin-top:0;">
+          <strong>Este bloco NÃO segue o filtro De/Até do topo</strong> — usa sempre ERP + Manual inteiros, na janela
+          de cada medição (ver abaixo), não o período filtrado. Faturado vem do "Valor Líquido (R$)" da planilha de
+          Faturamento (NFS-e por medição dos prestadores). Pago é o total com Vencimento no período entre a medição
+          anterior e esta — na última medição, esse período vai até ontem, pra emendar direto com o "A Pagar" (ver
+          abaixo) sem deixar lacuna nem duplicar título nenhum. Saldo Bruto = Faturado − Pago (na tabela "Por
+          medição" essa mesma conta aparece como Margem). A Pagar é a soma dos títulos com Vencimento a partir de
+          hoje até o último título; Saldo Disponível = Saldo Bruto − A Pagar. Clique numa barra "Pago" ou numa linha
+          da tabela para ver os títulos.
         </p>
         <div class="cards" id="cards-faturamento" style="margin-bottom:18px;"></div>
         <div class="painel" style="margin-bottom:18px; width:100%;">
@@ -687,6 +723,11 @@
             <button class="btn secundario small" onclick="expandirGrafico('faturadoPagoAcumulado', 'Faturamento, Pago e Saldo Bruto — Acumulado')">⛶ Expandir</button>
             <button class="btn secundario small" onclick="exportarXlsx('faturadoPagoAcumulado')">⬇ Exportar Excel</button>
           </div>
+          <p class="sintese-grafico">
+            As mesmas contas do texto acima (Faturado, Pago, Saldo Bruto), só que <strong>somadas ao longo das
+            medições</strong> desde a 1ª — a área sob cada linha reforça o total acumulado até ali, não o valor
+            daquela medição isolada (isso é o gráfico "Por medição" logo abaixo).
+          </p>
           <div id="faturado-pago-acumulado-chart-wrap" class="grafico-altura-tela">
             <canvas id="chart-faturado-pago-acumulado"></canvas>
           </div>
@@ -700,6 +741,11 @@
               <button class="btn secundario small" id="btn-planilha-faturado-pago" onclick="abrirPlanilhaModal('faturado-pago', 'Por medição')">📋 Planilha</button>
             </div>
           </div>
+          <p class="sintese-grafico">
+            Agora o valor de <strong>cada medição isolada</strong> (não acumulado): uma barra de Faturado e uma de
+            Pago por medição, mesmas contas do texto no topo do bloco. Use "📋 Planilha" pra ver a Margem
+            (Faturado − Pago) linha a linha, ou clique numa barra pra ver os títulos.
+          </p>
           <div class="filtros" style="margin-bottom:8px;">
             <select id="filtro-medicao-faturado-pago">
               <option value="">Medição: todas</option>
@@ -730,6 +776,11 @@
               <button class="btn secundario small" onclick="exportarXlsx('comprometidoEmitido')">⬇ Exportar Excel</button>
             </div>
           </div>
+          <p class="sintese-grafico">
+            Duas curvas em %, uma por medição: <strong>Comprometido Utilizado</strong> = Pago ÷ Faturado;
+            <strong>Emitido</strong> = soma de todos os documentos emitidos no período da medição ÷ Faturado. A
+            faixa cinza entre as curvas é a diferença em R$ — passe o mouse pra ver o valor exato.
+          </p>
           <div id="comprometido-emitido-chart-wrap" class="grafico-altura-tela grafico-altura-tela--com-legenda">
             <canvas id="chart-comprometido-emitido"></canvas>
           </div>
@@ -742,6 +793,10 @@
               <button class="btn secundario small" onclick="exportarXlsx('comprometidoEmitidoMensal')">⬇ Exportar Excel</button>
             </div>
           </div>
+          <p class="sintese-grafico">
+            Mesmas 2 métricas do gráfico acima, mas em <strong>R$ acumulado mês a mês</strong> desde a 1ª medição
+            (soma corrida), não mais em %. A faixa cinza continua sendo a diferença entre as curvas.
+          </p>
           <div id="comprometido-emitido-mensal-chart-wrap" class="grafico-altura-tela grafico-altura-tela--com-legenda">
             <canvas id="chart-comprometido-emitido-mensal"></canvas>
           </div>
@@ -755,6 +810,11 @@
               <button class="btn secundario small" id="btn-planilha-faturamento-categorias" onclick="abrirPlanilhaModal('faturamento-categorias', 'Por categoria de custo')">📋 Planilha</button>
             </div>
           </div>
+          <p class="sintese-grafico">
+            Custo de cada categoria (ver "Categoria" nos títulos, agrupados pelo fornecedor/histórico) frente ao
+            Faturado líquido do período — a % na planilha é o custo daquela categoria ÷ Faturamento. Categorias além
+            das maiores viram "Outras" no gráfico; a planilha traz todas. Clique numa categoria pra ver os títulos.
+          </p>
           <div class="filtros" style="margin-bottom:8px;">
             <select id="filtro-categoria-faturamento">
               <option value="">Categoria: todas</option>
@@ -787,6 +847,11 @@
         <button class="btn secundario small" onclick="expandirGrafico('categoriaCusto', 'Custo por Categoria — Baixado x A Baixar')">⛶ Expandir</button>
         <button class="btn secundario small" onclick="exportarXlsx('categoriaCusto')">⬇ Exportar Excel</button>
       </div>
+      <p class="sintese-grafico">
+        Cada barra é uma categoria, dividida em quanto já foi <strong>baixado</strong> (verde) e quanto ainda está
+        <strong>a baixar</strong> (laranja) — soma dos dois é o custo total da categoria no período. As menores
+        entram juntas em "Outras" (a exportação traz todas). Clique numa barra para ver os títulos.
+      </p>
       <div id="categoria-custo-chart-wrap" class="grafico-altura-tela">
         <canvas id="chart-categoria-custo"></canvas>
       </div>
@@ -801,6 +866,11 @@
           <button class="btn secundario small" onclick="expandirGrafico('abcCategoria', 'Curva ABC por Categoria')">⛶ Expandir</button>
           <button class="btn secundario small" onclick="exportarXlsx('abcCategoria')">⬇ Exportar Excel</button>
         </div>
+        <p class="sintese-grafico">
+          Pareto das categorias marcadas na tabela ao lado: barra azul = % do custo total (aberto + baixado) que
+          aquela categoria representa; barra laranja (quando há Faturamento carregado) = % do Faturamento líquido;
+          linha roxa = % acumulado, que define as classes A (até 80%), B (até 95%) e C na tabela.
+        </p>
         <div id="abc-categoria-vazio" style="font-size:13px; color:var(--cinza); display:none;">Nenhuma categoria selecionada.</div>
         <div id="abc-categoria-chart-wrap" class="grafico-altura-tela">
           <canvas id="chart-abc-categoria"></canvas>
@@ -812,6 +882,11 @@
           <button class="btn secundario small" onclick="limparSelecaoCategoriaGrafico()" title="Desmarca todas as categorias do gráfico 'Curva ABC por Categoria'">☐ Limpar seleção</button>
           <button class="btn secundario small" onclick="exportarXlsx('rankingCategoria')">⬇ Exportar Excel</button>
         </div>
+        <p class="sintese-grafico">
+          Todas as categorias do período, do maior pro menor valor (aberto + baixado). Marque/desmarque a coluna
+          "Gráfico" pra escolher o que aparece na Curva ABC ao lado (padrão: as 8 maiores). Clique numa linha pra
+          ver os títulos daquela categoria.
+        </p>
         <div id="total-abc-categoria" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
         <div class="tabela-scroll">
           <table id="tabela-abc-categoria">
@@ -831,6 +906,11 @@
         <button class="btn secundario small" onclick="expandirGrafico('pagosAbc', 'Curva ABC dos fornecedores')">⛶ Expandir</button>
         <button class="btn secundario small" onclick="exportarXlsx('pagosAbc')">⬇ Exportar Excel</button>
       </div>
+      <p class="sintese-grafico">
+        Uma linha por fornecedor marcado na tabela ao lado (padrão: os 5 maiores), com o valor efetivamente
+        <strong>pago</strong> (Data Baixa) mês a mês — diferente da tabela, que soma aberto + baixado pra fazer o
+        ranking. Clique num ponto pra ver os títulos daquele fornecedor/mês.
+      </p>
       <div id="pagos-abc-vazio" style="font-size:13px; color:var(--cinza); display:none;">Nenhum título baixado (pago) no período pra estes fornecedores.</div>
       <div id="pagos-abc-chart-wrap" class="grafico-altura-tela">
         <canvas id="chart-pagos-abc"></canvas>
@@ -842,6 +922,11 @@
         <button class="btn secundario small" onclick="limparSelecaoAbcGrafico()" title="Desmarca todos os fornecedores do gráfico 'Curva ABC dos fornecedores'">☐ Limpar seleção</button>
         <button class="btn secundario small" onclick="exportarXlsx('abc')">⬇ Exportar Excel</button>
       </div>
+      <p class="sintese-grafico">
+        Todos os fornecedores do período, somando aberto + baixado, do maior pro menor valor — classes A (até 80%
+        acumulado), B (até 95%) e C. Marque/desmarque "Gráfico" pra escolher quem aparece na Curva ABC ao lado.
+        Clique numa linha pra ver todos os títulos daquele fornecedor.
+      </p>
       <div id="total-abc" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
       <div class="tabela-scroll">
         <table id="tabela-abc">
@@ -860,6 +945,10 @@
         <button class="btn secundario small" onclick="expandirGrafico('aporte', 'Resumo por Aporte — Qtd Doc x Doc aberto')">⛶ Expandir</button>
         <button class="btn secundario small" onclick="exportarXlsx('aporte')">⬇ Exportar Excel</button>
       </div>
+      <p class="sintese-grafico">
+        Por aporte (calculado a partir do Vencimento): barra azul = total de documentos (abertos + baixados); barra
+        laranja = quantos ainda estão em aberto. Clique numa barra pra ver os títulos em aberto daquele aporte.
+      </p>
       <div id="aporte-chart-wrap" class="grafico-altura-tela">
         <canvas id="chart-aporte"></canvas>
       </div>
@@ -869,6 +958,10 @@
         <h2>Resumo por Aporte — títulos em aberto</h2>
         <button class="btn secundario small" onclick="exportarXlsx('aporte')">⬇ Exportar Excel</button>
       </div>
+      <p class="sintese-grafico">
+        Mesmos números do gráfico ao lado, linha a linha por aporte — Valor é a soma só dos títulos em aberto.
+        Clique numa linha pra ver os títulos em aberto daquele aporte.
+      </p>
       <div id="total-aporte" style="font-size:13px; color:var(--cinza); margin-bottom:10px;"></div>
       <div class="tabela-scroll">
         <table id="tabela-aporte">
