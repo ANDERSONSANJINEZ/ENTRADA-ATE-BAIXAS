@@ -469,7 +469,14 @@
   #monitor-anexos .monitor-anexos-msg { color: var(--cinza); }
   #monitor-anexos .monitor-anexos-barra { height: 6px; border-radius: 3px; background: var(--azul-claro); overflow: hidden; margin-top: 8px; }
   #monitor-anexos .monitor-anexos-barra-interna { height: 100%; width: 0%; background: var(--azul); transition: width .2s; }
-  canvas { max-height: 320px; }
+  /* Removido um "canvas { max-height: 320px; }" global daqui — travava
+     TODOS os gráficos do app (não só o expandido) bem abaixo da altura de
+     verdade dos seus containers (.grafico-altura-tela já regula isso por
+     painel, de 260 a 520px conforme o tipo; o modal expandido tem a tela
+     quase inteira, até 88vh). Cada canvas já tem um container com altura
+     própria — não precisa (e não deveria ter) um teto genérico em cima
+     disso; é o que deixava o gráfico expandido com aquele espaço em
+     branco enorme embaixo. */
   #badge-data-base.desatualizada { background: #fbbf24; color: #1e2430; font-weight: bold; }
   /* Calendário do filtro De/Até — construído do zero em vez de usar o
      seletor nativo (<input type="date">.showPicker()): a tela roda dentro
@@ -1174,7 +1181,7 @@
       <h2 id="modal-grafico-expandido-titulo"></h2>
       <button class="modal-fechar" onclick="fecharModalGraficoExpandido()" title="Fechar (Esc)">✕</button>
     </div>
-    <div style="flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center;">
+    <div style="flex:1; min-height:0; position:relative;">
       <canvas id="chart-expandido"></canvas>
     </div>
   </div>
@@ -3178,10 +3185,17 @@ function expandirGrafico(chave, titulo) {
   if (!chart) { toast('Gráfico ainda não carregado.'); return; }
   document.getElementById('modal-grafico-expandido-titulo').textContent = titulo;
   if (chartExpandido) chartExpandido.destroy();
+  // A classe "aberto" (o que torna o modal visível) precisa ser aplicada
+  // ANTES de criar o Chart.js, não depois — Chart.js mede o tamanho do
+  // container (canvas.parentNode) já na criação, pra decidir a altura do
+  // gráfico; medido ainda escondido (display:none), ele fixava uma altura
+  // pequena/arbitrária e nunca recalculava depois, deixando um espaço em
+  // branco enorme abaixo do gráfico expandido — o motivo do pedido
+  // "estique verticalmente este gráfico".
+  document.getElementById('modal-grafico-expandido').classList.add('aberto');
   chartExpandido = new Chart(document.getElementById('chart-expandido'), {
     type: chart.config.type, data: chart.config.data, options: chart.config.options, plugins: chart.config.plugins,
   });
-  document.getElementById('modal-grafico-expandido').classList.add('aberto');
 }
 function fecharModalGraficoExpandido() {
   document.getElementById('modal-grafico-expandido').classList.remove('aberto');
