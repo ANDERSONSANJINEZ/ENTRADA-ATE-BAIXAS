@@ -907,6 +907,51 @@ var PASTAS_BUSCA_ANEXO = [
   '18nuIj4SsAEqPJ7jOxlUe8JzJ8TCNcueL', // CE-007 - ANALISE DE NOTAS -> GILBERTO (documentos)
   '1leuDOfqLFDxdg3PECZ6aij2eIkPGKwq6', // 16 COMPROVANTE PAGTO, organizada por ano/mês (comprovantes de pagamento)
 ];
+// Mesma pasta de cima (índice 2) — nome próprio só pra ficar claro do que
+// se trata em quem usa só esta, sem precisar saber a ordem do array acima.
+var PASTA_COMPROVANTES_PAGTO = PASTAS_BUSCA_ANEXO[2];
+
+// Gráfico "Comprovantes por mês" do Dashboard (pedido explícito) — conta
+// quantos arquivos cada subpasta de mês tem dentro de "16 COMPROVANTE
+// PAGTO", estrutura confirmada pelo usuário: Ano (ex.: "2026") > Mês (ex.:
+// "10 2026", "11 2026"...), 1 subpasta por mês, 1 arquivo = 1 comprovante.
+// Diferente da busca/índice de anexo (que casa POR TÍTULO), isto aqui não
+// olha pra ERP/Manual nenhum — é só a contagem bruta de arquivo por pasta,
+// então só 2 níveis de getFolders() + 1 contagem por subpasta de mês, bem
+// mais leve que catalogar nome por nome.
+function api_comprovantesPorMes(payload) {
+  var raiz;
+  try {
+    raiz = DriveApp.getFolderById(PASTA_COMPROVANTES_PAGTO);
+  } catch (e) {
+    return { meses: [], erro: 'Não foi possível abrir a pasta de comprovantes: ' + e.message };
+  }
+  var meses = [];
+  try {
+    var anos = raiz.getFolders();
+    while (anos.hasNext()) {
+      var anoFolder = anos.next();
+      var anoNome = anoFolder.getName().trim();
+      if (!/^\d{4}$/.test(anoNome)) continue; // só subpasta que É um ano (ex.: "2026")
+      var mesesIter = anoFolder.getFolders();
+      while (mesesIter.hasNext()) {
+        var mesFolder = mesesIter.next();
+        var m = mesFolder.getName().trim().match(/^(\d{1,2})[\s.\-_/]+(\d{4})$/); // "10 2026"
+        if (!m) continue;
+        var mes = m[1].length === 1 ? '0' + m[1] : m[1];
+        var ano = m[2];
+        var qtde = 0;
+        var arquivos = mesFolder.getFiles();
+        while (arquivos.hasNext()) { arquivos.next(); qtde++; }
+        meses.push({ mes: mes, ano: ano, label: mes + '/' + ano, qtde: qtde });
+      }
+    }
+  } catch (e) {
+    return { meses: [], erro: 'Falha ao contar os comprovantes: ' + e.message };
+  }
+  meses.sort(function (a, b) { return (a.ano + a.mes).localeCompare(b.ano + b.mes); });
+  return { meses: meses };
+}
 
 function normalizarTextoBusca_(s) {
   return String(s || '')
@@ -1431,6 +1476,7 @@ function doPost(e) {
     else if (acao === 'carregarLog') resultado = api_carregarLog(payload);
     else if (acao === 'salvarConciliacao') resultado = api_salvarConciliacao(payload);
     else if (acao === 'faturamentoPorMedicao') resultado = api_faturamentoPorMedicao(payload);
+    else if (acao === 'comprovantesPorMes') resultado = api_comprovantesPorMes(payload);
     else throw new Error('Ação desconhecida: ' + acao);
     resultado.ok = true;
     return ContentService

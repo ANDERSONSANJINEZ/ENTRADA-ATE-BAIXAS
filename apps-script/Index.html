@@ -619,6 +619,7 @@
       <div class="dashboard-lateral" id="dashboard-lateral">
         <div class="dashboard-lateral-trilho">
         <button class="ativo" data-grupo="aging" title="Títulos em aberto por faixa de vencimento"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M10 6v4.2l3 2"/></svg><span class="rotulo-lateral">Títulos em aberto por faixa de vencimento</span></button>
+        <button data-grupo="comprovantes-mes" title="Comprovantes por mês"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="3.2" height="6"/><rect x="8.4" y="7" width="3.2" height="10"/><rect x="13.8" y="3.5" width="3.2" height="13.5"/></svg><span class="rotulo-lateral">Comprovantes por mês</span></button>
         <button data-grupo="fluxo" title="Fluxo de caixa projetado (títulos em aberto)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,14.5 8,9.5 11,12.5 17,5.5"/><polyline points="12.5,5.5 17,5.5 17,10"/></svg><span class="rotulo-lateral">Fluxo de caixa projetado</span></button>
         <button data-grupo="status-pagamento" title="Situação das baixas"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M6.8 10.2l2.2 2.2 4.2-4.8"/></svg><span class="rotulo-lateral">Situação das baixas</span></button>
         <button data-grupo="valor-remessa" title="Valor por Remessa (últimas 30)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.2l7-2.9 7 2.9-7 2.9-7-2.9z"/><path d="M3 6.2v7.6l7 2.9 7-2.9V6.2"/><path d="M10 9.1v8.6"/></svg><span class="rotulo-lateral">Valor por Remessa</span></button>
@@ -644,6 +645,23 @@
       <div class="cards" id="cards-kpi" style="margin-bottom:18px;"></div>
       <div id="aging-chart-wrap" class="grafico-altura-tela grafico-altura-tela--com-cards">
         <canvas id="chart-aging"></canvas>
+      </div>
+    </div>
+    </div>
+    <div class="grupo-dashboard" data-grupo="comprovantes-mes">
+    <div class="painel">
+      <div class="cabecalho-painel">
+        <h2>Comprovantes por mês</h2>
+        <button class="btn secundario small" onclick="expandirGrafico('comprovantesMes', 'Comprovantes por mês')">⛶ Expandir</button>
+      </div>
+      <p class="sintese-grafico">
+        Diferente dos outros gráficos do Dashboard: não vem dos títulos do ERP/Manual, vem direto da pasta do Google
+        Drive "16 COMPROVANTE PAGTO" (organizada em Ano › Mês) — cada barra é a quantidade de arquivos dentro da
+        subpasta daquele mês, ou seja, quantos comprovantes de pagamento foram guardados ali naquele período.
+      </p>
+      <div id="comprovantes-mes-aviso" class="aviso" style="display:none; margin-bottom:14px;"></div>
+      <div id="comprovantes-mes-chart-wrap" class="grafico-altura-tela">
+        <canvas id="chart-comprovantes-mes"></canvas>
       </div>
     </div>
     </div>
@@ -1457,7 +1475,7 @@ const SRC = { tipo:'B', dt_emissao:'C', no_titulo:'D', form_pagto:'E', fornecedo
   nome_fornece:'G', vencimento:'H', vencto_real:'I', vlr_titulo:'J', parcela:'K',
   dt_baixa:'L', historico:'M', aprovacao:'S', usuario:'AJ', remessa:'AW' };
 
-let state = { erp: [], manual: [], dataBase: null, resumoConciliacao: null, faturamento: { medicoes: [], linhasBrutas: 0, erro: null } };
+let state = { erp: [], manual: [], dataBase: null, resumoConciliacao: null, faturamento: { medicoes: [], linhasBrutas: 0, erro: null }, comprovantesPorMes: { meses: [], erro: null } };
 
 // Nome do arquivo padrão da pasta do Drive: AAAA.MM.DD.xlsx (ex.: 2026.07.30.xlsx)
 function extrairDataBaseDoNome(nomeArquivo) {
@@ -1923,6 +1941,56 @@ async function carregarFaturamento() {
     renderizarTabelaFaturamentoCategorias(ultimoItensAnalise);
   }
   if (document.getElementById('conteudo-analise').innerHTML) renderizarAnalise();
+}
+
+// Busca à parte (mesmo padrão de carregarFaturamento acima): não é dado do
+// ERP/Manual, é uma contagem de arquivo por pasta do Drive (ver
+// api_comprovantesPorMes no Code.gs) — falha aqui (pasta sem permissão,
+// fora do ar) só deixa esse gráfico com aviso, nunca trava o resto do
+// Dashboard.
+async function carregarComprovantesPorMes() {
+  try {
+    const dados = await chamarServidor('comprovantesPorMes', {});
+    state.comprovantesPorMes = { meses: dados.meses || [], erro: dados.erro || null };
+  } catch (e) {
+    state.comprovantesPorMes = { meses: [], erro: e.message };
+  }
+  renderizarComprovantesPorMes();
+}
+
+function renderizarComprovantesPorMes() {
+  const avisoEl = document.getElementById('comprovantes-mes-aviso');
+  const wrapEl = document.getElementById('comprovantes-mes-chart-wrap');
+  const { meses, erro } = state.comprovantesPorMes;
+  if (erro) {
+    avisoEl.style.display = 'block';
+    avisoEl.textContent = `Não foi possível carregar a contagem de comprovantes: ${erro}`;
+    wrapEl.style.display = 'none';
+    return;
+  }
+  avisoEl.style.display = 'none';
+  wrapEl.style.display = '';
+  if (chartComprovantesMes) chartComprovantesMes.destroy();
+  chartComprovantesMes = new Chart(document.getElementById('chart-comprovantes-mes'), {
+    type: 'bar',
+    data: {
+      labels: meses.map((m) => m.label),
+      datasets: [{ label: 'Comprovantes', data: meses.map((m) => m.qtde), backgroundColor: '#1f4e78', borderRadius: 4, maxBarThickness: 48 }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        datalabels: { display: false },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.parsed.y.toLocaleString('pt-BR')} comprovante(s)` } },
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Qtde de comprovantes' } },
+        x: { title: { display: true, text: 'Mês/Ano' } },
+      },
+    },
+  });
 }
 
 async function postarAcao(action, extra) {
@@ -3040,7 +3108,7 @@ function atualizarSetasOrdenacao(tabelaId) {
 }
 
 // ---------- Dashboard ----------
-let chartAging, chartFluxo, chartStatusPagamento, chartPagosAbc, chartAporte;
+let chartAging, chartFluxo, chartStatusPagamento, chartPagosAbc, chartAporte, chartComprovantesMes;
 let chartCategoriaCusto, chartAbcCategoria, chartMargemGauge, chartFaturadoPagoAcumulado;
 let chartPagoApagarGauge, chartApagarGauge, chartSaldoDisponivelGauge;
 let chartMargemMedicao, chartCategoriaFaturamento, chartComprometidoEmitido, chartComprometidoEmitidoMensal;
@@ -3061,6 +3129,7 @@ let ultimoItensAnalise = [];
 // atualização.
 const REGISTRO_GRAFICOS_DASHBOARD_ = {
   aging: () => chartAging,
+  comprovantesMes: () => chartComprovantesMes,
   fluxo: () => chartFluxo,
   statusPagamento: () => chartStatusPagamento,
   remessa: () => chartRemessa,
@@ -7914,6 +7983,7 @@ function renderizarTudo() {
 }
 carregarTudo();
 carregarFaturamento();
+carregarComprovantesPorMes();
 </script>
 </body>
 </html>
