@@ -2091,16 +2091,18 @@ if (ABAS_PERMITIDAS_RESTRITO) {
 // pra compartilhar com terceiros), esta é gente com senha de edição normal;
 // só abas/seções somem da navegação, o resto do acesso (inclusive editar)
 // continua igual. Três regras independentes:
-//   1) Dayana Sousa/Francisco Gilderlan: sem Dashboard nem Análise.
-//   2) Faturamento (dentro do Dashboard) e Análise: só Anderson e Zico —
-//      qualquer outro nome (Dayana/Francisco inclusive, e também ninguém
-//      ainda logado) não vê essas duas, mesmo mantendo o resto do
+//   1) Francisco Gilderlan: sem Dashboard nem Análise.
+//   2) Faturamento (dentro do Dashboard) e Análise: só Anderson, Zico e
+//      Dayana Sousa — qualquer outro nome (Francisco inclusive, e também
+//      ninguém ainda logado) não vê essas duas, mesmo mantendo o resto do
 //      Dashboard visível.
 //   3) Arquivos de Dados e Histórico: só Anderson e Dayana Sousa —
 //      vale até pra quem nunca digitou nome nenhum (modo leitura padrão),
 //      mesmo padrão da regra 2 acima.
-const USUARIOS_SEM_DASHBOARD_ANALISE_ = ['dayana sousa', 'francisco gilderlan'];
-const USUARIOS_COM_FATURAMENTO_ANALISE_ = ['anderson', 'zico'];
+// Dayana Sousa tem o mesmo acesso de Anderson (pedido explícito): fora da
+// regra 1 (nunca escondida dela) e dentro das regras 2 e 3.
+const USUARIOS_SEM_DASHBOARD_ANALISE_ = ['francisco gilderlan'];
+const USUARIOS_COM_FATURAMENTO_ANALISE_ = ['anderson', 'zico', 'dayana sousa'];
 const USUARIOS_COM_EXTRATOR_HISTORICO_ = ['anderson', 'dayana sousa'];
 function aplicarRestricaoAbasPorUsuario_() {
   const nome = (usuarioEdicaoNome || '').trim().toLowerCase();
