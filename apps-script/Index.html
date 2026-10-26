@@ -1478,9 +1478,20 @@ const HEADERS = ['ID','Tipo','Data Emissão','Nº Documento','Vencimento Real','
   'Código Fornecedor','Parcela','Data Baixa','Vencimento','R$ Valor','Usuário Inclusor',
   'Razão Social','Aprovação Remessa','Remessa','Histórico','Origem','Status'];
 
+// Mapeamento de colunas do export "Listagem do Browse" do TOTVS Protheus
+// (cabeçalho na linha 2, dados a partir da linha 3) — conferido direto no
+// arquivo mais recente da pasta do Drive (ver api_buscarArquivoDriveNovo).
+// remessa:'N' — não é 'AW' por acaso: o layout do export mudou e "Remessa"
+// passou pra coluna N; a coluna AW agora é "N Empregado", preenchida só em
+// linhas Tipo="RES" (rescisão) com o NOME do colaborador, não um número —
+// é por isso que o gráfico "Valor por Remessa" estava mostrando nome de
+// gente em vez de número de remessa (as únicas linhas com AW preenchido
+// eram essas rescisões; todo título de fornecedor de verdade, cuja remessa
+// de verdade está na coluna N, ficava sem nenhum valor de Remessa). As
+// outras colunas (B a S, AJ) continuam na mesma posição de sempre.
 const SRC = { tipo:'B', dt_emissao:'C', no_titulo:'D', form_pagto:'E', fornecedor:'F',
   nome_fornece:'G', vencimento:'H', vencto_real:'I', vlr_titulo:'J', parcela:'K',
-  dt_baixa:'L', historico:'M', aprovacao:'S', usuario:'AJ', remessa:'AW' };
+  dt_baixa:'L', historico:'M', aprovacao:'S', usuario:'AJ', remessa:'N' };
 
 let state = { erp: [], manual: [], dataBase: null, resumoConciliacao: null, faturamento: { medicoes: [], linhasBrutas: 0, erro: null }, comprovantesPorMes: { meses: [], erro: null } };
 
